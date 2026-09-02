@@ -143,7 +143,7 @@ export function ModelStage({
           <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 rounded-lg border border-white/8 bg-[#07111d]/70 px-3 py-2 text-[11px] text-slate-500 backdrop-blur">
             <MousePointer2 className="size-3" /> 드래그 회전 · 스크롤 확대
           </div>
-          <StlViewer src={design.modelPath} />
+          <StlViewer key={design.modelPath} src={design.modelPath} />
         </>
       ) : (
         <div className="absolute inset-0 grid place-items-center p-8 text-center">

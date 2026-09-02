@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   Boxes,
@@ -28,6 +28,7 @@ import type { ShowcaseDesign } from '@/lib/aerotwin-types';
 import {
   formatComponent,
   formatMetric,
+  isAvailableMetric,
   percentChange,
 } from '@/lib/aerotwin-types';
 import {
@@ -52,12 +53,12 @@ export function DesignLabView({
   designs,
   selected,
   onSelect,
-  onCompare,
+  onOpenDatasetCompare,
 }: {
   designs: ShowcaseDesign[];
   selected: ShowcaseDesign;
   onSelect: (id: number) => void;
-  onCompare: () => void;
+  onOpenDatasetCompare: () => void;
 }) {
   const componentOptions = useMemo(
     () => ({
@@ -73,30 +74,49 @@ export function DesignLabView({
   const [armLength, setArmLength] = useState(Math.round(selected.armLength || 300));
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [running, setRunning] = useState(false);
+  const predictionTimeoutRef = useRef<number | null>(null);
 
-  const baselineDrag = selected.trim[20]?.drag ?? selected.trim.find((row) => row.valid)?.drag ?? 0;
+  useEffect(() => () => {
+    if (predictionTimeoutRef.current != null) window.clearTimeout(predictionTimeoutRef.current);
+  }, []);
+
+  const baselineDrag = selected.trim[20]?.valid ? Number(selected.trim[20].drag ?? 0) : 0;
+
+  const cancelPendingPrediction = () => {
+    if (predictionTimeoutRef.current != null) {
+      window.clearTimeout(predictionTimeoutRef.current);
+      predictionTimeoutRef.current = null;
+    }
+    setRunning(false);
+    setPrediction(null);
+  };
 
   const reset = () => {
+    cancelPendingPrediction();
     setMotor(selected.motor ?? '');
     setPropeller(selected.propeller ?? '');
     setBattery(selected.battery ?? '');
     setArmLength(Math.round(selected.armLength || 300));
-    setPrediction(null);
   };
 
   const runPrediction = () => {
+    if (predictionTimeoutRef.current != null) window.clearTimeout(predictionTimeoutRef.current);
+    const requestedMotor = motor;
+    const requestedPropeller = propeller;
+    const requestedBattery = battery;
+    const requestedArmLength = armLength;
     setRunning(true);
     setPrediction(null);
-    window.setTimeout(() => {
+    predictionTimeoutRef.current = window.setTimeout(() => {
       const baseCapacity = parseCapacity(selected.battery);
-      const nextCapacity = parseCapacity(battery);
+      const nextCapacity = parseCapacity(requestedBattery);
       const batteryFactor = Math.max(0.6, Math.min(1.75, nextCapacity / baseCapacity));
       const baseKv = parseKv(selected.motor);
-      const nextKv = parseKv(motor);
+      const nextKv = parseKv(requestedMotor);
       const motorEfficiency = Math.max(0.86, Math.min(1.14, 1 + (baseKv - nextKv) / Math.max(baseKv, 1) * 0.1));
-      const propDelta = componentOptions.propellers.indexOf(propeller) - componentOptions.propellers.indexOf(selected.propeller ?? '');
+      const propDelta = componentOptions.propellers.indexOf(requestedPropeller) - componentOptions.propellers.indexOf(selected.propeller ?? '');
       const propEfficiency = Math.max(0.91, Math.min(1.1, 1 + propDelta * 0.018));
-      const armRatio = armLength / Math.max(selected.armLength, 1);
+      const armRatio = requestedArmLength / Math.max(selected.armLength, 1);
       const estimatedMass = Math.max(1, selected.mass + (nextCapacity - baseCapacity) * 0.000055 + (nextKv - baseKv) * -0.0005);
       const massRatio = estimatedMass / Math.max(selected.mass, 1);
       const dragFactor = Math.max(0.75, Math.min(1.35, armRatio ** 1.15 * (2 - propEfficiency)));
@@ -109,6 +129,7 @@ export function DesignLabView({
         drag: Number(baselineDrag) * dragFactor,
       });
       setRunning(false);
+      predictionTimeoutRef.current = null;
     }, 850);
   };
 
@@ -118,7 +139,7 @@ export function DesignLabView({
         eyebrow={`Design Lab / Draft from #${selected.id}`}
         title="What-if Design Prediction"
         description="원본 설계를 보존한 채 부품과 arm 길이를 바꾸고, deterministic demo surrogate로 성능 변화 방향을 빠르게 확인합니다."
-        actions={<DesignSelector designs={designs} value={selected.id} onChange={(id) => { onSelect(id); setPrediction(null); }} />}
+        actions={<DesignSelector designs={designs} value={selected.id} onChange={(id) => { cancelPendingPrediction(); onSelect(id); }} />}
       />
 
       <div className="grid gap-4 xl:grid-cols-[310px_minmax(480px,1fr)_360px]">
@@ -128,9 +149,9 @@ export function DesignLabView({
             <Button size="icon-sm" variant="ghost" onClick={reset} className="text-slate-500" aria-label="초기화"><RotateCcw /></Button>
           </div>
 
-          <ControlSelect label="Motor" value={motor} options={componentOptions.motors} onChange={(value) => { setMotor(value); setPrediction(null); }} />
-          <ControlSelect label="Propeller" value={propeller} options={componentOptions.propellers} onChange={(value) => { setPropeller(value); setPrediction(null); }} />
-          <ControlSelect label="Battery" value={battery} options={componentOptions.batteries} onChange={(value) => { setBattery(value); setPrediction(null); }} />
+          <ControlSelect label="Motor" value={motor} options={componentOptions.motors} onChange={(value) => { cancelPendingPrediction(); setMotor(value); }} />
+          <ControlSelect label="Propeller" value={propeller} options={componentOptions.propellers} onChange={(value) => { cancelPendingPrediction(); setPropeller(value); }} />
+          <ControlSelect label="Battery" value={battery} options={componentOptions.batteries} onChange={(value) => { cancelPendingPrediction(); setBattery(value); }} />
 
           <div className="mt-5">
             <div className="mb-3 flex items-center justify-between text-xs"><span className="text-slate-500">Arm Length</span><span className="font-mono text-cyan-200">{armLength} mm</span></div>
@@ -139,7 +160,7 @@ export function DesignLabView({
               min={180}
               max={520}
               step={1}
-              onValueChange={(value) => { setArmLength(Number(Array.isArray(value) ? value[0] : value)); setPrediction(null); }}
+              onValueChange={(value) => { cancelPendingPrediction(); setArmLength(Number(Array.isArray(value) ? value[0] : value)); }}
               className="[&_[data-slot=slider-range]]:bg-cyan-300"
               aria-label="Arm Length"
             />
@@ -162,7 +183,7 @@ export function DesignLabView({
             <MetricTile icon={<Weight className="size-4" />} label="Baseline Mass" value={formatMetric(selected.mass, 2)} unit="kg" />
             <MetricTile icon={<Route className="size-4" />} label="Baseline Range" value={formatMetric(selected.maxDistance / 1000, 2)} unit="km" tone="cyan" />
             <MetricTile icon={<Zap className="size-4" />} label="Baseline Power" value={formatMetric(selected.power, 0)} unit="W" tone="violet" />
-            <MetricTile icon={<Wind className="size-4" />} label="Drag @ 20m/s" value={formatMetric(Number(baselineDrag), 1)} unit="N" tone="amber" />
+            <MetricTile icon={<Wind className="size-4" />} label="Drag @ 20m/s" value={isAvailableMetric(baselineDrag) ? formatMetric(baselineDrag, 1) : '—'} unit={isAvailableMetric(baselineDrag) ? 'N' : undefined} tone="amber" />
           </div>
         </div>
 
@@ -182,8 +203,9 @@ export function DesignLabView({
                 <PredictionRow icon={<Wind />} label="Drag @ 20m/s" before={Number(baselineDrag)} after={prediction.drag} unit="N" better="down" />
                 <PredictionRow icon={<Weight />} label="Mass" before={selected.mass} after={prediction.mass} unit="kg" better="down" />
               </div>
-              <Button onClick={onCompare} variant="outline" className="mt-5 h-10 w-full border-white/10 bg-white/[0.025] text-slate-200">
-                <GitCompareArrows /> Before / After 비교 <ArrowRight />
+              <p className="mt-4 text-[10px] leading-4 text-slate-600">Draft 전후 값은 위 패널에서 비교합니다. A/B 화면은 실제 AircraftVerse 설계 ID끼리 비교합니다.</p>
+              <Button onClick={onOpenDatasetCompare} variant="outline" className="mt-3 h-10 w-full border-white/10 bg-white/[0.025] text-slate-200">
+                <GitCompareArrows /> 데이터셋 설계 A/B 비교 <ArrowRight />
               </Button>
             </>
           ) : (
@@ -218,16 +240,17 @@ function ControlSelect({ label, value, options, onChange }: { label: string; val
 
 function PredictionRow({ icon, label, before, after, unit, better }: { icon: React.ReactNode; label: string; before: number; after: number; unit: string; better: 'up' | 'down' }) {
   const change = percentChange(before, after);
-  const improved = better === 'up' ? change >= 0 : change <= 0;
+  const improved = change == null ? false : better === 'up' ? change >= 0 : change <= 0;
+  const digits = unit === 'W' || unit === 'sec' ? 0 : 1;
   return (
     <div className="py-4">
       <div className="mb-2 flex items-center gap-2 text-xs text-slate-500"><span className="[&>svg]:size-3.5">{icon}</span>{label}</div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 font-mono text-xs">
-        <span className="text-slate-600">{formatMetric(before, unit === 'W' || unit === 'sec' ? 0 : 1)}</span>
+        <span className="text-slate-600">{isAvailableMetric(before) ? formatMetric(before, digits) : '—'}</span>
         <ArrowRight className="size-3 text-slate-700" />
-        <span className="text-right text-slate-200">{formatMetric(after, unit === 'W' || unit === 'sec' ? 0 : 1)} {unit}</span>
+        <span className="text-right text-slate-200">{isAvailableMetric(after) ? `${formatMetric(after, digits)} ${unit}` : '—'}</span>
       </div>
-      <p className={`mt-1 text-right font-mono text-[10px] ${improved ? 'text-emerald-300' : 'text-amber-300'}`}>{change >= 0 ? '+' : ''}{change.toFixed(1)}%</p>
+      <p className={`mt-1 text-right font-mono text-[10px] ${change == null ? 'text-slate-600' : improved ? 'text-emerald-300' : 'text-amber-300'}`}>{change == null ? '—' : `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`}</p>
     </div>
   );
 }

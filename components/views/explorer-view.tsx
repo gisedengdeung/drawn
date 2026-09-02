@@ -27,7 +27,6 @@ import { Switch } from '@/components/ui/switch';
 import type {
   DatasetIndex,
   DesignSummary,
-  ShowcaseDesign,
   ShowcaseMap,
 } from '@/lib/aerotwin-types';
 import { formatDistance, formatHub, formatMetric } from '@/lib/aerotwin-types';
@@ -44,17 +43,17 @@ export function ExplorerView({
   dataset,
   showcases,
   selected,
-  detail,
   onSelect,
   onOpenSimulator,
+  onOpenCompare,
   onOpenOptimizer,
 }: {
   dataset: DatasetIndex;
   showcases: ShowcaseMap;
   selected: DesignSummary | null;
-  detail: ShowcaseDesign | null;
   onSelect: (id: number) => void;
   onOpenSimulator: (id: number) => void;
+  onOpenCompare: (id: number) => void;
   onOpenOptimizer: () => void;
 }) {
   const [query, setQuery] = useState('');
@@ -68,7 +67,7 @@ export function ExplorerView({
     const normalizedQuery = query.trim().replace(/^#/, '').toLowerCase();
     return dataset.designs
       .filter((design) => {
-        if (viewerOnly && !design.viewerReady) return false;
+        if (viewerOnly && !showcases[String(design.id)]) return false;
         if (feasibleOnly && !design.feasible) return false;
         if (design.mass > massMax) return false;
         if (propellers !== 'all' && design.numPropellers !== Number(propellers)) return false;
@@ -84,21 +83,21 @@ export function ExplorerView({
         return true;
       })
       .sort((a, b) => b.maxDistance - a.maxDistance);
-  }, [dataset.designs, feasibleOnly, massMax, propellers, query, viewerOnly, wingMode]);
+  }, [dataset.designs, feasibleOnly, massMax, propellers, query, showcases, viewerOnly, wingMode]);
 
   const visibleResults = filtered.slice(0, 60);
   const current = selected ?? visibleResults[0] ?? dataset.designs[0];
-  const currentDetail = showcases[String(current.id)] ?? detail;
+  const currentDetail = showcases[String(current.id)] ?? null;
 
   return (
     <section className="px-4 py-5 lg:px-6">
       <SectionHeading
         eyebrow="AircraftVerse / Local index"
         title="Design Explorer"
-        description="9,238개 로컬 설계의 구조·질량·비행성능을 검색하고 시연용 STL을 직접 확인합니다."
+        description={`${dataset.summary.localDesigns.toLocaleString()}개 전체 설계의 구조·질량·비행성능을 검색하고 대표 STL을 직접 확인합니다.`}
         actions={
           <Button onClick={onOpenOptimizer} className="bg-cyan-300 text-[#041019] hover:bg-cyan-200">
-            <Sparkles /> AI 최적화 시작 <ArrowUpRight />
+            <Sparkles /> 설계 랭킹 시작 <ArrowUpRight />
           </Button>
         }
       />
@@ -188,7 +187,7 @@ export function ExplorerView({
                       <p className="font-mono text-xs font-semibold text-slate-200">Design #{design.id}</p>
                       <p className="mt-1 truncate text-[10px] text-slate-600">{formatHub(design.hub)}</p>
                     </div>
-                    {design.viewerReady ? (
+                    {showcases[String(design.id)] ? (
                       <Badge className="bg-cyan-300/10 text-[9px] text-cyan-200">3D</Badge>
                     ) : (
                       <Badge variant="outline" className="border-white/8 text-[9px] text-slate-600">META</Badge>
@@ -222,8 +221,8 @@ export function ExplorerView({
               <p className="mt-1 text-xs text-slate-500">{formatHub(current.hub)} · {current.numPropellers} propellers · {current.numWings} wings</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" className="border-white/10 bg-white/[0.025] text-slate-300">
-                <GitCompareArrows /> 비교에 추가
+              <Button onClick={() => onOpenCompare(current.id)} variant="outline" className="border-white/10 bg-white/[0.025] text-slate-300">
+                <GitCompareArrows /> A/B 비교 열기
               </Button>
               <Button
                 disabled={!currentDetail}
@@ -235,7 +234,7 @@ export function ExplorerView({
             </div>
           </div>
 
-          <ModelStage design={currentDetail} className="min-h-[530px]" />
+          <ModelStage design={currentDetail} emptyDesignId={current.id} className="min-h-[530px]" />
           <div className="mt-3"><DataDisclaimer compact /></div>
         </div>
 

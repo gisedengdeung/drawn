@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   CircleGauge,
@@ -38,12 +38,12 @@ import { Progress } from '@/components/ui/progress';
 import type {
   DatasetIndex,
   DesignSummary,
-  ShowcaseDesign,
 } from '@/lib/aerotwin-types';
 import {
   formatDistance,
   formatHub,
   formatMetric,
+  isAvailableMetric,
   percentChange,
 } from '@/lib/aerotwin-types';
 import {
@@ -75,8 +75,8 @@ export function OptimizerView({
   onCompare,
 }: {
   dataset: DatasetIndex;
-  current: ShowcaseDesign;
-  onCompare: () => void;
+  current: DesignSummary;
+  onCompare: (aId: number, bId: number) => void;
 }) {
   const [objective, setObjective] = useState<Objective>('range');
   const [massLimit, setMassLimit] = useState(10);
@@ -84,17 +84,31 @@ export function OptimizerView({
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<ScoredDesign[]>([]);
   const [preset, setPreset] = useState('Delivery');
+  const runTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (runTimeoutRef.current != null) window.clearTimeout(runTimeoutRef.current);
+  }, []);
 
   const candidatePool = useMemo(
-    () => dataset.designs.filter((design) =>
-      design.feasible &&
-      design.mass > 0 &&
-      design.mass <= massLimit &&
-      design.power > 0 &&
-      design.power <= powerLimit &&
-      (objective !== 'drag' || design.dragAt20 > 0),
-    ),
-    [dataset.designs, massLimit, objective, powerLimit],
+    () => dataset.designs.filter((design) => {
+      if (
+        design.id === current.id ||
+        !design.feasible ||
+        design.mass <= 0 ||
+        design.mass > massLimit ||
+        design.power <= 0 ||
+        design.power > powerLimit
+      ) return false;
+      if (objective === 'hover') return design.hoverTime > 0;
+      if (objective === 'drag') return design.dragAt20 > 0;
+      if (objective === 'speed') return design.maxSpeed > 0;
+      if (objective === 'balanced') {
+        return design.hoverTime > 0 && design.dragAt20 > 0 && design.maxSpeed > 0;
+      }
+      return design.maxDistance > 0;
+    }),
+    [current.id, dataset.designs, massLimit, objective, powerLimit],
   );
 
   const paretoPoints = useMemo(() => {
@@ -108,9 +122,18 @@ export function OptimizerView({
     }));
   }, [candidatePool]);
 
-  const applyPreset = (name: string) => {
-    setPreset(name);
+  const cancelPendingRun = () => {
+    if (runTimeoutRef.current != null) {
+      window.clearTimeout(runTimeoutRef.current);
+      runTimeoutRef.current = null;
+    }
+    setRunning(false);
     setResults([]);
+  };
+
+  const applyPreset = (name: string) => {
+    cancelPendingRun();
+    setPreset(name);
     if (name === 'Delivery') {
       setObjective('range'); setMassLimit(10); setPowerLimit(2500);
     } else if (name === 'Surveillance') {
@@ -123,10 +146,13 @@ export function OptimizerView({
   };
 
   const optimize = () => {
+    if (runTimeoutRef.current != null) window.clearTimeout(runTimeoutRef.current);
+    const requestedCandidates = candidatePool;
+    const requestedObjective = objective;
     setRunning(true);
     setResults([]);
-    window.setTimeout(() => {
-      const maxima = candidatePool.reduce(
+    runTimeoutRef.current = window.setTimeout(() => {
+      const maxima = requestedCandidates.reduce(
         (acc, design) => ({
           range: Math.max(acc.range, design.maxDistance),
           hover: Math.max(acc.hover, design.hoverTime),
@@ -137,12 +163,13 @@ export function OptimizerView({
         }),
         { range: 1, hover: 1, power: 1, drag: 1, speed: 1, mass: 1 },
       );
-      const scored = candidatePool
-        .map((design) => ({ ...design, score: scoreDesign(design, objective, maxima) }))
-        .sort((a, b) => b.score - a.score)
+      const scored = requestedCandidates
+        .map((design) => ({ ...design, score: scoreDesign(design, requestedObjective, maxima) }))
+        .sort((a, b) => b.score - a.score || a.id - b.id)
         .slice(0, 3);
       setResults(scored);
       setRunning(false);
+      runTimeoutRef.current = null;
     }, 1100);
   };
 
@@ -151,10 +178,10 @@ export function OptimizerView({
   return (
     <section className="px-4 py-5 lg:px-6">
       <SectionHeading
-        eyebrow="AI Optimizer / Surrogate-guided search"
-        title="목적 기반 설계 최적화"
-        description="로컬 설계공간의 실제 output.json 메트릭에 제약조건을 적용하고, 목적별 normalized surrogate score로 상위 설계를 추천합니다."
-        actions={<><SourceBadge source="SURROGATE SCORE" /><Badge variant="outline" className="border-white/8 text-slate-500">NSGA-II ready architecture</Badge></>}
+        eyebrow="Dataset Optimizer / Objective ranking"
+        title="목적 기반 데이터셋 랭킹"
+        description="27,714개 설계의 실제 output.json 메트릭에 제약조건과 목적 점수를 적용해 상위 후보를 추천합니다."
+        actions={<><SourceBadge source="DATASET RANKING" /><Badge variant="outline" className="border-white/8 text-slate-500">Trained AI model · next milestone</Badge></>}
       />
 
       <div className="grid gap-4 xl:grid-cols-[330px_minmax(0,1fr)]">
@@ -179,7 +206,7 @@ export function OptimizerView({
             {objectives.map((item) => {
               const Icon = item.icon;
               return (
-                <button key={item.id} onClick={() => { setObjective(item.id); setResults([]); }} className={`rounded-xl border p-3 text-left transition ${objective === item.id ? 'border-violet-300/25 bg-violet-300/8' : 'border-white/8 bg-white/[0.015] hover:bg-white/[0.04]'}`}>
+                <button key={item.id} onClick={() => { cancelPendingRun(); setObjective(item.id); }} className={`rounded-xl border p-3 text-left transition ${objective === item.id ? 'border-violet-300/25 bg-violet-300/8' : 'border-white/8 bg-white/[0.015] hover:bg-white/[0.04]'}`}>
                   <Icon className={`mb-2 size-4 ${objective === item.id ? 'text-violet-300' : 'text-slate-600'}`} />
                   <p className={`text-[11px] font-medium ${objective === item.id ? 'text-violet-100' : 'text-slate-400'}`}>{item.label}</p>
                   <p className="mt-1 text-[9px] text-slate-600">{item.detail}</p>
@@ -191,11 +218,11 @@ export function OptimizerView({
           <p className="mb-3 mt-6 text-sm font-medium text-slate-200">Constraints</p>
           <div className="mb-3">
             <span className="mb-2 flex items-center justify-between text-xs text-slate-500"><span>Mass</span><span>≤ kg</span></span>
-            <Input aria-label="최대 질량" type="number" min={2} max={100} value={massLimit} onChange={(event) => { setMassLimit(Number(event.target.value)); setResults([]); }} className="h-10 border-white/10 bg-white/[0.025] font-mono text-slate-200" />
+            <Input aria-label="최대 질량" type="number" min={2} max={100} value={massLimit} onChange={(event) => { cancelPendingRun(); setMassLimit(Number(event.target.value)); }} className="h-10 border-white/10 bg-white/[0.025] font-mono text-slate-200" />
           </div>
           <div>
             <span className="mb-2 flex items-center justify-between text-xs text-slate-500"><span>Power @ MFD</span><span>≤ W</span></span>
-            <Input aria-label="최대 소비전력" type="number" min={200} max={10000} step={100} value={powerLimit} onChange={(event) => { setPowerLimit(Number(event.target.value)); setResults([]); }} className="h-10 border-white/10 bg-white/[0.025] font-mono text-slate-200" />
+            <Input aria-label="최대 소비전력" type="number" min={200} max={10000} step={100} value={powerLimit} onChange={(event) => { cancelPendingRun(); setPowerLimit(Number(event.target.value)); }} className="h-10 border-white/10 bg-white/[0.025] font-mono text-slate-200" />
           </div>
 
           <div className="mt-4 flex items-center justify-between rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2 text-xs">
@@ -211,7 +238,7 @@ export function OptimizerView({
         <div className="min-w-0 space-y-4">
           <section className="rounded-2xl border border-white/9 bg-[#0a1622] p-4 lg:p-5">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div><div className="flex items-center gap-2"><h2 className="font-semibold text-white">Pareto Design Space</h2><SourceBadge /></div><p className="mt-1 text-xs text-slate-600">Range ↑ vs Power ↓ · 유효 후보 최대 240점 표시</p></div>
+              <div><div className="flex items-center gap-2"><h2 className="font-semibold text-white">Range–Power Design Space</h2><SourceBadge /></div><p className="mt-1 text-xs text-slate-600">전체 유효 후보 중 최대 240점을 표본 표시합니다.</p></div>
               <div className="flex gap-4 text-[10px] text-slate-500"><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-cyan-900" /> 후보</span><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-violet-400" /> 추천</span></div>
             </div>
             <ChartContainer config={chartConfig} className="h-[310px] w-full aspect-auto" initialDimension={{ width: 900, height: 310 }}>
@@ -229,7 +256,7 @@ export function OptimizerView({
 
           {running ? (
             <section className="grid min-h-72 place-items-center rounded-2xl border border-violet-300/12 bg-violet-300/5 p-8 text-center">
-              <div><Sparkles className="mx-auto mb-4 size-7 animate-pulse text-violet-300" /><p className="font-medium text-violet-100">후보 설계를 평가하고 있습니다</p><p className="mt-2 text-xs text-violet-100/50">제약 필터 → 목적 점수 → Pareto shortlist</p></div>
+              <div><Sparkles className="mx-auto mb-4 size-7 animate-pulse text-violet-300" /><p className="font-medium text-violet-100">후보 설계를 평가하고 있습니다</p><p className="mt-2 text-xs text-violet-100/50">제약 필터 → 목적 점수 → 후보 shortlist</p></div>
             </section>
           ) : results.length ? (
             <>
@@ -240,10 +267,10 @@ export function OptimizerView({
               <section className="rounded-2xl border border-violet-300/15 bg-[linear-gradient(135deg,rgba(167,139,250,0.09),rgba(34,211,238,0.035))] p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="flex items-center gap-2"><Trophy className="size-4 text-violet-300" /><p className="text-sm font-medium text-violet-100">AI Recommended · Design #{best.id}</p><SourceBadge source="SURROGATE SCORE" /></div>
+                    <div className="flex items-center gap-2"><Trophy className="size-4 text-violet-300" /><p className="text-sm font-medium text-violet-100">Dataset Recommended · Design #{best.id}</p><SourceBadge source="DATASET RANKING" /></div>
                     <p className="mt-2 text-xs text-violet-100/55">{formatHub(best.hub)} · constraint 통과 · score {best.score.toFixed(3)}</p>
                   </div>
-                  <Button onClick={onCompare} className="bg-violet-400 text-white hover:bg-violet-300"><GitCompareArrows /> A/B Compare 열기 <ArrowRight /></Button>
+                  <Button onClick={() => onCompare(current.id, best.id)} className="bg-violet-400 text-white hover:bg-violet-300"><GitCompareArrows /> A/B Compare 열기 <ArrowRight /></Button>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
                   <DeltaMetric label="Range" before={current.maxDistance} after={best.maxDistance} unit="m" better="up" />
@@ -256,7 +283,7 @@ export function OptimizerView({
             </>
           ) : (
             <section className="grid min-h-60 place-items-center rounded-2xl border border-white/9 bg-[#0a1622] p-8 text-center">
-              <div><Sparkles className="mx-auto mb-4 size-6 text-slate-700" /><p className="text-sm font-medium text-slate-300">최적화 목표와 제약조건을 선택하세요</p><p className="mt-2 text-xs text-slate-600">OPTIMIZE를 누르면 상위 3개 설계와 Pareto trade-off를 반환합니다.</p></div>
+              <div><Sparkles className="mx-auto mb-4 size-6 text-slate-700" /><p className="text-sm font-medium text-slate-300">최적화 목표와 제약조건을 선택하세요</p><p className="mt-2 text-xs text-slate-600">OPTIMIZE를 누르면 상위 3개 설계와 Range–Power trade-off를 반환합니다.</p></div>
             </section>
           )}
           <DataDisclaimer compact />
@@ -289,10 +316,10 @@ function RecommendationCard({ design, rank }: { design: ScoredDesign; rank: numb
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
         <Mini label="Range" value={formatDistance(design.maxDistance)} />
         <Mini label="Power" value={`${formatMetric(design.power, 0)} W`} />
-        <Mini label="Hover" value={`${formatMetric(design.hoverTime, 0)} s`} />
+        <Mini label="Hover" value={isAvailableMetric(design.hoverTime) ? `${formatMetric(design.hoverTime, 0)} s` : '—'} />
         <Mini label="Mass" value={`${formatMetric(design.mass, 2)} kg`} />
       </div>
-      <div className="mt-4 flex items-center justify-between border-t border-white/7 pt-3 text-[10px]"><span className="text-slate-600">Surrogate score</span><span className="font-mono text-violet-300">{design.score.toFixed(3)}</span></div>
+      <div className="mt-4 flex items-center justify-between border-t border-white/7 pt-3 text-[10px]"><span className="text-slate-600">Dataset score</span><span className="font-mono text-violet-300">{design.score.toFixed(3)}</span></div>
     </article>
   );
 }
@@ -303,12 +330,13 @@ function Mini({ label, value }: { label: string; value: string }) {
 
 function DeltaMetric({ label, before, after, unit, better }: { label: string; before: number; after: number; unit: string; better: 'up' | 'down' }) {
   const change = percentChange(before, after);
-  const good = better === 'up' ? change >= 0 : change <= 0;
+  const good = change == null ? false : better === 'up' ? change >= 0 : change <= 0;
+  const available = isAvailableMetric(after);
   return (
     <div className="rounded-xl border border-white/8 bg-[#08131f]/55 p-3">
       <p className="text-[10px] text-slate-600">{label}</p>
-      <p className="mt-1 font-mono text-xs text-slate-300">{formatMetric(after, unit === 'kg' || unit === 'N' ? 2 : 0)} {unit}</p>
-      <p className={`mt-1 font-mono text-[10px] ${good ? 'text-emerald-300' : 'text-amber-300'}`}>{change >= 0 ? '+' : ''}{change.toFixed(1)}%</p>
+      <p className="mt-1 font-mono text-xs text-slate-300">{available ? `${formatMetric(after, unit === 'kg' || unit === 'N' ? 2 : 0)} ${unit}` : '—'}</p>
+      <p className={`mt-1 font-mono text-[10px] ${change == null ? 'text-slate-600' : good ? 'text-emerald-300' : 'text-amber-300'}`}>{change == null ? '—' : `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`}</p>
     </div>
   );
 }

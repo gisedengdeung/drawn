@@ -31,14 +31,15 @@ const navItems = [
   { id: 'simulator' as const, label: 'Performance', icon: Activity },
   { id: 'lab' as const, label: 'Design Lab', icon: Beaker },
   { id: 'compare' as const, label: 'A/B Compare', icon: GitCompareArrows },
-  { id: 'optimizer' as const, label: 'AI Optimizer', icon: Sparkles },
+  { id: 'optimizer' as const, label: 'Dataset Optimizer', icon: Sparkles },
 ];
 
 export function AeroTwinApp() {
   const [view, setView] = useState<WorkspaceView>('explore');
   const [dataset, setDataset] = useState<DatasetIndex | null>(null);
   const [showcases, setShowcases] = useState<ShowcaseMap>({});
-  const [selectedId, setSelectedId] = useState(17297);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [comparePair, setComparePair] = useState<{ aId: number; bId: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,8 +56,20 @@ export function AeroTwinApp() {
     ])
       .then(([index, showcaseData]) => {
         if (!active) return;
+        const showcaseIds = index.summary.showcaseIds;
+        if (
+          showcaseIds.length !== 12 ||
+          showcaseIds.some((id) => !showcaseData[String(id)]) ||
+          !showcaseData[String(index.summary.defaultShowcaseId)]
+        ) {
+          throw new Error('설계 인덱스와 대표 3D 자산이 일치하지 않습니다.');
+        }
+        const secondId = showcaseIds.find((id) => id !== index.summary.defaultShowcaseId)
+          ?? index.summary.defaultShowcaseId;
         setDataset(index);
         setShowcases(showcaseData);
+        setSelectedId(index.summary.defaultShowcaseId);
+        setComparePair({ aId: index.summary.defaultShowcaseId, bId: secondId });
       })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : '데이터 로딩 오류');
@@ -66,20 +79,39 @@ export function AeroTwinApp() {
     };
   }, []);
 
-  const selectedSummary = useMemo<DesignSummary | null>(
-    () => dataset?.designs.find((design) => design.id === selectedId) ?? null,
-    [dataset, selectedId],
+  const designById = useMemo(
+    () => new Map(dataset?.designs.map((design) => [design.id, design]) ?? []),
+    [dataset],
   );
-  const selectedDetail = showcases[String(selectedId)] ?? null;
+  const selectedSummary = useMemo<DesignSummary | null>(
+    () => selectedId == null ? null : designById.get(selectedId) ?? null,
+    [designById, selectedId],
+  );
+  const selectedDetail = selectedId == null ? null : showcases[String(selectedId)] ?? null;
   const showcaseList = useMemo(
-    () => Object.values(showcases).sort((a, b) => a.id - b.id),
-    [showcases],
+    () => dataset?.summary.showcaseIds
+      .map((id) => showcases[String(id)])
+      .filter((design) => Boolean(design)) ?? [],
+    [dataset, showcases],
   );
 
   const selectShowcaseAndOpen = (id: number, nextView: WorkspaceView) => {
-    const fallback = showcases[String(id)] ? id : 17297;
-    setSelectedId(fallback);
+    setSelectedId(id);
     setView(nextView);
+  };
+
+  const openCompare = (aId: number, bId: number) => {
+    if (!designById.has(aId) || !designById.has(bId)) return;
+    setComparePair({ aId, bId });
+    setView('compare');
+  };
+
+  const openCompareFromExplorer = (aId: number) => {
+    const existingB = comparePair?.bId;
+    const bId = existingB && existingB !== aId && designById.has(existingB)
+      ? existingB
+      : dataset?.summary.showcaseIds.find((id) => id !== aId);
+    if (bId != null) openCompare(aId, bId);
   };
 
   return (
@@ -103,7 +135,7 @@ export function AeroTwinApp() {
 
         <div className="ml-auto flex items-center gap-2">
           <Badge variant="outline" className="hidden border-violet-400/20 bg-violet-400/8 text-violet-200 sm:inline-flex">
-            <Sparkles /> Demo Surrogate v0.1
+            <Sparkles /> Dataset Ranking v1
           </Badge>
           <Button variant="outline" className="border-white/10 bg-white/[0.035] text-slate-200 hover:bg-white/8">
             팀 워크스페이스 <ChevronDown />
@@ -142,7 +174,7 @@ export function AeroTwinApp() {
               <Info className="size-3.5 text-cyan-300" /> 데이터 범위
             </div>
             <p className="text-xs leading-5 text-slate-500">
-              AircraftVerse 전체 27,714개 중 현재 로컬 샘플 9,238개를 탐색합니다.
+              AircraftVerse 전체 27,714개 설계를 검색하고 대표 12개 STL을 시각화합니다.
             </p>
             <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-600">
               <span className="size-1.5 rounded-full bg-amber-300" /> CFD 전체 유동장이 아닌 trim 성능 데이터
@@ -182,35 +214,58 @@ export function AeroTwinApp() {
                   dataset={dataset}
                   showcases={showcases}
                   selected={selectedSummary}
-                  detail={selectedDetail}
                   onSelect={setSelectedId}
                   onOpenSimulator={(id) => selectShowcaseAndOpen(id, 'simulator')}
+                  onOpenCompare={openCompareFromExplorer}
                   onOpenOptimizer={() => setView('optimizer')}
                 />
               )}
-              {view === 'simulator' && (
+              {view === 'simulator' && selectedDetail && (
                 <SimulatorView
                   designs={showcaseList}
-                  selected={selectedDetail ?? showcases['17297']}
+                  selected={selectedDetail}
                   onSelect={setSelectedId}
                   onOpenLab={() => setView('lab')}
                 />
               )}
-              {view === 'lab' && (
-                <DesignLabView
-                  key={selectedDetail?.id ?? 17297}
-                  designs={showcaseList}
-                  selected={selectedDetail ?? showcases['17297']}
-                  onSelect={setSelectedId}
-                  onCompare={() => setView('compare')}
+              {view === 'simulator' && !selectedDetail && (
+                <ShowcaseRequiredState
+                  title="Performance Simulator"
+                  selectedId={selectedId}
+                  defaultId={dataset.summary.defaultShowcaseId}
+                  onChoose={(id) => selectShowcaseAndOpen(id, 'simulator')}
                 />
               )}
-              {view === 'compare' && <CompareView designs={showcaseList} />}
+              {view === 'lab' && selectedDetail && (
+                <DesignLabView
+                  key={selectedDetail.id}
+                  designs={showcaseList}
+                  selected={selectedDetail}
+                  onSelect={setSelectedId}
+                  onOpenDatasetCompare={() => openCompareFromExplorer(selectedDetail.id)}
+                />
+              )}
+              {view === 'lab' && !selectedDetail && (
+                <ShowcaseRequiredState
+                  title="Design Lab"
+                  selectedId={selectedId}
+                  defaultId={dataset.summary.defaultShowcaseId}
+                  onChoose={(id) => selectShowcaseAndOpen(id, 'lab')}
+                />
+              )}
+              {view === 'compare' && comparePair && (
+                <CompareView
+                  dataset={dataset}
+                  showcases={showcases}
+                  pair={comparePair}
+                  onPairChange={setComparePair}
+                />
+              )}
               {view === 'optimizer' && (
                 <OptimizerView
                   dataset={dataset}
-                  current={selectedDetail ?? showcases['1000']}
-                  onCompare={() => setView('compare')}
+                  current={selectedSummary ?? designById.get(dataset.summary.defaultShowcaseId)!}
+                  onCompare={openCompare}
                 />
               )}
             </>
@@ -229,8 +284,35 @@ function LoadingWorkspace() {
           <Hexagon className="size-6 animate-pulse text-cyan-300" />
         </div>
         <p className="font-medium text-slate-200">AircraftVerse 인덱스를 준비하고 있습니다</p>
-        <p className="mt-2 text-sm text-slate-500">9,238개 설계 메타데이터와 trim curve를 로드합니다.</p>
+        <p className="mt-2 text-sm text-slate-500">27,714개 설계 메타데이터와 대표 trim curve를 로드합니다.</p>
       </div>
     </div>
+  );
+}
+
+function ShowcaseRequiredState({
+  title,
+  selectedId,
+  defaultId,
+  onChoose,
+}: {
+  title: string;
+  selectedId: number | null;
+  defaultId: number;
+  onChoose: (id: number) => void;
+}) {
+  return (
+    <section className="grid min-h-[calc(100vh-64px)] place-items-center px-6 text-center">
+      <div className="max-w-md rounded-2xl border border-white/9 bg-[#0a1622] p-8">
+        <Boxes className="mx-auto mb-4 size-8 text-cyan-300" />
+        <h1 className="text-lg font-semibold text-white">{title}</h1>
+        <p className="mt-3 text-sm leading-6 text-slate-500">
+          Design #{selectedId ?? '—'}는 metadata-only 설계라 STL과 trim 곡선이 패키징되지 않았습니다.
+        </p>
+        <Button onClick={() => onChoose(defaultId)} className="mt-5 bg-cyan-300 text-[#041019] hover:bg-cyan-200">
+          대표 설계 #{defaultId} 선택
+        </Button>
+      </div>
+    </section>
   );
 }

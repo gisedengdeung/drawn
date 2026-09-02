@@ -35,6 +35,7 @@ export type TrimRow = {
 };
 
 export type ShowcaseDesign = DesignSummary & {
+  selectionReason: string;
   sourceName: string;
   generatorVersion: string;
   motor: string | null;
@@ -55,7 +56,15 @@ export type DatasetSummary = {
   validRangeDesigns: number;
   validHoverDesigns: number;
   wingedDesigns: number;
-  indexedAt: string;
+  sourceParts: Array<{
+    name: string;
+    designCount: number;
+    bytes: number;
+  }>;
+  sourceBytes: number;
+  pointCloudShape: [number, number];
+  showcaseIds: number[];
+  defaultShowcaseId: number;
   source: string;
   trimSchema: string[];
 };
@@ -100,6 +109,10 @@ export function formatHub(value: string) {
 }
 
 export function percentChange(before: number, after: number) {
-  if (!before) return 0;
+  if (!isAvailableMetric(before) || !isAvailableMetric(after)) return null;
   return ((after - before) / before) * 100;
+}
+
+export function isAvailableMetric(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }

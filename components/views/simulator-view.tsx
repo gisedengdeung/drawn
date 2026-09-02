@@ -215,12 +215,13 @@ export function SimulatorView({
 }
 
 function LiveMetric({ icon, label, value, unit, tone }: { icon: React.ReactNode; label: string; value: number | null; unit: string; tone: 'cyan' | 'violet' | 'green' | 'amber' }) {
+  const available = value != null && Number.isFinite(value) && value !== 0;
   return (
     <MetricTile
       icon={<span className="[&>svg]:size-4">{icon}</span>}
       label={label}
-      value={value == null ? '—' : formatMetric(value, unit === 'W' || unit === 'sec' ? 0 : 1)}
-      unit={value == null ? undefined : unit}
+      value={available ? formatMetric(value, unit === 'W' || unit === 'sec' ? 0 : 1) : '—'}
+      unit={available ? unit : undefined}
       tone={tone}
       source="DATASET"
     />

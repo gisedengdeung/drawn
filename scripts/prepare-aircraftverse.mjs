@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, '..');
@@ -8,6 +9,9 @@ const workspaceRoot = path.resolve(projectRoot, '..');
 const publicDataDir = path.join(projectRoot, 'public', 'data');
 const publicModelsDir = path.join(projectRoot, 'public', 'models');
 const defaultShowcaseId = 17297;
+const expectedPartCount = 3;
+const expectedDesignsPerPart = 9238;
+const expectedTotalDesigns = 27714;
 const requiredFiles = [
   'cadfile.stl',
   'Geom.stp',
@@ -90,6 +94,43 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+function writeBinaryStl(sourcePath, destinationPath) {
+  const source = fs.readFileSync(sourcePath);
+  const arrayBuffer = source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
+  const geometry = new STLLoader().parse(arrayBuffer);
+  const positions = geometry.getAttribute('position');
+  const normals = geometry.getAttribute('normal');
+  if (!positions || positions.count % 3 !== 0) {
+    geometry.dispose();
+    throw new Error(`Invalid STL triangle geometry: ${sourcePath}`);
+  }
+
+  const triangleCount = positions.count / 3;
+  const binary = Buffer.alloc(84 + triangleCount * 50);
+  binary.write('AeroTwin AircraftVerse binary STL', 0, 'ascii');
+  binary.writeUInt32LE(triangleCount, 80);
+  let offset = 84;
+
+  for (let triangle = 0; triangle < triangleCount; triangle += 1) {
+    const firstVertex = triangle * 3;
+    for (let axis = 0; axis < 3; axis += 1) {
+      binary.writeFloatLE(normals?.getComponent(firstVertex, axis) ?? 0, offset);
+      offset += 4;
+    }
+    for (let vertex = 0; vertex < 3; vertex += 1) {
+      for (let axis = 0; axis < 3; axis += 1) {
+        binary.writeFloatLE(positions.getComponent(firstVertex + vertex, axis), offset);
+        offset += 4;
+      }
+    }
+    binary.writeUInt16LE(0, offset);
+    offset += 2;
+  }
+
+  geometry.dispose();
+  fs.writeFileSync(destinationPath, binary);
+}
+
 function getSequenceValue(sequence, key) {
   return sequence.find((entry) => Object.hasOwn(entry, key))?.[key] ?? null;
 }
@@ -140,7 +181,7 @@ function createTrimRows(filePath) {
     return {
       speed,
       ...row,
-      valid: numericValues.length === trimFields.length && numericValues.some((value) => value !== 0),
+      valid: numericValues.some((value) => value !== 0),
     };
   });
 }
@@ -149,8 +190,12 @@ function readTrimAt(metadata, speed) {
   const row = Array.from({ length: 12 }, (_, column) =>
     metadata.buffer.readDoubleLE(metadata.dataOffset + (speed * 12 + column) * 8),
   );
-  const valid = row.every(Number.isFinite) && row.some((value) => value !== 0);
-  return { valid, drag: valid ? row[6] : 0, power: valid ? row[8] : 0 };
+  const isUsable = (value) => Number.isFinite(value) && value !== 0;
+  return {
+    valid: row.some(isUsable),
+    drag: isUsable(row[6]) ? row[6] : 0,
+    power: isUsable(row[8]) ? row[8] : 0,
+  };
 }
 
 function compareDescending(metric) {
@@ -159,6 +204,66 @@ function compareDescending(metric) {
 
 function compareAscending(metric) {
   return (a, b) => metric(a) - metric(b) || a.id - b.id;
+}
+
+function findParetoFront(designs) {
+  const sorted = [...designs].sort(
+    (a, b) => b.maxDistance - a.maxDistance || a.power - b.power || a.mass - b.mass || a.id - b.id,
+  );
+  const powers = [...new Set(sorted.map((design) => design.power))].sort((a, b) => a - b);
+  const powerIndex = new Map(powers.map((power, index) => [power, index + 1]));
+  const minimumMassTree = Array.from(
+    { length: powers.length + 1 },
+    () => Number.POSITIVE_INFINITY,
+  );
+  const queryMinimumMass = (index) => {
+    let minimum = Number.POSITIVE_INFINITY;
+    for (let cursor = index; cursor > 0; cursor -= cursor & -cursor) {
+      minimum = Math.min(minimum, minimumMassTree[cursor]);
+    }
+    return minimum;
+  };
+  const recordMass = (index, mass) => {
+    for (let cursor = index; cursor < minimumMassTree.length; cursor += cursor & -cursor) {
+      minimumMassTree[cursor] = Math.min(minimumMassTree[cursor], mass);
+    }
+  };
+
+  const front = [];
+  for (const design of sorted) {
+    const index = powerIndex.get(design.power);
+    if (queryMinimumMass(index) <= design.mass) continue;
+    front.push(design);
+    recordMass(index, design.mass);
+  }
+  return front;
+}
+
+function createIdealDistance(designs) {
+  const bounds = designs.reduce(
+    (accumulator, design) => ({
+      rangeMin: Math.min(accumulator.rangeMin, design.maxDistance),
+      rangeMax: Math.max(accumulator.rangeMax, design.maxDistance),
+      powerMin: Math.min(accumulator.powerMin, design.power),
+      powerMax: Math.max(accumulator.powerMax, design.power),
+      massMin: Math.min(accumulator.massMin, design.mass),
+      massMax: Math.max(accumulator.massMax, design.mass),
+    }),
+    {
+      rangeMin: Number.POSITIVE_INFINITY,
+      rangeMax: Number.NEGATIVE_INFINITY,
+      powerMin: Number.POSITIVE_INFINITY,
+      powerMax: Number.NEGATIVE_INFINITY,
+      massMin: Number.POSITIVE_INFINITY,
+      massMax: Number.NEGATIVE_INFINITY,
+    },
+  );
+  const normalize = (value, minimum, maximum) => (value - minimum) / Math.max(maximum - minimum, 1);
+  return (design) => Math.hypot(
+    1 - normalize(design.maxDistance, bounds.rangeMin, bounds.rangeMax),
+    normalize(design.power, bounds.powerMin, bounds.powerMax),
+    normalize(design.mass, bounds.massMin, bounds.massMax),
+  );
 }
 
 function selectShowcases(designs) {
@@ -185,26 +290,8 @@ function selectShowcases(designs) {
   const feasible = designs.filter(
     (design) => design.feasible && design.mass > 0 && design.power > 0,
   );
-  const maxima = feasible.reduce(
-    (accumulator, design) => ({
-      range: Math.max(accumulator.range, design.maxDistance),
-      hover: Math.max(accumulator.hover, design.hoverTime),
-      power: Math.max(accumulator.power, design.power),
-      drag: Math.max(accumulator.drag, design.dragAt20),
-      speed: Math.max(accumulator.speed, design.maxSpeed),
-      mass: Math.max(accumulator.mass, design.mass),
-    }),
-    { range: 1, hover: 1, power: 1, drag: 1, speed: 1, mass: 1 },
-  );
-  const balancedScore = (design) => {
-    const range = design.maxDistance / maxima.range;
-    const hover = design.hoverTime / maxima.hover;
-    const power = 1 - design.power / maxima.power;
-    const drag = design.dragAt20 > 0 ? 1 - design.dragAt20 / maxima.drag : 0;
-    const speed = design.maxSpeed / maxima.speed;
-    const mass = 1 - design.mass / maxima.mass;
-    return range * 0.36 + hover * 0.22 + power * 0.18 + drag * 0.1 + speed * 0.06 + mass * 0.08;
-  };
+  const paretoFront = findParetoFront(feasible);
+  const idealDistance = createIdealDistance(feasible);
 
   add(baseline, 'Default demonstration design');
   addFirstUnused(feasible, compareDescending((design) => design.maxDistance), 'Maximum flight distance');
@@ -212,7 +299,7 @@ function selectShowcases(designs) {
   addFirstUnused(feasible.filter((design) => design.maxSpeed > 0), compareDescending((design) => design.maxSpeed), 'Maximum speed');
   addFirstUnused(feasible, compareAscending((design) => design.power), 'Minimum power at maximum flight distance');
   addFirstUnused(feasible.filter((design) => design.dragAt20 > 0), compareAscending((design) => design.dragAt20), 'Minimum valid drag at 20 m/s');
-  addFirstUnused(feasible, compareDescending(balancedScore), 'Balanced dataset ranking');
+  addFirstUnused(paretoFront, compareAscending(idealDistance), 'Pareto-balanced Range–Power–Mass trade-off');
   addFirstUnused(feasible.filter((design) => design.numWings > 0), compareDescending((design) => design.maxDistance), 'Maximum-range winged design');
   addFirstUnused(feasible.filter((design) => design.numPropellers === 4), compareDescending((design) => design.maxDistance), 'Maximum-range 4-propeller design');
   addFirstUnused(feasible.filter((design) => design.numPropellers === 6), compareDescending((design) => design.maxDistance), 'Maximum-range 6-propeller design');
@@ -223,6 +310,11 @@ function selectShowcases(designs) {
 }
 
 const dataRoots = discoverDataRoots();
+if (dataRoots.length !== expectedPartCount) {
+  throw new Error(
+    `Expected ${expectedPartCount} AircraftVerse parts, found ${dataRoots.length}: ${dataRoots.join(', ')}`,
+  );
+}
 fs.mkdirSync(publicDataDir, { recursive: true });
 fs.mkdirSync(publicModelsDir, { recursive: true });
 
@@ -236,6 +328,11 @@ for (const dataRoot of dataRoots) {
   const folders = fs.readdirSync(dataRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && /^design_\d+$/.test(entry.name))
     .sort((a, b) => Number(a.name.slice(7)) - Number(b.name.slice(7)));
+  if (folders.length !== expectedDesignsPerPart) {
+    throw new Error(
+      `Expected ${expectedDesignsPerPart.toLocaleString()} designs in ${dataRoot}, found ${folders.length.toLocaleString()}.`,
+    );
+  }
   let partBytes = 0;
 
   for (const folder of folders) {
@@ -294,6 +391,12 @@ for (const dataRoot of dataRoots) {
   });
 }
 
+if (designRecords.length !== expectedTotalDesigns || designIds.size !== expectedTotalDesigns) {
+  throw new Error(
+    `Expected ${expectedTotalDesigns.toLocaleString()} unique designs, indexed ${designRecords.length.toLocaleString()} records and ${designIds.size.toLocaleString()} unique IDs.`,
+  );
+}
+
 designRecords.sort((a, b) => a.metadata.id - b.metadata.id);
 const designs = designRecords.map((record) => record.metadata);
 const recordsById = new Map(designRecords.map((record) => [record.metadata.id, record]));
@@ -315,7 +418,10 @@ for (const { design, selectionReason } of selected) {
   const sequence = readJson(path.join(record.designDir, 'design_seq.json'));
   const output = readJson(path.join(record.designDir, 'output.json'));
   const modelName = `design-${design.id}.stl`;
-  fs.copyFileSync(path.join(record.designDir, 'cadfile.stl'), path.join(publicModelsDir, modelName));
+  writeBinaryStl(
+    path.join(record.designDir, 'cadfile.stl'),
+    path.join(publicModelsDir, modelName),
+  );
   showcase[design.id] = {
     ...design,
     selectionReason,

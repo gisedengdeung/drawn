@@ -13,12 +13,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  type DesignSummary,
   formatComponent,
   formatHub,
   type ShowcaseDesign,
 } from '@/lib/aerotwin-types';
 
-export function SourceBadge({ source = 'DATASET' }: { source?: 'DATASET' | 'INTERPOLATED' | 'DEMO ESTIMATE' | 'SURROGATE SCORE' }) {
+type DataSource = 'DATASET' | 'INTERPOLATED' | 'DEMO ESTIMATE' | 'DATASET RANKING';
+
+export function SourceBadge({ source = 'DATASET' }: { source?: DataSource }) {
   const style =
     source === 'DATASET'
       ? 'border-cyan-400/20 bg-cyan-400/5 text-cyan-200'
@@ -47,7 +50,7 @@ export function MetricTile({
   note?: string;
   icon?: ReactNode;
   tone?: 'cyan' | 'violet' | 'green' | 'amber' | 'slate';
-  source?: 'DATASET' | 'INTERPOLATED' | 'DEMO ESTIMATE' | 'SURROGATE SCORE';
+  source?: DataSource;
 }) {
   const toneClasses = {
     cyan: 'bg-cyan-300/8 text-cyan-300',
@@ -100,7 +103,7 @@ export function DesignSelector({
   onChange,
   className = '',
 }: {
-  designs: ShowcaseDesign[];
+  designs: Array<Pick<DesignSummary, 'id' | 'numPropellers' | 'numWings'>>;
   value: number;
   onChange: (value: number) => void;
   className?: string;
@@ -125,10 +128,12 @@ export function ModelStage({
   design,
   className = '',
   label = true,
+  emptyDesignId,
 }: {
   design: ShowcaseDesign | null;
   className?: string;
   label?: boolean;
+  emptyDesignId?: number;
 }) {
   return (
     <div className={`relative min-h-[360px] overflow-hidden rounded-2xl border border-white/9 bg-[radial-gradient(circle_at_50%_32%,rgba(28,88,105,0.26),transparent_44%),linear-gradient(180deg,#0b1a28,#07111c)] ${className}`}>
@@ -151,8 +156,10 @@ export function ModelStage({
             <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl border border-white/8 bg-white/[0.025]">
               <Box className="size-5 text-slate-600" />
             </div>
-            <p className="text-sm font-medium text-slate-300">3D asset not packaged</p>
-            <p className="mt-2 max-w-sm text-xs leading-5 text-slate-600">전체 30GB 원본 중 시연용 6개 STL만 웹 앱에 포함했습니다. 메타데이터는 계속 탐색할 수 있습니다.</p>
+            <p className="text-sm font-medium text-slate-300">
+              {emptyDesignId ? `Design #${emptyDesignId}는 metadata-only입니다` : '3D asset not packaged'}
+            </p>
+            <p className="mt-2 max-w-sm text-xs leading-5 text-slate-600">전체 84.34GiB 원본 중 대표 12개 STL만 웹 앱에 포함했습니다. 이 설계의 성능 메타데이터는 계속 비교할 수 있습니다.</p>
           </div>
         </div>
       )}
@@ -185,7 +192,7 @@ export function DataDisclaimer({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`flex gap-3 rounded-xl border border-amber-300/12 bg-amber-300/[0.045] text-amber-100/75 ${compact ? 'px-3 py-2 text-[11px]' : 'p-4 text-xs leading-5'}`}>
       <Info className="mt-0.5 size-3.5 shrink-0 text-amber-300" />
-      <p>설계 탐색용 surrogate 결과이며 CFD 전체 유동장, 비행 인증 또는 제작 안전성을 대체하지 않습니다.</p>
+      <p>AircraftVerse 데이터셋과 demo model 기반 설계 탐색 결과이며 CFD 전체 유동장, 비행 인증 또는 제작 안전성을 대체하지 않습니다.</p>
     </div>
   );
 }

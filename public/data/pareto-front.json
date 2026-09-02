@@ -1,0 +1,1 @@
+{"objectives":{"maximize":["maxDistance"],"minimize":["power","mass"]},"kneeMethod":"minimum normalized Euclidean distance to the feasible-set ideal point","kneeId":20015,"designIds":[2082,6841,7210,8365,8384,10195,10221,10995,11137,12210,14399,15131,15503,15779,16095,16441,16491,16826,17965,18828,19095,20015,20290,20314,20467,20716,21261,22134,22305,22875,23110,27807]}

@@ -37,3 +37,13 @@ next-env.d.ts
 /outputs/
 /work/
 *.tsbuildinfo
+
+# local AircraftVerse source data (generated web assets stay tracked)
+/AircraftVerse_*/
+/data/
+/**/__MACOSX/
+/**/pointCloud.npy
+/**/trims.npy
+/**/Geom.stp
+/**/cadfile.stl
+/corpus_dic

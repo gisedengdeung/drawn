@@ -10,19 +10,37 @@ import { Button } from '@/components/ui/button';
 
 type StlViewerProps = {
   src: string;
+  pitchDegrees?: number | null;
+  forceVectors?: {
+    drag?: number | null;
+    lift?: number | null;
+    thrust?: number | null;
+  };
+  showForceVectors?: boolean;
 };
 
-export function StlViewer({ src }: StlViewerProps) {
+export function StlViewer({
+  src,
+  pitchDegrees = 0,
+  forceVectors,
+  showForceVectors = false,
+}: StlViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
+  const dynamicsRef = useRef({ pitchDegrees, forceVectors, showForceVectors });
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+
+  useEffect(() => {
+    dynamicsRef.current = { pitchDegrees, forceVectors, showForceVectors };
+  }, [forceVectors, pitchDegrees, showForceVectors]);
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
 
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xeef3f6);
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 10000);
     let renderer: THREE.WebGLRenderer;
     try {
@@ -43,7 +61,11 @@ export function StlViewer({ src }: StlViewerProps) {
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
     renderer.domElement.style.touchAction = 'none';
-    renderer.domElement.setAttribute('aria-label', 'UAV 3D model viewer');
+    renderer.domElement.tabIndex = 0;
+    renderer.domElement.setAttribute(
+      'aria-label',
+      'UAV 3D model viewer. 방향키로 회전 및 확대/축소',
+    );
     mount.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -52,22 +74,47 @@ export function StlViewer({ src }: StlViewerProps) {
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.55;
     controls.enablePan = true;
+    const handleKeyboard = (event: KeyboardEvent) => {
+      const offset = camera.position.clone().sub(controls.target);
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), event.key === 'ArrowLeft' ? 0.12 : -0.12);
+      } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        offset.multiplyScalar(event.key === 'ArrowUp' ? 0.9 : 1.1);
+      } else {
+        return;
+      }
+      event.preventDefault();
+      camera.position.copy(controls.target).add(offset);
+      controls.update();
+    };
+    renderer.domElement.addEventListener('keydown', handleKeyboard);
 
-    scene.add(new THREE.HemisphereLight(0xc9f9ff, 0x07101d, 2.2));
-    const key = new THREE.DirectionalLight(0xe9fdff, 4.2);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x91a9b6, 2.6));
+    const key = new THREE.DirectionalLight(0xffffff, 3.6);
     key.position.set(4, 7, 5);
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0x6e77ff, 3.4);
+    const rim = new THREE.DirectionalLight(0x86d8df, 2.2);
     rim.position.set(-5, 2, -4);
     scene.add(rim);
 
-    const grid = new THREE.GridHelper(1200, 16, 0x1b6979, 0x12323d);
+    const grid = new THREE.GridHelper(1200, 20, 0x9cb3bd, 0xd4e0e5);
     const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material];
     gridMaterials.forEach((material) => {
       material.transparent = true;
-      material.opacity = 0.28;
+      material.opacity = 0.58;
     });
     scene.add(grid);
+
+    const modelPivot = new THREE.Group();
+    scene.add(modelPivot);
+
+    const forceGroup = new THREE.Group();
+    const dragArrow = new THREE.ArrowHelper(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(), 1, 0x147d91, 0.18, 0.1);
+    const liftArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 1, 0xc47a13, 0.18, 0.1);
+    const thrustArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, 0x178653, 0.18, 0.1);
+    forceGroup.add(dragArrow, liftArrow, thrustArrow);
+    forceGroup.visible = false;
+    scene.add(forceGroup);
 
     let model: THREE.Mesh | null = null;
     let frame = 0;
@@ -76,6 +123,33 @@ export function StlViewer({ src }: StlViewerProps) {
     let modelRadius = 0;
     let lastWidth = 0;
     let lastHeight = 0;
+    let lastDynamics = '';
+
+    const updateDynamics = () => {
+      const dynamics = dynamicsRef.current;
+      const pitch = Number.isFinite(dynamics.pitchDegrees) ? Number(dynamics.pitchDegrees) : 0;
+      const drag = Math.max(0, Number(dynamics.forceVectors?.drag) || 0);
+      const lift = Math.max(0, Number(dynamics.forceVectors?.lift) || 0);
+      const thrust = Math.max(0, Number(dynamics.forceVectors?.thrust) || 0);
+      const signature = `${pitch}|${drag}|${lift}|${thrust}|${dynamics.showForceVectors}|${modelRadius}`;
+      if (signature === lastDynamics) return;
+      lastDynamics = signature;
+
+      modelPivot.rotation.z = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(pitch, -45, 45));
+      forceGroup.visible = Boolean(dynamics.showForceVectors && modelRadius && (drag || lift || thrust));
+      if (!forceGroup.visible) return;
+
+      const maximum = Math.max(drag, lift, thrust, 1);
+      const arrowLength = (value: number) => modelRadius * (0.55 + (value / maximum) * 0.85);
+      const headLength = Math.max(modelRadius * 0.17, 0.1);
+      const headWidth = Math.max(modelRadius * 0.1, 0.06);
+      dragArrow.position.set(-modelRadius * 0.12, modelRadius * 0.24, 0);
+      liftArrow.position.set(0, modelRadius * 0.12, 0);
+      thrustArrow.position.set(modelRadius * 0.12, modelRadius * 0.24, 0);
+      dragArrow.setLength(arrowLength(drag), headLength, headWidth);
+      liftArrow.setLength(arrowLength(lift), headLength, headWidth);
+      thrustArrow.setLength(arrowLength(thrust), headLength, headWidth);
+    };
 
     const fitCamera = () => {
       if (!modelRadius) return;
@@ -141,15 +215,16 @@ export function StlViewer({ src }: StlViewerProps) {
         model = new THREE.Mesh(
           geometry,
           new THREE.MeshStandardMaterial({
-            color: 0xcceff2,
-            metalness: 0.48,
-            roughness: 0.3,
+            color: 0x93d4dc,
+            metalness: 0.24,
+            roughness: 0.44,
             side: THREE.DoubleSide,
           }),
         );
         model.rotation.x = -Math.PI / 2;
         model.position.y = radius * 0.12;
-        scene.add(model);
+        modelPivot.add(model);
+        updateDynamics();
         fitCamera();
         setStatus('ready');
       },
@@ -162,6 +237,7 @@ export function StlViewer({ src }: StlViewerProps) {
     );
 
     const animate = () => {
+      updateDynamics();
       controls.update();
       renderer.render(scene, camera);
       frame = requestAnimationFrame(animate);
@@ -174,9 +250,18 @@ export function StlViewer({ src }: StlViewerProps) {
       cancelAnimationFrame(resizeFrame);
       observer.disconnect();
       renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
+      renderer.domElement.removeEventListener('keydown', handleKeyboard);
       controls.dispose();
       model?.geometry.dispose();
       if (model?.material && !Array.isArray(model.material)) model.material.dispose();
+      for (const arrow of [dragArrow, liftArrow, thrustArrow]) {
+        arrow.line.geometry.dispose();
+        const lineMaterials = Array.isArray(arrow.line.material) ? arrow.line.material : [arrow.line.material];
+        lineMaterials.forEach((material) => material.dispose());
+        arrow.cone.geometry.dispose();
+        const coneMaterials = Array.isArray(arrow.cone.material) ? arrow.cone.material : [arrow.cone.material];
+        coneMaterials.forEach((material) => material.dispose());
+      }
       grid.geometry.dispose();
       gridMaterials.forEach((material) => material.dispose());
       renderer.dispose();
@@ -188,17 +273,21 @@ export function StlViewer({ src }: StlViewerProps) {
     <div
       ref={mountRef}
       data-viewer-status={status}
+      data-pitch-degrees={Number.isFinite(pitchDegrees) ? pitchDegrees : 0}
+      data-force-drag={forceVectors?.drag ?? ''}
+      data-force-lift={forceVectors?.lift ?? ''}
+      data-force-thrust={forceVectors?.thrust ?? ''}
       className="absolute inset-0 overflow-hidden"
     >
       {status === 'loading' && (
-        <div className="absolute inset-0 z-10 grid place-items-center text-xs font-medium uppercase tracking-[0.18em] text-cyan-200/70">
-          Loading aircraft mesh
+        <div className="absolute inset-0 z-10 grid place-items-center text-xs font-semibold tracking-[0.12em] text-[#607383]">
+          원본 STL 불러오는 중
         </div>
       )}
       {status === 'error' && (
-        <div className="absolute inset-0 z-10 grid place-items-center bg-[#07111d]/80 p-6 text-center backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 grid place-items-center bg-white/90 p-6 text-center backdrop-blur-sm">
           <div>
-            <p className="text-sm text-amber-200">{errorMessage || '3D 모델을 불러오지 못했습니다.'}</p>
+            <p className="text-sm font-medium text-amber-800">{errorMessage || '3D 모델을 불러오지 못했습니다.'}</p>
             <Button
               size="sm"
               variant="outline"
@@ -207,7 +296,7 @@ export function StlViewer({ src }: StlViewerProps) {
                 setErrorMessage('');
                 setRetryKey((value) => value + 1);
               }}
-              className="mt-4 border-amber-200/20 bg-amber-200/5 text-amber-100 hover:bg-amber-200/10"
+              className="mt-4 border-amber-200 bg-white text-amber-900 hover:bg-amber-50"
             >
               <RefreshCw /> 다시 시도
             </Button>

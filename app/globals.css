@@ -54,59 +54,60 @@ body {
 }
 
 :root {
-  --background: oklch(0.145 0.025 246);
-  --foreground: oklch(0.94 0.015 220);
-  --card: oklch(0.18 0.027 246);
-  --card-foreground: oklch(0.94 0.015 220);
-  --popover: oklch(0.17 0.025 246);
-  --popover-foreground: oklch(0.94 0.015 220);
-  --primary: oklch(0.86 0.12 195);
-  --primary-foreground: oklch(0.16 0.035 230);
-  --secondary: oklch(0.24 0.03 248);
-  --secondary-foreground: oklch(0.9 0.015 220);
-  --muted: oklch(0.22 0.025 246);
-  --muted-foreground: oklch(0.65 0.03 230);
-  --accent: oklch(0.28 0.05 220);
-  --accent-foreground: oklch(0.92 0.02 210);
+  color-scheme: light;
+  --background: oklch(0.982 0.006 230);
+  --foreground: oklch(0.25 0.03 238);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.25 0.03 238);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.25 0.03 238);
+  --primary: oklch(0.52 0.105 212);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.955 0.012 225);
+  --secondary-foreground: oklch(0.31 0.04 235);
+  --muted: oklch(0.96 0.009 230);
+  --muted-foreground: oklch(0.52 0.025 235);
+  --accent: oklch(0.94 0.025 211);
+  --accent-foreground: oklch(0.36 0.08 215);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.98 0.01 220 / 10%);
-  --input: oklch(0.98 0.01 220 / 14%);
-  --ring: oklch(0.82 0.12 195);
-  --chart-1: oklch(0.82 0.12 195);
-  --chart-2: oklch(0.7 0.17 292);
-  --chart-3: oklch(0.77 0.15 150);
-  --chart-4: oklch(0.78 0.16 70);
-  --chart-5: oklch(0.68 0.18 25);
+  --border: oklch(0.89 0.014 230);
+  --input: oklch(0.86 0.018 230);
+  --ring: oklch(0.57 0.105 212);
+  --chart-1: oklch(0.55 0.12 210);
+  --chart-2: oklch(0.58 0.16 292);
+  --chart-3: oklch(0.58 0.13 155);
+  --chart-4: oklch(0.68 0.14 75);
+  --chart-5: oklch(0.62 0.18 28);
   --radius: 0.75rem;
-  --sidebar: oklch(0.16 0.025 246);
-  --sidebar-foreground: oklch(0.86 0.02 220);
-  --sidebar-primary: oklch(0.82 0.12 195);
-  --sidebar-primary-foreground: oklch(0.16 0.025 246);
-  --sidebar-accent: oklch(0.22 0.04 220);
-  --sidebar-accent-foreground: oklch(0.92 0.02 210);
-  --sidebar-border: oklch(0.98 0.01 220 / 10%);
-  --sidebar-ring: oklch(0.82 0.12 195);
+  --sidebar: oklch(0.975 0.008 230);
+  --sidebar-foreground: oklch(0.32 0.035 235);
+  --sidebar-primary: oklch(0.52 0.105 212);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.935 0.025 212);
+  --sidebar-accent-foreground: oklch(0.36 0.08 215);
+  --sidebar-border: oklch(0.89 0.014 230);
+  --sidebar-ring: oklch(0.57 0.105 212);
 }
 
 .dark {
-  --background: oklch(0.145 0.025 246);
-  --foreground: oklch(0.94 0.015 220);
-  --card: oklch(0.18 0.027 246);
-  --card-foreground: oklch(0.94 0.015 220);
-  --popover: oklch(0.17 0.025 246);
-  --popover-foreground: oklch(0.94 0.015 220);
-  --primary: oklch(0.86 0.12 195);
-  --primary-foreground: oklch(0.16 0.035 230);
-  --secondary: oklch(0.24 0.03 248);
-  --secondary-foreground: oklch(0.9 0.015 220);
-  --muted: oklch(0.22 0.025 246);
-  --muted-foreground: oklch(0.65 0.03 230);
-  --accent: oklch(0.28 0.05 220);
-  --accent-foreground: oklch(0.92 0.02 210);
-  --destructive: oklch(0.68 0.2 25);
-  --border: oklch(0.98 0.01 220 / 10%);
-  --input: oklch(0.98 0.01 220 / 14%);
-  --ring: oklch(0.82 0.12 195);
+  --background: oklch(0.982 0.006 230);
+  --foreground: oklch(0.25 0.03 238);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.25 0.03 238);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.25 0.03 238);
+  --primary: oklch(0.52 0.105 212);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.955 0.012 225);
+  --secondary-foreground: oklch(0.31 0.04 235);
+  --muted: oklch(0.96 0.009 230);
+  --muted-foreground: oklch(0.52 0.025 235);
+  --accent: oklch(0.94 0.025 211);
+  --accent-foreground: oklch(0.36 0.08 215);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.89 0.014 230);
+  --input: oklch(0.86 0.018 230);
+  --ring: oklch(0.57 0.105 212);
 }
 
 @layer base {
@@ -115,9 +116,74 @@ body {
   }
   body {
     @apply bg-background text-foreground;
-    background-image: radial-gradient(circle at 78% -10%, rgba(34, 211, 238, 0.06), transparent 28%);
+    background-image: linear-gradient(180deg, #ffffff 0, #f7f9fb 240px);
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  .workspace-light {
+    --workbench-surface: #ffffff;
+    --workbench-subtle: #f4f7f9;
+    --workbench-border: #dbe4ea;
+    --workbench-ink: #172b3a;
+    --workbench-muted: #607383;
+    --workbench-primary: #147d91;
+  }
+
+  /* Legacy dark utility classes inside shared viewer/metric components. */
+  .workspace-light [class*='bg-[#0a1622]'],
+  .workspace-light [class*='bg-[#08131f]'],
+  .workspace-light [class*='bg-[#07111d]'],
+  .workspace-light [class*='bg-[#0b1723]'] {
+    background-color: var(--workbench-surface) !important;
+  }
+
+  .workspace-light [class*='border-white/'] {
+    border-color: var(--workbench-border) !important;
+  }
+
+  .workspace-light .text-white,
+  .workspace-light .text-slate-200,
+  .workspace-light .text-slate-300 {
+    color: var(--workbench-ink) !important;
+  }
+
+  .workspace-light .text-slate-400,
+  .workspace-light .text-slate-500,
+  .workspace-light .text-slate-600,
+  .workspace-light .text-slate-700 {
+    color: var(--workbench-muted) !important;
+  }
+
+  .workspace-light button.text-white,
+  .workspace-light button .text-white,
+  .workspace-light [class*='bg-[#147d91]'].text-white,
+  .workspace-light [class*='bg-violet-7'].text-white {
+    color: #ffffff !important;
+  }
+
+  .workspace-light [class*='bg-white/[0.'] {
+    background-color: rgba(226, 232, 240, 0.38) !important;
+  }
+
+  .workspace-light [class*='bg-[radial-gradient'] {
+    background-color: #eef3f6 !important;
+    background-image: radial-gradient(circle at 50% 34%, #ffffff 0, #edf3f6 66%, #e4ecef 100%) !important;
+  }
+
+  .workspace-panel {
+    border: 1px solid var(--workbench-border);
+    background: var(--workbench-surface);
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+  }
+
+  /* Select menus are portalled outside the workspace root. */
+  body [class*='bg-[#0b1723]'] {
+    border-color: #dbe4ea !important;
+    background-color: #ffffff !important;
+    color: #294353 !important;
   }
 }

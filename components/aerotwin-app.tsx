@@ -5,10 +5,9 @@ import {
   Activity,
   Beaker,
   Boxes,
-  ChevronDown,
+  CheckCircle2,
   GitCompareArrows,
   Hexagon,
-  Info,
   Sparkles,
 } from 'lucide-react';
 
@@ -27,11 +26,11 @@ import type {
 } from '@/lib/aerotwin-types';
 
 const navItems = [
-  { id: 'explore' as const, label: 'Design Explorer', icon: Boxes },
-  { id: 'simulator' as const, label: 'Performance', icon: Activity },
-  { id: 'lab' as const, label: 'Design Lab', icon: Beaker },
-  { id: 'compare' as const, label: 'A/B Compare', icon: GitCompareArrows },
-  { id: 'optimizer' as const, label: 'Dataset Optimizer', icon: Sparkles },
+  { id: 'explore' as const, step: 1, label: '설계 선택', short: '탐색', icon: Boxes },
+  { id: 'lab' as const, step: 2, label: '파라미터 편집', short: '편집', icon: Beaker },
+  { id: 'simulator' as const, step: 3, label: '성능 확인', short: '성능', icon: Activity },
+  { id: 'compare' as const, step: 4, label: '설계 비교', short: '비교', icon: GitCompareArrows },
+  { id: 'optimizer' as const, step: 5, label: '후보 탐색', short: '후보', icon: Sparkles },
 ];
 
 export function AeroTwinApp() {
@@ -94,6 +93,10 @@ export function AeroTwinApp() {
       .filter((design) => Boolean(design)) ?? [],
     [dataset, showcases],
   );
+  const labSelectorDesigns = useMemo(() => {
+    if (!selectedSummary || showcaseList.some((design) => design.id === selectedSummary.id)) return showcaseList;
+    return [selectedSummary, ...showcaseList];
+  }, [selectedSummary, showcaseList]);
 
   const selectShowcaseAndOpen = (id: number, nextView: WorkspaceView) => {
     setSelectedId(id);
@@ -115,91 +118,60 @@ export function AeroTwinApp() {
   };
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-50 flex h-16 items-center border-b border-white/8 bg-[#07111d]/92 px-4 backdrop-blur-xl lg:px-6">
-        <button onClick={() => setView('explore')} className="flex min-w-0 items-center gap-3 text-left">
-          <div className="grid size-9 place-items-center rounded-xl border border-cyan-300/25 bg-cyan-300/10 shadow-[0_0_24px_rgba(34,211,238,0.12)]">
-            <Hexagon className="size-5 text-cyan-300" />
-          </div>
-          <div>
-            <p className="font-semibold tracking-[-0.02em]">AeroTwin</p>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">UAV Intelligence</p>
-          </div>
-        </button>
+    <main className="workspace-light min-h-screen bg-[#f7f9fb] text-[#172b3a]">
+      <header className="sticky top-0 z-50 border-b border-[#dbe4ea] bg-white/95 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-[1720px] items-center gap-4 px-4 lg:px-6">
+          <button onClick={() => setView('explore')} className="flex min-w-0 items-center gap-2.5 text-left">
+            <div className="grid size-8 place-items-center rounded-lg bg-[#147d91] shadow-sm">
+              <Hexagon className="size-4.5 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold tracking-[-0.02em] text-[#172b3a]">AeroTwin</p>
+              <p className="hidden text-[10px] font-medium tracking-[0.08em] text-[#6b7d8b] sm:block">UAV 설계 워크벤치</p>
+            </div>
+          </button>
 
-        <div className="ml-8 hidden items-center gap-2 rounded-full border border-white/8 bg-white/[0.025] px-3 py-1.5 text-xs text-slate-400 md:flex">
-          <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
-          Local dataset ready <span className="text-slate-600">·</span>{' '}
-          {dataset ? dataset.summary.localDesigns.toLocaleString() : '…'} designs
+          <div className="hidden h-5 w-px bg-[#dbe4ea] sm:block" />
+          <div className="hidden items-center gap-1.5 text-xs text-[#5f7280] sm:flex">
+            <CheckCircle2 className="size-3.5 text-emerald-600" />
+            AircraftVerse {dataset ? dataset.summary.localDesigns.toLocaleString() : '…'}개 준비됨
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <Badge variant="outline" className="border-[#cfdbe2] bg-[#f7f9fb] text-[10px] text-[#526675]">
+              파라메트릭 27,714개 · 원본 STL 12개
+            </Badge>
+          </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          <Badge variant="outline" className="hidden border-violet-400/20 bg-violet-400/8 text-violet-200 sm:inline-flex">
-            <Sparkles /> Dataset Ranking v1
-          </Badge>
-          <Button variant="outline" className="border-white/10 bg-white/[0.035] text-slate-200 hover:bg-white/8">
-            팀 워크스페이스 <ChevronDown />
-          </Button>
-        </div>
+        <nav className="mx-auto flex max-w-[1720px] items-center overflow-x-auto px-2 lg:px-4" aria-label="설계 작업 단계">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = item.id === view;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setView(item.id)}
+                aria-current={active ? 'page' : undefined}
+                className={`group relative flex min-w-fit flex-1 items-center justify-center gap-2 border-b-2 px-3 py-2.5 text-xs font-medium transition lg:text-sm ${
+                  active
+                    ? 'border-[#147d91] bg-[#eef8fa] text-[#0f6475]'
+                    : 'border-transparent text-[#607383] hover:bg-[#f4f7f9] hover:text-[#294353]'
+                }`}
+              >
+                <span className={`grid size-5 place-items-center rounded-full text-[10px] ${active ? 'bg-[#147d91] text-white' : 'bg-[#e9eff3] text-[#607383]'}`}>
+                  {item.step}
+                </span>
+                <Icon className="hidden size-3.5 md:block" />
+                <span className="hidden sm:inline">{item.label}</span>
+                <span className="sm:hidden">{item.short}</span>
+              </button>
+            );
+          })}
+        </nav>
       </header>
 
-      <div className="grid min-h-[calc(100vh-64px)] grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-white/8 bg-[#08131f] p-4 lg:flex lg:flex-col">
-          <nav className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = item.id === view;
-              const accent = item.id === 'optimizer';
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setView(item.id)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
-                    active
-                      ? accent
-                        ? 'bg-violet-300/10 text-violet-200'
-                        : 'bg-cyan-300/10 text-cyan-200'
-                      : accent
-                        ? 'text-violet-300/75 hover:bg-white/5 hover:text-violet-200'
-                        : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
-                  }`}
-                >
-                  <Icon className="size-4" /> {item.label}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="mt-auto rounded-2xl border border-white/8 bg-white/[0.025] p-4">
-            <div className="mb-3 flex items-center gap-2 text-xs font-medium text-slate-300">
-              <Info className="size-3.5 text-cyan-300" /> 데이터 범위
-            </div>
-            <p className="text-xs leading-5 text-slate-500">
-              AircraftVerse 전체 27,714개 설계를 검색하고 대표 12개 STL을 시각화합니다.
-            </p>
-            <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-600">
-              <span className="size-1.5 rounded-full bg-amber-300" /> CFD 전체 유동장이 아닌 trim 성능 데이터
-            </div>
-          </div>
-        </aside>
-
-        <div className="min-w-0">
-          <nav className="flex gap-1 overflow-x-auto border-b border-white/8 bg-[#08131f] px-3 py-2 lg:hidden">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Button
-                  key={item.id}
-                  size="sm"
-                  variant={view === item.id ? 'secondary' : 'ghost'}
-                  onClick={() => setView(item.id)}
-                  className={view === item.id ? 'text-cyan-200' : 'text-slate-500'}
-                >
-                  <Icon /> {item.label}
-                </Button>
-              );
-            })}
-          </nav>
-
+      <div className="mx-auto min-h-[calc(100vh-103px)] max-w-[1720px] min-w-0">
           {error ? (
             <div className="m-6 rounded-2xl border border-rose-400/20 bg-rose-400/8 p-8 text-rose-200">
               <p className="font-medium">데이터를 불러오지 못했습니다.</p>
@@ -215,6 +187,7 @@ export function AeroTwinApp() {
                   showcases={showcases}
                   selected={selectedSummary}
                   onSelect={setSelectedId}
+                  onOpenLab={(id) => selectShowcaseAndOpen(id, 'lab')}
                   onOpenSimulator={(id) => selectShowcaseAndOpen(id, 'simulator')}
                   onOpenCompare={openCompareFromExplorer}
                   onOpenOptimizer={() => setView('optimizer')}
@@ -236,21 +209,15 @@ export function AeroTwinApp() {
                   onChoose={(id) => selectShowcaseAndOpen(id, 'simulator')}
                 />
               )}
-              {view === 'lab' && selectedDetail && (
+              {view === 'lab' && selectedSummary && (
                 <DesignLabView
-                  key={selectedDetail.id}
-                  designs={showcaseList}
-                  selected={selectedDetail}
+                  key={selectedSummary.id}
+                  designs={labSelectorDesigns}
+                  selected={selectedSummary}
+                  referenceDesign={selectedDetail}
+                  datasetDesigns={dataset.designs}
                   onSelect={setSelectedId}
-                  onOpenDatasetCompare={() => openCompareFromExplorer(selectedDetail.id)}
-                />
-              )}
-              {view === 'lab' && !selectedDetail && (
-                <ShowcaseRequiredState
-                  title="Design Lab"
-                  selectedId={selectedId}
-                  defaultId={dataset.summary.defaultShowcaseId}
-                  onChoose={(id) => selectShowcaseAndOpen(id, 'lab')}
+                  onOpenDatasetCompare={() => openCompareFromExplorer(selectedSummary.id)}
                 />
               )}
               {view === 'compare' && comparePair && (
@@ -266,11 +233,11 @@ export function AeroTwinApp() {
                   dataset={dataset}
                   current={selectedSummary ?? designById.get(dataset.summary.defaultShowcaseId)!}
                   onCompare={openCompare}
+                  onApplyDraft={(id) => selectShowcaseAndOpen(id, 'lab')}
                 />
               )}
             </>
           )}
-        </div>
       </div>
     </main>
   );
@@ -278,13 +245,13 @@ export function AeroTwinApp() {
 
 function LoadingWorkspace() {
   return (
-    <div className="grid min-h-[calc(100vh-64px)] place-items-center px-6">
+    <div className="grid min-h-[calc(100vh-103px)] place-items-center px-6">
       <div className="text-center">
-        <div className="mx-auto mb-5 grid size-12 place-items-center rounded-2xl border border-cyan-300/20 bg-cyan-300/8">
-          <Hexagon className="size-6 animate-pulse text-cyan-300" />
+        <div className="mx-auto mb-5 grid size-12 place-items-center rounded-xl border border-[#b9dce3] bg-[#eef8fa]">
+          <Hexagon className="size-6 animate-pulse text-[#147d91]" />
         </div>
-        <p className="font-medium text-slate-200">AircraftVerse 인덱스를 준비하고 있습니다</p>
-        <p className="mt-2 text-sm text-slate-500">27,714개 설계 메타데이터와 대표 trim curve를 로드합니다.</p>
+        <p className="font-medium text-[#233b4a]">AircraftVerse 인덱스를 준비하고 있습니다</p>
+        <p className="mt-2 text-sm text-[#607383]">27,714개 설계 메타데이터와 대표 성능 곡선을 불러옵니다.</p>
       </div>
     </div>
   );
@@ -302,14 +269,14 @@ function ShowcaseRequiredState({
   onChoose: (id: number) => void;
 }) {
   return (
-    <section className="grid min-h-[calc(100vh-64px)] place-items-center px-6 text-center">
-      <div className="max-w-md rounded-2xl border border-white/9 bg-[#0a1622] p-8">
-        <Boxes className="mx-auto mb-4 size-8 text-cyan-300" />
-        <h1 className="text-lg font-semibold text-white">{title}</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-500">
+    <section className="grid min-h-[calc(100vh-103px)] place-items-center px-6 text-center">
+      <div className="workspace-panel max-w-md rounded-2xl p-8">
+        <Boxes className="mx-auto mb-4 size-8 text-[#147d91]" />
+        <h1 className="text-lg font-semibold text-[#172b3a]">{title}</h1>
+        <p className="mt-3 text-sm leading-6 text-[#607383]">
           Design #{selectedId ?? '—'}는 metadata-only 설계라 STL과 trim 곡선이 패키징되지 않았습니다.
         </p>
-        <Button onClick={() => onChoose(defaultId)} className="mt-5 bg-cyan-300 text-[#041019] hover:bg-cyan-200">
+        <Button onClick={() => onChoose(defaultId)} className="mt-5 bg-[#147d91] text-white hover:bg-[#0f6878]">
           대표 설계 #{defaultId} 선택
         </Button>
       </div>

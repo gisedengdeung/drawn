@@ -56,27 +56,30 @@ type Objective = 'range' | 'hover' | 'power' | 'drag' | 'speed' | 'balanced';
 type ScoredDesign = DesignSummary & { score: number };
 
 const chartConfig = {
-  candidate: { label: 'Candidate', color: '#4c7f89' },
-  recommended: { label: 'Recommended', color: '#a78bfa' },
+  candidate: { label: '조건 통과 후보', color: '#9aabb5' },
+  pareto: { label: '2목적 Pareto 후보', color: '#147d91' },
+  recommended: { label: '현재 추천', color: '#6750a4' },
 } satisfies ChartConfig;
 
 const objectives: { id: Objective; label: string; detail: string; icon: typeof Route }[] = [
-  { id: 'range', label: 'Max Range', detail: '비행거리 ↑', icon: Route },
-  { id: 'hover', label: 'Max Hover', detail: '체공시간 ↑', icon: CircleGauge },
-  { id: 'power', label: 'Min Power', detail: '소비전력 ↓', icon: Zap },
-  { id: 'drag', label: 'Min Drag', detail: 'Drag @20 ↓', icon: Wind },
-  { id: 'speed', label: 'Max Speed', detail: '최대속도 ↑', icon: Gauge },
-  { id: 'balanced', label: 'Balanced', detail: 'Range·Power·Mass', icon: Radar },
+  { id: 'range', label: '비행거리 최대', detail: 'Range ↑', icon: Route },
+  { id: 'hover', label: '체공시간 최대', detail: 'Hover ↑', icon: CircleGauge },
+  { id: 'power', label: '소비전력 최소', detail: 'Power ↓', icon: Zap },
+  { id: 'drag', label: '항력 최소', detail: 'Drag @20 ↓', icon: Wind },
+  { id: 'speed', label: '최대속도 최대', detail: 'Speed ↑', icon: Gauge },
+  { id: 'balanced', label: '균형형', detail: '3목적 Pareto knee', icon: Radar },
 ];
 
 export function OptimizerView({
   dataset,
   current,
   onCompare,
+  onApplyDraft,
 }: {
   dataset: DatasetIndex;
   current: DesignSummary;
   onCompare: (aId: number, bId: number) => void;
+  onApplyDraft: (id: number) => void;
 }) {
   const [objective, setObjective] = useState<Objective>('range');
   const [massLimit, setMassLimit] = useState(10);
@@ -104,14 +107,14 @@ export function OptimizerView({
       if (objective === 'drag') return design.dragAt20 > 0;
       if (objective === 'speed') return design.maxSpeed > 0;
       if (objective === 'balanced') {
-        return design.hoverTime > 0 && design.dragAt20 > 0 && design.maxSpeed > 0;
+        return design.maxDistance > 0;
       }
       return design.maxDistance > 0;
     }),
     [current.id, dataset.designs, massLimit, objective, powerLimit],
   );
 
-  const paretoPoints = useMemo(() => {
+  const designSpaceSample = useMemo(() => {
     const sorted = [...candidatePool].sort((a, b) => a.power - b.power);
     const step = Math.max(1, Math.ceil(sorted.length / 240));
     return sorted.filter((_, index) => index % step === 0).map((design) => ({
@@ -121,6 +124,8 @@ export function OptimizerView({
       mass: design.mass,
     }));
   }, [candidatePool]);
+
+  const paretoPoints = useMemo(() => buildParetoPoints(candidatePool), [candidatePool]);
 
   const cancelPendingRun = () => {
     if (runTimeoutRef.current != null) {
@@ -163,30 +168,32 @@ export function OptimizerView({
         }),
         { range: 1, hover: 1, power: 1, drag: 1, speed: 1, mass: 1 },
       );
-      const scored = requestedCandidates
-        .map((design) => ({ ...design, score: scoreDesign(design, requestedObjective, maxima) }))
-        .sort((a, b) => b.score - a.score || a.id - b.id)
-        .slice(0, 3);
+      const scored = requestedObjective === 'balanced'
+        ? scoreParetoKnee(requestedCandidates).slice(0, 3)
+        : requestedCandidates
+          .map((design) => ({ ...design, score: scoreDesign(design, requestedObjective, maxima) }))
+          .sort((a, b) => b.score - a.score || a.id - b.id)
+          .slice(0, 3);
       setResults(scored);
       setRunning(false);
       runTimeoutRef.current = null;
-    }, 1100);
+    }, 0);
   };
 
   const best = results[0];
 
   return (
-    <section className="px-4 py-5 lg:px-6">
+    <section className="px-4 py-4 lg:px-6">
       <SectionHeading
-        eyebrow="Dataset Optimizer / Objective ranking"
-        title="목적 기반 데이터셋 랭킹"
-        description="27,714개 설계의 실제 output.json 메트릭에 제약조건과 목적 점수를 적용해 상위 후보를 추천합니다."
-        actions={<><SourceBadge source="DATASET RANKING" /><Badge variant="outline" className="border-white/8 text-slate-500">Trained AI model · next milestone</Badge></>}
+        eyebrow="5단계 · 조건에 맞는 후보 탐색"
+        title="데이터셋 후보 탐색"
+        description="27,714개 실제 output.json 메트릭을 조건으로 필터링하고, 선택한 목적 점수로 순위를 계산합니다."
+        actions={<><SourceBadge source="DATASET RANKING" /><Badge variant="outline" className="border-[#d8cfee] bg-violet-50 text-violet-700">학습 AI가 아닌 데이터셋 랭킹</Badge></>}
       />
 
-      <div className="grid gap-4 xl:grid-cols-[330px_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-white/9 bg-[#0a1622] p-4">
-          <p className="text-sm font-medium text-slate-200">Mission Preset</p>
+      <div className="grid gap-4 lg:grid-cols-[310px_minmax(0,1fr)]">
+        <aside className="workspace-panel rounded-xl p-4">
+          <p className="text-sm font-medium text-[#294353]">임무 Preset</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             {[
               ['Delivery', PackageCheck],
@@ -194,69 +201,70 @@ export function OptimizerView({
               ['Racing', Crosshair],
               ['Heavy Payload', ShieldCheck],
             ].map(([name, Icon]) => (
-              <button key={String(name)} onClick={() => applyPreset(String(name))} className={`rounded-xl border p-3 text-left transition ${preset === name ? 'border-cyan-300/20 bg-cyan-300/8 text-cyan-100' : 'border-white/8 bg-white/[0.02] text-slate-500 hover:bg-white/[0.04]'}`}>
+              <button key={String(name)} onClick={() => applyPreset(String(name))} className={`rounded-lg border p-3 text-left transition ${preset === name ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]' : 'border-[#dbe4ea] bg-white text-[#607383] hover:bg-[#f4f7f9]'}`}>
                 <Icon className="mb-2 size-4" />
                 <span className="text-[11px] font-medium">{String(name)}</span>
               </button>
             ))}
           </div>
 
-          <p className="mb-3 mt-6 text-sm font-medium text-slate-200">Optimization Objective</p>
+          <p className="mb-3 mt-5 text-sm font-medium text-[#294353]">탐색 목표</p>
           <div className="grid grid-cols-2 gap-2">
             {objectives.map((item) => {
               const Icon = item.icon;
               return (
-                <button key={item.id} onClick={() => { cancelPendingRun(); setObjective(item.id); }} className={`rounded-xl border p-3 text-left transition ${objective === item.id ? 'border-violet-300/25 bg-violet-300/8' : 'border-white/8 bg-white/[0.015] hover:bg-white/[0.04]'}`}>
-                  <Icon className={`mb-2 size-4 ${objective === item.id ? 'text-violet-300' : 'text-slate-600'}`} />
-                  <p className={`text-[11px] font-medium ${objective === item.id ? 'text-violet-100' : 'text-slate-400'}`}>{item.label}</p>
-                  <p className="mt-1 text-[9px] text-slate-600">{item.detail}</p>
+                <button key={item.id} onClick={() => { cancelPendingRun(); setObjective(item.id); }} className={`rounded-lg border p-3 text-left transition ${objective === item.id ? 'border-violet-300 bg-violet-50' : 'border-[#dbe4ea] bg-white hover:bg-[#f4f7f9]'}`}>
+                  <Icon className={`mb-2 size-4 ${objective === item.id ? 'text-violet-700' : 'text-[#718391]'}`} />
+                  <p className={`text-[11px] font-medium ${objective === item.id ? 'text-violet-900' : 'text-[#526675]'}`}>{item.label}</p>
+                  <p className="mt-1 text-[10px] text-[#718391]">{item.detail}</p>
                 </button>
               );
             })}
           </div>
 
-          <p className="mb-3 mt-6 text-sm font-medium text-slate-200">Constraints</p>
+          <p className="mb-3 mt-5 text-sm font-medium text-[#294353]">제약조건</p>
           <div className="mb-3">
-            <span className="mb-2 flex items-center justify-between text-xs text-slate-500"><span>Mass</span><span>≤ kg</span></span>
-            <Input aria-label="최대 질량" type="number" min={2} max={100} value={massLimit} onChange={(event) => { cancelPendingRun(); setMassLimit(Number(event.target.value)); }} className="h-10 border-white/10 bg-white/[0.025] font-mono text-slate-200" />
+            <span className="mb-2 flex items-center justify-between text-xs text-[#607383]"><span>최대 질량</span><span>kg 이하</span></span>
+            <Input aria-label="최대 질량" type="number" min={2} max={100} value={massLimit} onChange={(event) => { cancelPendingRun(); setMassLimit(Number(event.target.value)); }} className="h-10 border-[#ccd8df] bg-white font-mono text-[#172b3a]" />
           </div>
           <div>
-            <span className="mb-2 flex items-center justify-between text-xs text-slate-500"><span>Power @ MFD</span><span>≤ W</span></span>
-            <Input aria-label="최대 소비전력" type="number" min={200} max={10000} step={100} value={powerLimit} onChange={(event) => { cancelPendingRun(); setPowerLimit(Number(event.target.value)); }} className="h-10 border-white/10 bg-white/[0.025] font-mono text-slate-200" />
+            <span className="mb-2 flex items-center justify-between text-xs text-[#607383]"><span>최대 소비전력 @ MFD</span><span>W 이하</span></span>
+            <Input aria-label="최대 소비전력" type="number" min={200} max={10000} step={100} value={powerLimit} onChange={(event) => { cancelPendingRun(); setPowerLimit(Number(event.target.value)); }} className="h-10 border-[#ccd8df] bg-white font-mono text-[#172b3a]" />
           </div>
 
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2 text-xs">
-            <span className="text-slate-500">Feasible candidates</span>
-            <span className="font-mono text-cyan-200">{candidatePool.length.toLocaleString()}</span>
+          <div className="mt-4 flex items-center justify-between rounded-lg border border-[#dbe4ea] bg-[#f4f7f9] px-3 py-2 text-xs">
+            <span className="text-[#607383]">조건 통과 후보</span>
+            <span className="font-mono font-semibold text-[#0f6475]">{candidatePool.length.toLocaleString()}개</span>
           </div>
-          <Button disabled={running || candidatePool.length === 0} onClick={optimize} className="mt-4 h-11 w-full bg-violet-400 text-white hover:bg-violet-300">
-            <Sparkles /> {running ? 'Exploring design space…' : 'OPTIMIZE'}
+          <Button disabled={running || candidatePool.length === 0} onClick={optimize} className="mt-4 h-11 w-full bg-[#147d91] text-white hover:bg-[#0f6878]">
+            <Sparkles /> {running ? '후보 순위 계산 중…' : '상위 후보 계산'}
           </Button>
           {running && <Progress value={82} className="mt-3 [&_[data-slot=progress-indicator]]:bg-violet-400" />}
         </aside>
 
         <div className="min-w-0 space-y-4">
-          <section className="rounded-2xl border border-white/9 bg-[#0a1622] p-4 lg:p-5">
+          <section className="workspace-panel rounded-xl p-4 lg:p-5">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div><div className="flex items-center gap-2"><h2 className="font-semibold text-white">Range–Power Design Space</h2><SourceBadge /></div><p className="mt-1 text-xs text-slate-600">전체 유효 후보 중 최대 240점을 표본 표시합니다.</p></div>
-              <div className="flex gap-4 text-[10px] text-slate-500"><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-cyan-900" /> 후보</span><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-violet-400" /> 추천</span></div>
+              <div><div className="flex items-center gap-2"><h2 className="font-semibold text-[#172b3a]">Range–Power 2목적 Pareto</h2><SourceBadge /></div><p className="mt-1 text-xs text-[#607383]">회색은 최대 240개 표본, 청록색은 더 낮은 전력과 더 긴 거리에 동시에 지배되지 않는 실제 2목적 후보입니다.</p></div>
+              <div className="flex flex-wrap gap-4 text-[10px] text-[#607383]"><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-[#9aabb5]" /> 표본 후보</span><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-[#147d91]" /> Pareto {paretoPoints.length}개</span><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-violet-700" /> 현재 추천</span></div>
             </div>
             <ChartContainer config={chartConfig} className="h-[310px] w-full aspect-auto" initialDimension={{ width: 900, height: 310 }}>
               <ScatterChart margin={{ left: 0, right: 16, top: 10, bottom: 6 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                <CartesianGrid stroke="#e2e8ec" />
                 <XAxis type="number" dataKey="power" name="Power" unit="W" tickLine={false} axisLine={false} tickMargin={8} />
                 <YAxis type="number" dataKey="range" name="Range" unit="km" tickLine={false} axisLine={false} width={56} />
                 <ZAxis type="number" dataKey="mass" range={[24, 100]} name="Mass" unit="kg" />
                 <ChartTooltip cursor={{ strokeDasharray: '3 3' }} content={<ChartTooltipContent />} />
-                <Scatter data={paretoPoints} fill="var(--color-candidate)" fillOpacity={0.42} />
+                <Scatter data={designSpaceSample} fill="var(--color-candidate)" fillOpacity={0.42} />
+                <Scatter data={paretoPoints} fill="var(--color-pareto)" fillOpacity={0.9} />
                 {best && <Scatter data={[{ power: best.power, range: best.maxDistance / 1000, mass: best.mass }]} fill="var(--color-recommended)" />}
               </ScatterChart>
             </ChartContainer>
           </section>
 
           {running ? (
-            <section className="grid min-h-72 place-items-center rounded-2xl border border-violet-300/12 bg-violet-300/5 p-8 text-center">
-              <div><Sparkles className="mx-auto mb-4 size-7 animate-pulse text-violet-300" /><p className="font-medium text-violet-100">후보 설계를 평가하고 있습니다</p><p className="mt-2 text-xs text-violet-100/50">제약 필터 → 목적 점수 → 후보 shortlist</p></div>
+            <section className="grid min-h-72 place-items-center rounded-xl border border-violet-200 bg-violet-50 p-8 text-center">
+              <div><Sparkles className="mx-auto mb-4 size-7 animate-pulse text-violet-700" /><p className="font-medium text-violet-900">후보 순위를 계산하고 있습니다</p><p className="mt-2 text-xs text-violet-700">제약 필터 → 목적 점수 → 상위 후보</p></div>
             </section>
           ) : results.length ? (
             <>
@@ -264,13 +272,16 @@ export function OptimizerView({
                 {results.map((design, index) => <RecommendationCard key={design.id} design={design} rank={index + 1} />)}
               </div>
 
-              <section className="rounded-2xl border border-violet-300/15 bg-[linear-gradient(135deg,rgba(167,139,250,0.09),rgba(34,211,238,0.035))] p-5">
+              <section className="rounded-xl border border-violet-200 bg-[linear-gradient(135deg,#f5f2ff,#eef8fa)] p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="flex items-center gap-2"><Trophy className="size-4 text-violet-300" /><p className="text-sm font-medium text-violet-100">Dataset Recommended · Design #{best.id}</p><SourceBadge source="DATASET RANKING" /></div>
-                    <p className="mt-2 text-xs text-violet-100/55">{formatHub(best.hub)} · constraint 통과 · score {best.score.toFixed(3)}</p>
+                    <div className="flex items-center gap-2"><Trophy className="size-4 text-violet-700" /><p className="text-sm font-medium text-violet-900">데이터셋 추천 · Design #{best.id}</p><SourceBadge source="DATASET RANKING" /></div>
+                    <p className="mt-2 text-xs text-violet-700">{formatHub(best.hub)} · 제약조건 통과 · {objective === 'balanced' ? '비지배 Pareto knee' : `목적 점수 ${best.score.toFixed(3)}`}</p>
                   </div>
-                  <Button onClick={() => onCompare(current.id, best.id)} className="bg-violet-400 text-white hover:bg-violet-300"><GitCompareArrows /> A/B Compare 열기 <ArrowRight /></Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => onApplyDraft(best.id)} variant="outline" className="border-violet-200 bg-white text-violet-800 hover:bg-violet-50"><Sparkles /> 추천안을 Draft로 열기</Button>
+                    <Button onClick={() => onCompare(current.id, best.id)} className="bg-violet-700 text-white hover:bg-violet-800"><GitCompareArrows /> 현재 설계와 비교 <ArrowRight /></Button>
+                  </div>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
                   <DeltaMetric label="Range" before={current.maxDistance} after={best.maxDistance} unit="m" better="up" />
@@ -282,8 +293,8 @@ export function OptimizerView({
               </section>
             </>
           ) : (
-            <section className="grid min-h-60 place-items-center rounded-2xl border border-white/9 bg-[#0a1622] p-8 text-center">
-              <div><Sparkles className="mx-auto mb-4 size-6 text-slate-700" /><p className="text-sm font-medium text-slate-300">최적화 목표와 제약조건을 선택하세요</p><p className="mt-2 text-xs text-slate-600">OPTIMIZE를 누르면 상위 3개 설계와 Range–Power trade-off를 반환합니다.</p></div>
+            <section className="workspace-panel grid min-h-60 place-items-center rounded-xl p-8 text-center">
+              <div><Sparkles className="mx-auto mb-4 size-6 text-[#718391]" /><p className="text-sm font-medium text-[#294353]">목표와 제약조건을 검토하세요</p><p className="mt-2 text-xs text-[#607383]">‘상위 후보 계산’을 누르면 데이터셋 점수 기준 상위 3개 설계를 반환합니다.</p></div>
             </section>
           )}
           <DataDisclaimer compact />
@@ -305,27 +316,77 @@ function scoreDesign(design: DesignSummary, objective: Objective, max: Record<'r
   if (objective === 'power') return power;
   if (objective === 'drag') return drag;
   if (objective === 'speed') return speed;
-  return range * 0.36 + hover * 0.22 + power * 0.18 + drag * 0.1 + speed * 0.06 + mass * 0.08;
+  return range + power + mass;
+}
+
+function scoreParetoKnee(designs: DesignSummary[]): ScoredDesign[] {
+  const sorted = [...designs].sort(
+    (left, right) => left.power - right.power || left.mass - right.mass || right.maxDistance - left.maxDistance || left.id - right.id,
+  );
+  const front: DesignSummary[] = [];
+  for (const design of sorted) {
+    if (front.some((candidate) => candidate.power <= design.power && candidate.mass <= design.mass && candidate.maxDistance >= design.maxDistance)) continue;
+    for (let index = front.length - 1; index >= 0; index -= 1) {
+      const candidate = front[index];
+      if (design.power <= candidate.power && design.mass <= candidate.mass && design.maxDistance >= candidate.maxDistance) front.splice(index, 1);
+    }
+    front.push(design);
+  }
+  const bounds = front.reduce(
+    (acc, design) => ({
+      minRange: Math.min(acc.minRange, design.maxDistance), maxRange: Math.max(acc.maxRange, design.maxDistance),
+      minPower: Math.min(acc.minPower, design.power), maxPower: Math.max(acc.maxPower, design.power),
+      minMass: Math.min(acc.minMass, design.mass), maxMass: Math.max(acc.maxMass, design.mass),
+    }),
+    { minRange: Infinity, maxRange: -Infinity, minPower: Infinity, maxPower: -Infinity, minMass: Infinity, maxMass: -Infinity },
+  );
+  const normalizedDistance = (design: DesignSummary) => Math.hypot(
+    1 - (design.maxDistance - bounds.minRange) / Math.max(bounds.maxRange - bounds.minRange, 1),
+    (design.power - bounds.minPower) / Math.max(bounds.maxPower - bounds.minPower, 1),
+    (design.mass - bounds.minMass) / Math.max(bounds.maxMass - bounds.minMass, 1),
+  );
+  return front
+    .map((design) => ({ ...design, score: 1 / (1 + normalizedDistance(design)) }))
+    .sort((left, right) => right.score - left.score || left.id - right.id);
+}
+
+function buildParetoPoints(designs: DesignSummary[]) {
+  const sorted = [...designs]
+    .filter((design) => design.power > 0 && design.maxDistance > 0)
+    .sort((a, b) => a.power - b.power || b.maxDistance - a.maxDistance || a.id - b.id);
+  const points: Array<{ id: number; power: number; range: number; mass: number }> = [];
+  let bestRange = Number.NEGATIVE_INFINITY;
+  for (const design of sorted) {
+    if (design.maxDistance <= bestRange) continue;
+    bestRange = design.maxDistance;
+    points.push({
+      id: design.id,
+      power: design.power,
+      range: design.maxDistance / 1000,
+      mass: design.mass,
+    });
+  }
+  return points;
 }
 
 function RecommendationCard({ design, rank }: { design: ScoredDesign; rank: number }) {
   return (
-    <article className={`rounded-2xl border p-4 ${rank === 1 ? 'border-violet-300/20 bg-violet-300/7' : 'border-white/9 bg-[#0a1622]'}`}>
-      <div className="flex items-start justify-between"><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-600">Rank {rank}</p><p className="mt-1 font-mono text-sm font-semibold text-slate-200">Design #{design.id}</p></div>{rank === 1 && <Badge className="bg-violet-300/12 text-violet-200"><Trophy /> Best</Badge>}</div>
-      <p className="mt-3 truncate text-[11px] text-slate-600">{formatHub(design.hub)}</p>
+    <article className={`rounded-xl border p-4 shadow-sm ${rank === 1 ? 'border-violet-200 bg-violet-50' : 'border-[#dbe4ea] bg-white'}`}>
+      <div className="flex items-start justify-between"><div><p className="text-[10px] font-medium tracking-[0.08em] text-[#718391]">순위 {rank}</p><p className="mt-1 font-mono text-sm font-semibold text-[#233b4a]">Design #{design.id}</p></div>{rank === 1 && <Badge className="bg-violet-100 text-violet-800"><Trophy /> 추천</Badge>}</div>
+      <p className="mt-3 truncate text-[11px] text-[#607383]">{formatHub(design.hub)}</p>
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
         <Mini label="Range" value={formatDistance(design.maxDistance)} />
         <Mini label="Power" value={`${formatMetric(design.power, 0)} W`} />
         <Mini label="Hover" value={isAvailableMetric(design.hoverTime) ? `${formatMetric(design.hoverTime, 0)} s` : '—'} />
         <Mini label="Mass" value={`${formatMetric(design.mass, 2)} kg`} />
       </div>
-      <div className="mt-4 flex items-center justify-between border-t border-white/7 pt-3 text-[10px]"><span className="text-slate-600">Dataset score</span><span className="font-mono text-violet-300">{design.score.toFixed(3)}</span></div>
+      <div className="mt-4 flex items-center justify-between border-t border-[#e5ebef] pt-3 text-[10px]"><span className="text-[#718391]">데이터셋 점수</span><span className="font-mono font-semibold text-violet-700">{design.score.toFixed(3)}</span></div>
     </article>
   );
 }
 
 function Mini({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg bg-white/[0.025] p-2"><p className="text-[9px] text-slate-600">{label}</p><p className="mt-1 font-mono text-[11px] text-slate-300">{value}</p></div>;
+  return <div className="rounded-lg bg-[#f4f7f9] p-2"><p className="text-[9px] text-[#718391]">{label}</p><p className="mt-1 font-mono text-[11px] text-[#294353]">{value}</p></div>;
 }
 
 function DeltaMetric({ label, before, after, unit, better }: { label: string; before: number; after: number; unit: string; better: 'up' | 'down' }) {
@@ -333,10 +394,10 @@ function DeltaMetric({ label, before, after, unit, better }: { label: string; be
   const good = change == null ? false : better === 'up' ? change >= 0 : change <= 0;
   const available = isAvailableMetric(after);
   return (
-    <div className="rounded-xl border border-white/8 bg-[#08131f]/55 p-3">
-      <p className="text-[10px] text-slate-600">{label}</p>
-      <p className="mt-1 font-mono text-xs text-slate-300">{available ? `${formatMetric(after, unit === 'kg' || unit === 'N' ? 2 : 0)} ${unit}` : '—'}</p>
-      <p className={`mt-1 font-mono text-[10px] ${change == null ? 'text-slate-600' : good ? 'text-emerald-300' : 'text-amber-300'}`}>{change == null ? '—' : `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`}</p>
+    <div className="rounded-xl border border-[#dbe4ea] bg-white p-3">
+      <p className="text-[10px] text-[#718391]">{label}</p>
+      <p className="mt-1 font-mono text-xs text-[#294353]">{available ? `${formatMetric(after, unit === 'kg' || unit === 'N' ? 2 : 0)} ${unit}` : '—'}</p>
+      <p className={`mt-1 font-mono text-[10px] ${change == null ? 'text-[#718391]' : good ? 'text-emerald-700' : 'text-amber-700'}`}>{change == null ? '—' : `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`}</p>
     </div>
   );
 }

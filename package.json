@@ -10,6 +10,7 @@
     "build": "vinext build",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "data:prepare": "node scripts/prepare-aircraftverse.mjs",
+    "data:validate": "node scripts/validate-generated-data.mjs",
     "lint": "oxlint",
     "format": "oxfmt"
   },

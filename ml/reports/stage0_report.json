@@ -1,0 +1,283 @@
+{
+  "generated_at": "2026-09-14T01:05:11+0900",
+  "roots": [
+    "C:\\Users\\OWNER\\Desktop\\drone\\AircraftVerse_1",
+    "C:\\Users\\OWNER\\Desktop\\drone\\AircraftVerse_2",
+    "C:\\Users\\OWNER\\Desktop\\drone\\AircraftVerse_3"
+  ],
+  "stage0_passed": true,
+  "criteria": {
+    "design_count": {
+      "actual": 27714,
+      "expected": 27714,
+      "pass": true
+    },
+    "all_files_present": {
+      "missing": 0,
+      "pass": true
+    },
+    "pointcloud_schema": {
+      "violations": 0,
+      "expected": "<f4 (100, 3)",
+      "pass": true
+    },
+    "trims_schema": {
+      "violations": 0,
+      "expected": "<f8 (51, 12)",
+      "pass": true
+    },
+    "output_json_readable": {
+      "failures": 0,
+      "pass": true
+    },
+    "design_ids_globally_unique": {
+      "duplicates": 0,
+      "pass": true
+    },
+    "target_validity_counts": {
+      "Mass": {
+        "actual": 27714,
+        "expected": 27714,
+        "pass": true
+      },
+      "Max_Distance": {
+        "actual": 10737,
+        "expected": 10737,
+        "pass": true
+      },
+      "Hover_Time": {
+        "actual": 7789,
+        "expected": 7789,
+        "pass": true
+      },
+      "pass": true
+    },
+    "trim_column_order": {
+      "pass": true,
+      "fields": [
+        "distance",
+        "flightTime",
+        "pitch",
+        "maxUc",
+        "thrust",
+        "lift",
+        "drag",
+        "current",
+        "power",
+        "motorCurrentRatio",
+        "motorPowerRatio",
+        "batteryCurrentRatio"
+      ]
+    },
+    "stl_loadable": {
+      "sample_failures": 0,
+      "pass": true
+    },
+    "cuda_available": {
+      "torch_version": "2.14.0+cu126",
+      "cuda_build": "12.6",
+      "available": true,
+      "device_name": "NVIDIA GeForce RTX 3070",
+      "total_memory_gb": 8.0,
+      "pass": true
+    }
+  },
+  "scan": {
+    "total_designs": 27714,
+    "elapsed_seconds": 24.7,
+    "missing_files": [],
+    "bad_pointcloud": [],
+    "bad_trims": [],
+    "unreadable_output": [],
+    "output_keys": [
+      "Batt_amps_ratio_MFD",
+      "Batt_amps_ratio_MxSpd",
+      "Distance_MxSpd",
+      "Hover_Time",
+      "Interferences",
+      "Mass",
+      "Max_Distance",
+      "Max_Speed",
+      "Max_uc_at_MFD",
+      "Mot_amps_ratio_MFD",
+      "Mot_amps_ratio_MxSpd",
+      "Mot_power_ratio_MFD",
+      "Mot_power_ratio_MxSpd",
+      "Power_MFD",
+      "Power_MxSpd",
+      "Speed_MFD"
+    ],
+    "key_seen_counts": {
+      "Batt_amps_ratio_MFD": 27714,
+      "Batt_amps_ratio_MxSpd": 27714,
+      "Distance_MxSpd": 27714,
+      "Hover_Time": 27714,
+      "Interferences": 27714,
+      "Mass": 27714,
+      "Max_Distance": 27714,
+      "Max_Speed": 27714,
+      "Max_uc_at_MFD": 27714,
+      "Mot_amps_ratio_MFD": 27714,
+      "Mot_amps_ratio_MxSpd": 27714,
+      "Mot_power_ratio_MFD": 27714,
+      "Mot_power_ratio_MxSpd": 27714,
+      "Power_MFD": 27714,
+      "Power_MxSpd": 27714,
+      "Speed_MFD": 27714
+    },
+    "valid_counts": {
+      "Batt_amps_ratio_MFD": 10836,
+      "Batt_amps_ratio_MxSpd": 10836,
+      "Distance_MxSpd": 10737,
+      "Hover_Time": 7789,
+      "Interferences": 25513,
+      "Mass": 27714,
+      "Max_Distance": 10737,
+      "Max_Speed": 10737,
+      "Max_uc_at_MFD": 10836,
+      "Mot_amps_ratio_MFD": 10836,
+      "Mot_amps_ratio_MxSpd": 10836,
+      "Mot_power_ratio_MFD": 10836,
+      "Mot_power_ratio_MxSpd": 10836,
+      "Power_MFD": 10836,
+      "Power_MxSpd": 10836,
+      "Speed_MFD": 10737
+    },
+    "duplicate_ids": {}
+  },
+  "reference_design": {
+    "id": 17297,
+    "trims": {
+      "design_dir": "C:\\Users\\OWNER\\Desktop\\drone\\AircraftVerse_1\\design_17297",
+      "checks": [
+        {
+          "check": "output.Mass",
+          "actual": 6.9967,
+          "expected": 6.9967,
+          "pass": true
+        },
+        {
+          "check": "hover thrust == mass * 9.8",
+          "actual": 68.57,
+          "expected": 68.56766,
+          "pass": true
+        },
+        {
+          "check": "trim[0].thrust",
+          "actual": 68.57,
+          "expected": 68.57,
+          "pass": true
+        },
+        {
+          "check": "trim[25].distance",
+          "actual": 20344.35,
+          "expected": 20344.0,
+          "pass": true
+        },
+        {
+          "check": "trim[5].drag",
+          "actual": 1.0,
+          "expected": 1.0,
+          "pass": true
+        },
+        {
+          "check": "trim[10].drag",
+          "actual": 3.98,
+          "expected": 3.98,
+          "pass": true
+        },
+        {
+          "check": "trim[15].drag",
+          "actual": 8.85,
+          "expected": 8.85,
+          "pass": true
+        },
+        {
+          "check": "trim[20].drag",
+          "actual": 15.31,
+          "expected": 15.31,
+          "pass": true
+        },
+        {
+          "check": "trim[25].drag",
+          "actual": 23.17,
+          "expected": 23.17,
+          "pass": true
+        },
+        {
+          "check": "trim[25].distance == 25 * flightTime",
+          "actual": 20344.35,
+          "expected": 20344.25,
+          "pass": true
+        }
+      ],
+      "passed": true,
+      "valid_speed_count": 30,
+      "first_invalid_speed": 30,
+      "first_invalid_speed_expected": 30
+    },
+    "stl": {
+      "design_dir": "C:\\Users\\OWNER\\Desktop\\drone\\AircraftVerse_1\\design_17297",
+      "vertices": 17616,
+      "faces": 5872,
+      "watertight": false,
+      "bounds_min": [
+        -766.225,
+        -769.052,
+        -131.5
+      ],
+      "bounds_max": [
+        345.017,
+        769.052,
+        175.32
+      ],
+      "extents": [
+        1111.242,
+        1538.105,
+        306.82
+      ],
+      "largest_extent": 1538.105,
+      "unit_guess": "mm",
+      "sampled_shape": [
+        1024,
+        3
+      ],
+      "provided_pointcloud": {
+        "shape": [
+          100,
+          3
+        ],
+        "dtype": "float32",
+        "extents": [
+          1073.057,
+          1450.426,
+          298.651
+        ],
+        "bounds_min": [
+          -753.841,
+          -721.921,
+          -126.331
+        ],
+        "bounds_max": [
+          319.216,
+          728.505,
+          172.32
+        ]
+      }
+    }
+  },
+  "stl_sample": {
+    "sampled": 20,
+    "failures": [],
+    "unit_histogram": {
+      "mm": 20
+    }
+  },
+  "cuda": {
+    "torch_version": "2.14.0+cu126",
+    "cuda_build": "12.6",
+    "available": true,
+    "device_name": "NVIDIA GeForce RTX 3070",
+    "total_memory_gb": 8.0
+  }
+}

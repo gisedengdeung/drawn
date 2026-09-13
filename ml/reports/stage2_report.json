@@ -1,0 +1,66 @@
+{
+  "generated_at": "2026-09-14T01:31:11+0900",
+  "stage2_passed": true,
+  "designs": 27714,
+  "points_per_design": 1024,
+  "elapsed_minutes": 2.67,
+  "output": "C:\\Users\\OWNER\\Desktop\\drone\\drone-craft\\ml\\data\\pointclouds.npz",
+  "output_mb": 333.0,
+  "failures": [],
+  "checks": {
+    "all_designs_sampled": {
+      "sampled": 27714,
+      "expected": 27714,
+      "pass": true
+    },
+    "points_finite": {
+      "pass": true
+    },
+    "denormalises_into_bbox": {
+      "designs_outside": 0,
+      "pass": true
+    },
+    "normalised_within_unit_cube": {
+      "max_abs": 1.0,
+      "pass": true
+    },
+    "scale_positive": {
+      "pass": true
+    },
+    "split_matches_stage1": {
+      "pass": true
+    }
+  },
+  "normalisation": {
+    "recipe": "centred on the sampled centroid, divided by max(|coord|)",
+    "reconstruct": "raw_mm = points * scale + centroid",
+    "why_scale_is_kept": "size dominates drone performance; unit-sphere normalisation alone would erase it",
+    "unit": "mm"
+  },
+  "scale_mm": {
+    "min": 165.66,
+    "p50": 594.27,
+    "max": 3027.65
+  },
+  "span_mm": {
+    "min": 332.4,
+    "p50": 1159.77,
+    "max": 5957.84
+  },
+  "unit_sphere_radius": {
+    "min": 1.0,
+    "p50": 1.0525
+  },
+  "split_sizes": {
+    "train": 22187,
+    "val": 2803,
+    "test": 2724
+  },
+  "target_trainable": {
+    "Mass": 27703,
+    "Max_Distance": 10737,
+    "Hover_Time": 7789,
+    "Max_Speed": 10737,
+    "Power_MFD": 10836
+  }
+}

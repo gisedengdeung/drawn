@@ -5,6 +5,15 @@
 
 드론 도메인 지식은 [DRONE_PRIMER.md](DRONE_PRIMER.md), 현재 추정기의 한계는 [MODEL_CARD.md](MODEL_CARD.md)를 참고하세요.
 
+> **0·1·2단계는 데스크탑에서 완료되었습니다 (2026-09-14).** 환경 구축, 27,714개 전수 검증,
+> 타깃 추출과 split 고정, point cloud 샘플링까지 끝났습니다.
+> 학습셋 `ml/data/pointclouds.npz`(333MB, git 제외)가 준비되어 있습니다.
+> 재현 절차는 [../ml/README.md](../ml/README.md), 원본 결과는 `ml/reports/`의 리포트입니다.
+> 아래 결과 절들을 읽고 **3단계(PointNet 학습)부터** 시작하면 됩니다.
+>
+> 특히 [4단계 baseline이 바뀌었습니다](#4단계-baseline이-바뀌었습니다) — 평균 예측이 아니라
+> 기하 회귀를 이겨야 합니다.
+
 ## 담당 작업
 
 **3D 형상(point cloud)을 입력으로 받아 드론 성능 KPI를 예측하는 딥러닝 모델**을 만듭니다.
@@ -73,12 +82,8 @@ mesh = trimesh.load(stl_path)
 points, _ = trimesh.sample.sample_surface(mesh, 1024)   # (1024, 3)
 ```
 
-데스크탑에서 데이터를 푼 뒤 실제 shape를 먼저 재확인할 것:
-
-```python
-import numpy as np
-print(np.load('AircraftVerse_1/design_1/pointCloud.npy').shape)
-```
+> **0단계에서 확정.** 27,714개 전부 `<f4 (100, 3)`입니다. 예외 없습니다.
+> STL 샘플링도 동작을 확인했습니다 (design 17297: 5,872면 → 1,024점).
 
 ### 2. 단위 구 정규화는 크기 정보를 파괴합니다
 
@@ -98,6 +103,11 @@ points = points / scale          # scale을 feature로 보존할 것
 ```
 
 이 항목을 놓치면 성능이 나오지 않는데 원인 추적이 매우 어렵습니다.
+
+> **0단계에서 확정: STL 좌표 단위는 mm입니다.** 표본 20개 전부 mm였고,
+> design 17297의 bounding box는 `1111 × 1538 × 307 mm`입니다.
+> 따라서 위 `scale`도 mm 단위 스칼라이며, `output.json`의 `Mass`(kg)나
+> `Max_Distance`(m)와 스케일이 다릅니다. feature로 넣을 때 로그 변환이나 표준화를 검토하세요.
 
 ### 3. 형상만으로는 성능 예측이 제한적입니다
 
@@ -167,9 +177,9 @@ Mot_amps_ratio_MFD, Mot_power_ratio_MFD, Batt_amps_ratio_MFD, ...
 
 | 단계 | 내용 | 환경 | 예상 |
 | --- | --- | --- | --- |
-| 0 | 압축 해제, `pointCloud.npy` shape 확인 | 아무 곳 | 반나절 |
-| 1 | 타깃 추출, 유효성 필터, split 고정 | 아무 곳 | 1일 |
-| 2 | STL → point cloud 샘플링, `.npz` 저장 | 아무 곳 (CPU) | 2~4시간 |
+| 0 | ~~압축 해제, `pointCloud.npy` shape 확인~~ **완료** | 아무 곳 | 반나절 |
+| 1 | ~~타깃 추출, 유효성 필터, split 고정~~ **완료** | 아무 곳 | 1일 |
+| 2 | ~~STL → point cloud 샘플링, `.npz` 저장~~ **완료** (실제 2.7분) | 아무 곳 (CPU) | 2~4시간 |
 | 3 | PointNet 학습 | **데스크탑** | 2~3일 |
 | 4 | 검증셋 R²/MAE, baseline 대비 비교 | 데스크탑 | 1일 |
 | 5 | ONNX 내보내기 또는 FastAPI 연결 | — | 이후 |
@@ -184,17 +194,197 @@ Mot_amps_ratio_MFD, Mot_power_ratio_MFD, Batt_amps_ratio_MFD, ...
 ```
 drone-craft/
 ├── ml/
-│   ├── prepare_pointclouds.py   # STL → (N, 1024, 3) + scale + targets
+│   ├── README.md                # 환경 구축 절차 (0단계에서 작성)
+│   ├── requirements.txt         # numpy, trimesh
+│   ├── common.py                # 공유 유틸. 유효성 규칙·trim 열 순서의 유일한 정의
+│   ├── verify_stage0.py         # 0단계 전수 검증
+│   ├── prepare_targets.py       # 1단계 타깃 추출·split
+│   ├── prepare_pointclouds.py   # 2단계 STL → (N, 1024, 3) + scale
+│   ├── geometry_baseline.py     # 3·4단계가 넘어야 할 바닥
+│   ├── reports/                 # 검증 리포트 (커밋)
 │   ├── dataset.py
 │   ├── model.py                 # PointNet
 │   ├── train.py
 │   ├── evaluate.py
-│   └── data/                    # .npz 산출물 (git 제외)
+│   ├── data/                    # .npz 산출물 (git 제외)
+│   └── .venv/                   # (git 제외)
 ├── app/ components/ lib/        # 기존 프론트엔드
 └── public/data/                 # 커밋된 정적 자산
 ```
 
 `.gitignore`에 ML 산출물 제외 규칙을 추가해두었습니다. **340MB `.npz`를 커밋하지 않도록 주의하세요.**
+
+## 0단계 검증 결과
+
+데스크탑에서 `ml/verify_stage0.py`로 27,714개를 전수 검증했습니다. **10개 항목 전부 통과**(약 30초).
+재현은 [../ml/README.md](../ml/README.md), 원본 결과는 `ml/reports/stage0_report.json`입니다.
+
+### 확정된 사실
+
+| 항목 | 결과 | 다음 단계에서의 의미 |
+| --- | --- | --- |
+| 설계 수 | 27,714 (9,238 × 3) | — |
+| `pointCloud.npy` | 27,714개 전부 `<f4 (100, 3)` | 핵심 발견 #1 확정. STL 샘플링 필요 |
+| `trims.npy` | 27,714개 전부 `<f8 (51, 12)` | — |
+| 파일 무결성 | 5개 필수 파일 누락 0건, 깨진 STL 0건 | 2단계에서 예외 처리 부담 없음 |
+| **design ID** | **세 파트에 걸쳐 전역 유일** | 1단계 split 키를 ID 단독으로 잡아도 안전 |
+| `output.json` 키 | 16개, HANDOFF 목록과 일치 | — |
+| 유효 설계 수 | Mass 27,714 / Max_Distance 10,737 / Hover_Time 7,789 | 유효성 규칙 해석이 프론트엔드와 일치함을 확인 |
+| **trim 열 순서** | design 17297로 실측 확인 | 아래 참조 |
+| STL 단위 | **mm** (표본 20개 전부) | 2단계 `scale` feature 단위 |
+| CUDA | torch 2.14.0+cu126, RTX 3070 8GB 인식 | 3단계 학습 가능 |
+
+### trim 열 순서 (실측 확인됨)
+
+`trims.npy`에는 열 이름이 없습니다. 아래 순서는 `scripts/prepare-aircraftverse.mjs`에만 기록되어 있었고,
+0단계에서 design 17297의 실제 값으로 확인했습니다.
+
+```
+0 distance   1 flightTime  2 pitch    3 maxUc
+4 thrust     5 lift        6 drag     7 current
+8 power      9 motorCurrentRatio  10 motorPowerRatio  11 batteryCurrentRatio
+```
+
+대조에 쓴 값 — 전부 일치했습니다.
+
+| 검증 | 실측 |
+| --- | --- |
+| `trim[0].thrust` = `Mass × 9.8` | 68.57 = 6.9967 × 9.8 |
+| `trim[25].distance` = `25 × flightTime` | 20,344.35 |
+| drag(5/10/15/20/25) | 1.0 / 3.98 / 8.85 / 15.31 / 23.17 N |
+| 첫 무효 속도 행 | 30 m/s (유효 30행) |
+
+행 인덱스는 속도(m/s) 0–50이고, 모든 열이 0이거나 non-finite인 행이 무효입니다.
+
+## 1단계 결과
+
+`ml/prepare_targets.py`가 `ml/data/targets.csv`(27,714행 × 65열)와 `ml/reports/stage1_report.json`을
+만듭니다. 약 25초. 아래 세 가지는 **작업 방향을 바꾸는 내용**이라 2단계 전에 반드시 읽으세요.
+
+### 1. split은 design이 아니라 family 단위여야 합니다
+
+`design_low_level.json`의 `name`은 `design_<n>_<uuid>_<variant>` 형식입니다.
+**8,084개 family가 `dw`/`dw_dl` 쌍을 가지며, 전체의 58.3%(16,168개)가 형제를 가집니다.**
+
+형제는 완전 중복이 아닙니다. topology·부품·시드가 같고 치수만 다릅니다.
+
+| 타깃 | 형제 간 상대차 중앙값 | p90 |
+| --- | --- | --- |
+| `Mass` | 5.7% | 8.3% |
+| `Max_Distance` | 7.3% | 27.4% |
+| `Hover_Time` | 6.2% | 12.2% |
+
+design_id로 무작위 분할하면 형제 절반이 train/test를 가로질러 검증 점수가 부풀려집니다.
+파라미터·부품이 바이트 단위로 동일한 **완전 중복은 0건**이므로, 내용 해시만으로는 이 관계를 못 잡습니다.
+`prepare_targets.py`는 `sha256(salt + family)`로 배정하므로 **split 파일 없이 재현**됩니다.
+
+실제 결과: train 22,187 (80.1%) / val 2,803 (10.1%) / test 2,724 (9.8%), family가 split을 가로지르는 경우 0건.
+
+### 2. `Mass`는 100% 유효하지만 11개가 물리적으로 불가능합니다
+
+`isAvailableMetric` 규칙(`>0`, finite)은 27,714개 전부 통과합니다. 그런데 11개 설계가
+**60,000~240,000 kg**을 보고합니다. 정상 집단의 최대는 35.3 kg이고 그다음 값이 60,044 kg입니다.
+11개 모두 다른 KPI는 전부 0(해석 실패)입니다.
+
+**유효성(`*_valid`)은 필요조건이지 충분조건이 아닙니다.** `prepare_targets.py`의 `trainable(row, key)`가
+학습 필터의 유일한 정의이며, 2~4단계는 이것으로 걸러야 합니다. 11개는 삭제하지 않고
+`mass_plausible` 열로 표시만 해두었습니다.
+
+이 필터를 빼먹으면 `Mass` baseline이 train 평균 59.2 kg / test RMSE 576.8로 망가집니다.
+
+### 3. 4단계 baseline 수치
+
+"타깃 평균으로만 예측했을 때"의 실제 값입니다. 이 기준 없이는 R² 해석이 불가능합니다.
+
+| 타깃 | train 평균 | test MAE | test RMSE | trainable 수 |
+| --- | --- | --- | --- | --- |
+| `Mass` | 7.78 kg | 3.71 | 5.13 | 27,703 |
+| `Max_Distance` | 3,098 m | 2,554 | 3,653 | 10,737 |
+| `Hover_Time` | 175.1 s | 123.0 | 168.1 | 7,789 |
+
+### 디버깅 사다리 1번 타깃 (STL 불필요)
+
+설계 변수에서 바로 뽑았고 전 설계에 존재합니다. 단위는 mm입니다.
+
+| 타깃 | min | p50 | max |
+| --- | --- | --- | --- |
+| `fuselage_length` | 84.0 | 180.0 | 559.0 |
+| `fuselage_horz_diameter` | 311.4 | 372.9 | 804.9 |
+| `arm_length_max` | 50.1 | 397.8 | 500.0 |
+| `arm_length_sum` | 50.1 | 753.4 | 7,070.5 |
+
+"전체 span"은 STL bounding box이므로 2단계에서 샘플링과 함께 기록하면 됩니다.
+
+### 데이터셋 구성 (참고)
+
+| 항목 | 값 |
+| --- | --- |
+| 로터 수 | 1–16. 최빈 6개(9,803), 4개(7,574) |
+| 메인 허브 | Para_Hub_6 13,652 / Para_Hub_4 10,701 / Para_Hub_3 2,111 / Para_Hub_2 1,250 |
+| 날개 보유 | 6,343 (22.9%) — DRONE_PRIMER의 23%와 일치 |
+| 부품 종류 | 모터 49 / 프로펠러 146 / 배터리 56 — `component-catalogs.json`과 일치 |
+
+## 2단계 결과
+
+`ml/prepare_pointclouds.py`가 `ml/data/pointclouds.npz`(333MB, git 제외)를 만듭니다.
+27,714개 전부 **2.7분**(18워커, 173/s), 실패 0건. 자체 검증 6항목 전부 통과.
+
+0단계에서 trimesh로 따로 잰 design 17297의 STL extents `[1111.242, 1538.105, 306.82]`와
+2단계 산출물이 소수점까지 일치합니다.
+
+| 키 | shape | 비고 |
+| --- | --- | --- |
+| `points` | (27714, 1024, 3) f4 | 정규화된 단위구 좌표 |
+| `scale` | (27714,) f4 | **mm. 별도 스칼라 입력으로 넣으세요** |
+| `centroid` | (27714, 3) f4 | mm |
+| `extents` / `span` | (27714, 3) / (27714,) f4 | 메시 bbox. 사다리 1번 타깃 |
+| `targets` | (27714, 5) f4 | 학습 불가면 `NaN` |
+
+`raw_mm = points * scale + centroid`로 완전 복원됩니다.
+`targets`의 `NaN`이 곧 학습 필터이므로, 손실 계산에서 마스킹만 하면 됩니다.
+
+| | min | p50 | max |
+| --- | --- | --- | --- |
+| `scale` (mm) | 165.7 | 594.3 | 3,027.7 |
+| `span` (mm) | 332.4 | 1,159.8 | 5,957.8 |
+
+## 4단계 baseline이 바뀌었습니다
+
+이 문서는 4단계 baseline을 **"타깃 평균으로만 예측했을 때"**로 정의했습니다.
+2단계 데이터로 재보니 **그 바닥은 너무 낮아 판단 기준이 되지 못합니다.**
+
+메시에서 그냥 얻어지는 스칼라 11개(bbox extents, span, scale, 표면적, 동체·arm 치수)에
+최소제곱을 돌린 결과입니다. test split 기준이고 `ml/geometry_baseline.py`로 재현됩니다.
+
+| 타깃 | n_test | 평균 R² | **기하 R²** | 평균 MAE | 기하 MAE |
+| --- | --- | --- | --- | --- | --- |
+| `Mass` | 2,723 | 0.000 | **0.919** | 3.71 | 1.06 |
+| `Max_Distance` | 1,083 | 0.000 | **0.535** | 2,554 | 1,385 |
+| `Hover_Time` | 804 | 0.000 | **0.598** | 123.0 | 69.6 |
+| `Max_Speed` | 1,083 | 0.000 | **0.228** | 8.46 | 7.29 |
+| `Power_MFD` | 1,090 | 0.000 | **0.438** | 945.6 | 655.4 |
+
+**PointNet은 평균이 아니라 기하 열을 이겨야 합니다.** 이 스칼라들은 전부 입력 메시에서 나오므로,
+못 이기면 단순 기하가 이미 주던 것 이상을 배우지 못했다는 뜻입니다.
+[MODEL_CARD.md](MODEL_CARD.md)의 기록 항목에 이 baseline도 함께 남기세요.
+
+두 가지가 따라옵니다.
+
+**`Mass`는 span이 아니라 동체 크기로 예측됩니다.** `fuselage_vert_diameter`와 질량의 상관이
+0.881인 반면 span은 0.18입니다. 배터리를 담는 동체가 질량을 지배하고, 그 정보는 메시 안에 있습니다.
+사다리 2번(`Mass`)이 쉬운 이유가 크기 자체가 아니라는 점을 알고 가세요.
+
+**`Max_Distance` 0.54 / `Hover_Time` 0.60은 핵심 발견 3번의 예고와 일치합니다.**
+형상 단독 R² 0.4~0.6이 실패가 아니라는 기대치가 실측으로 확인됐습니다.
+다만 이제는 "0.5면 성공"이 아니라 **"기하 회귀의 0.535를 얼마나 넘느냐"**가 질문입니다.
+
+## 환경 구축 시 주의
+
+데스크탑에는 Python도 Node.js도 없었습니다. `python.exe`는 0바이트 Microsoft Store 스텁입니다.
+사용자 PATH 최상단이 `WindowsApps`이고 python.org 설치 프로그램은 PATH 뒤에 추가하므로,
+설치 후에도 맨 이름 `python`은 스텁이 잡힐 수 있습니다.
+
+**`py` 런처와 venv 명시 경로만 쓰세요.** 자세한 절차는 [../ml/README.md](../ml/README.md)에 있습니다.
 
 ## 참고 — 검증된 수치
 
@@ -212,9 +402,9 @@ drone-craft/
 
 | 항목 | 내용 |
 | --- | --- |
-| **payload 0.5kg의 정체** | 전 설계가 `payload.mass = 0.5`로 고정. avionics(FC/GPS/무선) 포함인지 순수 화물인지 불명. `design_low_level.json`을 열어 확인 필요 |
+| ~~**payload 0.5kg의 정체**~~ | **1단계에서 해소. 순수 화물입니다.** `CargoMass = 0.5`는 `Cargo` 컴포넌트에 붙고, avionics는 별도 `Sensor` 컴포넌트 6개(Autopilot, GPS, Current, Voltage, RpmTemp, Variometer)로 따로 모델링됩니다. 27,714개 전부 `CargoMass = 0.5`이고 `Sensor` 개수도 전부 6개입니다. 즉 0.5kg에 avionics는 포함되지 않습니다 |
 | **Pareto knee 라벨 불일치** | `pareto-front.json`과 `design-index.json`의 `paretoKneeId`는 20015인데, `showcase-designs.json`의 16491이 `selectionReason`에 `Pareto knee`로 표기됨. `scripts/prepare-aircraftverse.mjs`의 라벨링 문제로 보임 |
-| **point cloud 출처** | 제공된 100점이 STL에서 파생된 것인지 별도 생성인지 미확인 |
+| ~~**point cloud 출처**~~ | **0단계에서 사실상 해소.** design 17297 기준 제공된 100점의 bounding box가 STL bounding box 안에 그대로 들어가고 좌표계·단위(mm)가 같습니다 (STL `1111×1538×307`, npy `1073×1450×299`). 100점으로는 극단 꼭짓점을 못 맞히므로 약간 작게 나오는 것이 자연스럽습니다. **STL 표면에서 샘플링된 것으로 봅니다.** 어차피 100점은 쓰지 않으므로 추가 조사는 불필요합니다 |
 
 ## 데스크탑에서 시작하기
 

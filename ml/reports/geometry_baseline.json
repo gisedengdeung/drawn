@@ -1,0 +1,144 @@
+{
+  "features": [
+    "extent_x",
+    "extent_y",
+    "extent_z",
+    "span",
+    "scale",
+    "area",
+    "fuselage_length",
+    "fuselage_horz_diameter",
+    "fuselage_vert_diameter",
+    "arm_length_max",
+    "arm_length_sum"
+  ],
+  "n_features": 11,
+  "note": "ordinary least squares fitted on train, scored on test",
+  "targets": {
+    "Mass": {
+      "n_train": 22177,
+      "n_test": 2723,
+      "train_mean": 7.7789,
+      "mean_baseline": {
+        "r2": 0.0,
+        "mae": 3.7148,
+        "rmse": 5.1259
+      },
+      "geometry_baseline": {
+        "r2": 0.9187,
+        "mae": 1.0555,
+        "rmse": 1.4614
+      },
+      "geometry_baseline_log_fit": {
+        "r2": 0.8482,
+        "mae": 1.0373,
+        "rmse": 1.997
+      },
+      "geometry_baseline_log_space": {
+        "r2": 0.8974,
+        "mae": 0.1345,
+        "rmse": 0.1778
+      }
+    },
+    "Max_Distance": {
+      "n_train": 8604,
+      "n_test": 1083,
+      "train_mean": 3098.0401,
+      "mean_baseline": {
+        "r2": 0.0,
+        "mae": 2554.3524,
+        "rmse": 3653.4545
+      },
+      "geometry_baseline": {
+        "r2": 0.5348,
+        "mae": 1385.016,
+        "rmse": 2491.847
+      },
+      "geometry_baseline_log_fit": {
+        "r2": -17.4383,
+        "mae": 2310.8293,
+        "rmse": 15687.893
+      },
+      "geometry_baseline_log_space": {
+        "r2": 0.6,
+        "mae": 0.518,
+        "rmse": 0.7114
+      }
+    },
+    "Hover_Time": {
+      "n_train": 6247,
+      "n_test": 804,
+      "train_mean": 175.1232,
+      "mean_baseline": {
+        "r2": 0.0,
+        "mae": 122.9677,
+        "rmse": 168.0902
+      },
+      "geometry_baseline": {
+        "r2": 0.5983,
+        "mae": 69.5944,
+        "rmse": 106.5365
+      },
+      "geometry_baseline_log_fit": {
+        "r2": 0.357,
+        "mae": 76.1372,
+        "rmse": 134.784
+      },
+      "geometry_baseline_log_space": {
+        "r2": 0.6312,
+        "mae": 0.4434,
+        "rmse": 0.5484
+      }
+    },
+    "Max_Speed": {
+      "n_train": 8604,
+      "n_test": 1083,
+      "train_mean": 23.5977,
+      "mean_baseline": {
+        "r2": 0.0,
+        "mae": 8.4621,
+        "rmse": 10.3997
+      },
+      "geometry_baseline": {
+        "r2": 0.2282,
+        "mae": 7.2934,
+        "rmse": 9.1363
+      },
+      "geometry_baseline_log_fit": {
+        "r2": 0.1434,
+        "mae": 7.7446,
+        "rmse": 9.6252
+      },
+      "geometry_baseline_log_space": {
+        "r2": 0.1971,
+        "mae": 0.3814,
+        "rmse": 0.5433
+      }
+    },
+    "Power_MFD": {
+      "n_train": 8692,
+      "n_test": 1090,
+      "train_mean": 1831.8128,
+      "mean_baseline": {
+        "r2": 0.0,
+        "mae": 945.6108,
+        "rmse": 1325.2499
+      },
+      "geometry_baseline": {
+        "r2": 0.4383,
+        "mae": 655.4348,
+        "rmse": 993.193
+      },
+      "geometry_baseline_log_fit": {
+        "r2": 0.3021,
+        "mae": 643.3976,
+        "rmse": 1107.1239
+      },
+      "geometry_baseline_log_space": {
+        "r2": 0.5012,
+        "mae": 0.3513,
+        "rmse": 0.4535
+      }
+    }
+  }
+}

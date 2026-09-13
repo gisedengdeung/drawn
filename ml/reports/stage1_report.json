@@ -1,0 +1,600 @@
+{
+  "total_designs": 27714,
+  "mass_plausibility": {
+    "threshold_kg": 50.0,
+    "implausible_designs": 11,
+    "max_plausible_mass": 35.2866,
+    "implausible": [
+      {
+        "design_id": 830,
+        "mass": 240029.3,
+        "n_propeller": 16,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      },
+      {
+        "design_id": 831,
+        "mass": 240029.3,
+        "n_propeller": 16,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      },
+      {
+        "design_id": 1247,
+        "mass": 120110.4,
+        "n_propeller": 8,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      },
+      {
+        "design_id": 1248,
+        "mass": 120110.4,
+        "n_propeller": 8,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      },
+      {
+        "design_id": 9792,
+        "mass": 90045.2,
+        "n_propeller": 6,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      },
+      {
+        "design_id": 9793,
+        "mass": 90045.2,
+        "n_propeller": 6,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      },
+      {
+        "design_id": 22391,
+        "mass": 60044.6,
+        "n_propeller": 4,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      },
+      {
+        "design_id": 12691,
+        "mass": 60044.5,
+        "n_propeller": 4,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      },
+      {
+        "design_id": 1103,
+        "mass": 60028.7,
+        "n_propeller": 4,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      },
+      {
+        "design_id": 11654,
+        "mass": 60028.7,
+        "n_propeller": 4,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      },
+      {
+        "design_id": 3011,
+        "mass": 30044.4,
+        "n_propeller": 2,
+        "has_wing": 1,
+        "any_kpi_valid": 1
+      }
+    ]
+  },
+  "split_sizes": {
+    "train": 22187,
+    "val": 2803,
+    "test": 2724
+  },
+  "split_fractions": {
+    "train": 0.8006,
+    "val": 0.1011,
+    "test": 0.0983
+  },
+  "targets": {
+    "Mass": {
+      "valid": 27714,
+      "valid_fraction": 1.0,
+      "trainable": 27703,
+      "per_split": {
+        "train": 22177,
+        "val": 2803,
+        "test": 2723
+      },
+      "stats_trainable_only": {
+        "count": 27703,
+        "mean": 7.7869,
+        "std": 5.0591,
+        "min": 1.692,
+        "p50": 6.2043,
+        "max": 35.2866
+      }
+    },
+    "Max_Distance": {
+      "valid": 10737,
+      "valid_fraction": 0.3874,
+      "trainable": 10737,
+      "per_split": {
+        "train": 8604,
+        "val": 1050,
+        "test": 1083
+      },
+      "stats_trainable_only": {
+        "count": 10737,
+        "mean": 3124.5772,
+        "std": 3618.1303,
+        "min": 10.727,
+        "p50": 1676.625,
+        "max": 40904.9414
+      }
+    },
+    "Hover_Time": {
+      "valid": 7789,
+      "valid_fraction": 0.281,
+      "trainable": 7789,
+      "per_split": {
+        "train": 6247,
+        "val": 738,
+        "test": 804
+      },
+      "stats_trainable_only": {
+        "count": 7789,
+        "mean": 175.1827,
+        "std": 174.8848,
+        "min": 4.7421,
+        "p50": 109.9045,
+        "max": 1306.5413
+      }
+    },
+    "Max_Speed": {
+      "valid": 10737,
+      "valid_fraction": 0.3874,
+      "trainable": 10737,
+      "per_split": {
+        "train": 8604,
+        "val": 1050,
+        "test": 1083
+      },
+      "stats_trainable_only": {
+        "count": 10737,
+        "mean": 23.6892,
+        "std": 10.374,
+        "min": 1.0,
+        "p50": 24.0,
+        "max": 50.0
+      }
+    },
+    "Power_MFD": {
+      "valid": 10836,
+      "valid_fraction": 0.391,
+      "trainable": 10836,
+      "per_split": {
+        "train": 8692,
+        "val": 1054,
+        "test": 1090
+      },
+      "stats_trainable_only": {
+        "count": 10836,
+        "mean": 1831.3114,
+        "std": 1386.7461,
+        "min": 109.701,
+        "p50": 1477.8557,
+        "max": 22512.6738
+      }
+    },
+    "Speed_MFD": {
+      "valid": 10737,
+      "valid_fraction": 0.3874,
+      "trainable": 10737,
+      "per_split": {
+        "train": 8604,
+        "val": 1050,
+        "test": 1083
+      },
+      "stats_trainable_only": {
+        "count": 10737,
+        "mean": 21.3691,
+        "std": 8.5054,
+        "min": 1.0,
+        "p50": 22.0,
+        "max": 50.0
+      }
+    },
+    "Distance_MxSpd": {
+      "valid": 10737,
+      "valid_fraction": 0.3874,
+      "trainable": 10737,
+      "per_split": {
+        "train": 8604,
+        "val": 1050,
+        "test": 1083
+      },
+      "stats_trainable_only": {
+        "count": 10737,
+        "mean": 3035.2313,
+        "std": 3563.3297,
+        "min": 10.727,
+        "p50": 1615.3477,
+        "max": 40904.9414
+      }
+    },
+    "Power_MxSpd": {
+      "valid": 10836,
+      "valid_fraction": 0.391,
+      "trainable": 10836,
+      "per_split": {
+        "train": 8692,
+        "val": 1054,
+        "test": 1090
+      },
+      "stats_trainable_only": {
+        "count": 10836,
+        "mean": 2231.7847,
+        "std": 1666.8412,
+        "min": 109.701,
+        "p50": 1800.8953,
+        "max": 22512.6738
+      }
+    },
+    "Interferences": {
+      "valid": 25513,
+      "valid_fraction": 0.9206,
+      "trainable": 25513,
+      "per_split": {
+        "train": 20438,
+        "val": 2567,
+        "test": 2508
+      },
+      "stats_trainable_only": {
+        "count": 25513,
+        "mean": 18.4253,
+        "std": 20.509,
+        "min": 1.0,
+        "p50": 12.0,
+        "max": 373.0
+      }
+    },
+    "Max_uc_at_MFD": {
+      "valid": 10836,
+      "valid_fraction": 0.391,
+      "trainable": 10836,
+      "per_split": {
+        "train": 8692,
+        "val": 1054,
+        "test": 1090
+      },
+      "stats_trainable_only": {
+        "count": 10836,
+        "mean": 0.8485,
+        "std": 0.1671,
+        "min": 0.1652,
+        "p50": 0.9176,
+        "max": 1.0
+      }
+    },
+    "Mot_amps_ratio_MFD": {
+      "valid": 10836,
+      "valid_fraction": 0.391,
+      "trainable": 10836,
+      "per_split": {
+        "train": 8692,
+        "val": 1054,
+        "test": 1090
+      },
+      "stats_trainable_only": {
+        "count": 10836,
+        "mean": 0.6819,
+        "std": 0.2291,
+        "min": 0.0361,
+        "p50": 0.7086,
+        "max": 1.0
+      }
+    },
+    "Mot_amps_ratio_MxSpd": {
+      "valid": 10836,
+      "valid_fraction": 0.391,
+      "trainable": 10836,
+      "per_split": {
+        "train": 8692,
+        "val": 1054,
+        "test": 1090
+      },
+      "stats_trainable_only": {
+        "count": 10836,
+        "mean": 0.7217,
+        "std": 0.2334,
+        "min": 0.0361,
+        "p50": 0.7838,
+        "max": 1.0
+      }
+    },
+    "Mot_power_ratio_MFD": {
+      "valid": 10836,
+      "valid_fraction": 0.391,
+      "trainable": 10836,
+      "per_split": {
+        "train": 8692,
+        "val": 1054,
+        "test": 1090
+      },
+      "stats_trainable_only": {
+        "count": 10836,
+        "mean": 0.4758,
+        "std": 0.2496,
+        "min": 0.0142,
+        "p50": 0.4461,
+        "max": 0.9997
+      }
+    },
+    "Mot_power_ratio_MxSpd": {
+      "valid": 10836,
+      "valid_fraction": 0.391,
+      "trainable": 10836,
+      "per_split": {
+        "train": 8692,
+        "val": 1054,
+        "test": 1090
+      },
+      "stats_trainable_only": {
+        "count": 10836,
+        "mean": 0.5055,
+        "std": 0.2599,
+        "min": 0.0142,
+        "p50": 0.4836,
+        "max": 0.9997
+      }
+    },
+    "Batt_amps_ratio_MFD": {
+      "valid": 10836,
+      "valid_fraction": 0.391,
+      "trainable": 10836,
+      "per_split": {
+        "train": 8692,
+        "val": 1054,
+        "test": 1090
+      },
+      "stats_trainable_only": {
+        "count": 10836,
+        "mean": 0.8321,
+        "std": 0.6546,
+        "min": 0.089,
+        "p50": 0.6495,
+        "max": 8.0977
+      }
+    },
+    "Batt_amps_ratio_MxSpd": {
+      "valid": 10836,
+      "valid_fraction": 0.391,
+      "trainable": 10836,
+      "per_split": {
+        "train": 8692,
+        "val": 1054,
+        "test": 1090
+      },
+      "stats_trainable_only": {
+        "count": 10836,
+        "mean": 0.9621,
+        "std": 0.7793,
+        "min": 0.089,
+        "p50": 0.7353,
+        "max": 8.8829
+      }
+    }
+  },
+  "geometry": {
+    "fuselage_length": {
+      "count": 27714,
+      "mean": 205.3702,
+      "std": 107.743,
+      "min": 84.0,
+      "p50": 180.0,
+      "max": 559.0
+    },
+    "fuselage_horz_diameter": {
+      "count": 27714,
+      "mean": 389.5854,
+      "std": 66.6596,
+      "min": 311.4,
+      "p50": 372.9,
+      "max": 804.9
+    },
+    "fuselage_vert_diameter": {
+      "count": 27714,
+      "mean": 109.2166,
+      "std": 72.93,
+      "min": 51.0,
+      "p50": 76.5,
+      "max": 354.0
+    },
+    "fuselage_floor_height": {
+      "count": 27714,
+      "mean": 18.2028,
+      "std": 12.155,
+      "min": 8.5,
+      "p50": 12.75,
+      "max": 59.0
+    },
+    "arm_length_max": {
+      "count": 27714,
+      "mean": 360.6828,
+      "std": 120.7714,
+      "min": 50.1443,
+      "p50": 397.8204,
+      "max": 499.9977
+    },
+    "arm_length_sum": {
+      "count": 27714,
+      "mean": 1031.2037,
+      "std": 922.2245,
+      "min": 50.1443,
+      "p50": 753.4399,
+      "max": 7070.463
+    },
+    "wing_span_max": {
+      "count": 6343,
+      "mean": 1162.5064,
+      "std": 514.0011,
+      "min": 200.4369,
+      "p50": 1184.8073,
+      "max": 1999.993
+    }
+  },
+  "rotor_counts": {
+    "1": 322,
+    "2": 2365,
+    "3": 1040,
+    "4": 7574,
+    "5": 465,
+    "6": 9803,
+    "7": 424,
+    "8": 2036,
+    "9": 246,
+    "10": 986,
+    "11": 127,
+    "12": 1401,
+    "13": 81,
+    "14": 385,
+    "15": 78,
+    "16": 381
+  },
+  "wing_designs": 6343,
+  "wing_fraction": 0.2289,
+  "hub_types": {
+    "Para_Hub_6": 13652,
+    "Para_Hub_4": 10701,
+    "Para_Hub_3": 2111,
+    "Para_Hub_2": 1250
+  },
+  "distinct_motors": 49,
+  "distinct_propellers": 146,
+  "distinct_batteries": 56,
+  "cargo_mass_values": {
+    "0.5": 27714
+  },
+  "sensor_count_values": {
+    "6": 27714
+  },
+  "grouping": {
+    "designs": 27714,
+    "families": 19630,
+    "families_with_siblings": 8084,
+    "designs_with_a_sibling": 16168,
+    "largest_family": 2,
+    "family_size_histogram": {
+      "1": 11546,
+      "2": 8084
+    },
+    "variants": {
+      "s": 10242,
+      "dw": 8747,
+      "dw_dl": 8725
+    },
+    "exact_duplicate_configs": 0
+  },
+  "sibling_target_gap": {
+    "Mass": {
+      "both_valid_pairs": 8084,
+      "median_relative_gap": 0.0568,
+      "p90_relative_gap": 0.0833
+    },
+    "Max_Distance": {
+      "both_valid_pairs": 2812,
+      "median_relative_gap": 0.0733,
+      "p90_relative_gap": 0.2738
+    },
+    "Hover_Time": {
+      "both_valid_pairs": 2001,
+      "median_relative_gap": 0.0621,
+      "p90_relative_gap": 0.1217
+    }
+  },
+  "mean_baseline": {
+    "Mass": {
+      "train_mean": 7.7789,
+      "val_mae": 3.6525,
+      "val_rmse": 5.0465,
+      "val_n": 2803,
+      "test_mae": 3.7148,
+      "test_rmse": 5.1259,
+      "test_n": 2723
+    },
+    "Max_Distance": {
+      "train_mean": 3098.0401,
+      "val_mae": 2577.2573,
+      "val_rmse": 3722.8701,
+      "val_n": 1050,
+      "test_mae": 2554.3524,
+      "test_rmse": 3653.4545,
+      "test_n": 1083
+    },
+    "Hover_Time": {
+      "train_mean": 175.1232,
+      "val_mae": 128.829,
+      "val_rmse": 173.7704,
+      "val_n": 738,
+      "test_mae": 122.9677,
+      "test_rmse": 168.0902,
+      "test_n": 804
+    },
+    "fuselage_length": {
+      "train_mean": 205.0347,
+      "val_mae": 83.1113,
+      "val_rmse": 108.3054,
+      "val_n": 2803,
+      "test_mae": 82.4418,
+      "test_rmse": 107.4846,
+      "test_n": 2724
+    },
+    "fuselage_horz_diameter": {
+      "train_mean": 389.4536,
+      "val_mae": 47.5351,
+      "val_rmse": 65.978,
+      "val_n": 2803,
+      "test_mae": 48.8827,
+      "test_rmse": 68.9354,
+      "test_n": 2724
+    },
+    "fuselage_vert_diameter": {
+      "train_mean": 109.1565,
+      "val_mae": 53.2468,
+      "val_rmse": 71.8757,
+      "val_n": 2803,
+      "test_mae": 53.9075,
+      "test_rmse": 74.2332,
+      "test_n": 2724
+    },
+    "arm_length_max": {
+      "train_mean": 361.3452,
+      "val_mae": 99.7091,
+      "val_rmse": 120.6361,
+      "val_n": 2803,
+      "test_mae": 100.189,
+      "test_rmse": 120.6058,
+      "test_n": 2724
+    },
+    "arm_length_sum": {
+      "train_mean": 1037.4044,
+      "val_mae": 708.9456,
+      "val_rmse": 911.4104,
+      "val_n": 2803,
+      "test_mae": 714.5581,
+      "test_rmse": 917.3749,
+      "test_n": 2724
+    }
+  },
+  "split_method": {
+    "fractions": {
+      "train": 0.8,
+      "val": 0.1,
+      "test": 0.1
+    },
+    "salt": "aircraftverse-pointcloud-v1",
+    "key": "sha256 of the design family (design_<n>_<uuid> prefix of design_low_level name)",
+    "note": "pure function of the design; no split file needed to reproduce",
+    "why_family": "dw/dw_dl siblings share topology, components and seed; splitting per design would straddle 58% of the dataset"
+  },
+  "validity_rule": "isfinite(v) and v > 0, mirroring isAvailableMetric"
+}

@@ -1,0 +1,5 @@
+# Stage 0-2 preprocessing dependencies.
+# PyTorch is NOT listed here: it needs the CUDA wheel index.
+# See ml/README.md for the torch install line.
+numpy>=2.1
+trimesh>=4.5

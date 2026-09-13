@@ -49,6 +49,7 @@ next-env.d.ts
 /corpus_dic
 
 # ML training artifacts (see docs/HANDOFF.md)
+/ml/.venv/
 /ml/data/
 /ml/runs/
 /ml/checkpoints/

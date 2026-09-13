@@ -10,10 +10,22 @@
 | 2 | `prepare_pointclouds.py` | 완료 — STL → (N, 1024, 3) + scale |
 | — | `geometry_baseline.py` | 완료 — 3·4단계가 넘어야 할 바닥 |
 | 3 | `dataset.py`, `model.py`, `train.py` | 완료 — PointNet |
-| 4 | `evaluate.py` | 예정 — test 채점, prediction interval |
+| 4 | `evaluate.py` | 완료 — test 채점, prediction interval, model version |
+| 5 | — | 예정 — ONNX 또는 FastAPI 연결 |
 
 **모델 설명은 [../docs/POINTNET_MODEL.md](../docs/POINTNET_MODEL.md)에 있습니다** —
 입력 변수, 구조, 왜 그 결과가 나왔는지.
+
+최종 결과는 test split 기준 `Mass` R² **0.879**, `Max_Distance` R² **0.623**입니다.
+
+```powershell
+ml\.venv\Scripts\python.exe ml\train.py --targets Mass,Max_Distance `
+    --pool maxmean --epochs 200 --patience 30 --tag rung3_mass_distance
+ml\.venv\Scripts\python.exe ml\evaluate.py
+```
+
+`evaluate.py`가 **test split을 읽는 유일한 스크립트**입니다. 그 전 단계는 전부 val로만 선택했습니다.
+결과는 `ml/reports/stage4_evaluation.json`에 저장되며 prediction interval과 model version을 포함합니다.
 
 ## 환경
 

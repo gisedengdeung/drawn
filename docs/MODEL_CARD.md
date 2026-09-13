@@ -60,8 +60,58 @@ Optimizer는 세 파트의 27,714개 전체 설계에 대해 실제 `output.json
 
 1. `design_seq` Transformer로 Hover/Range/Mass/Speed model 학습
 2. PointNet/DGCNN geometry embedding 결합
-   — **geometry 축은 학습 완료(2026-09-14).** `Mass` val R² 0.854, `Max_Distance` 0.628.
-   입력·구조·근거는 [POINTNET_MODEL.md](POINTNET_MODEL.md). 아직 UI에 연결하지 않았습니다.
+   — **geometry 축 완료(2026-09-14): `pointnet-geometry-v1`.** 아래 참고.
 3. design + velocity 조건부 trim model 학습
-4. 검증셋 R²/MAE, prediction interval, model version 기록
+4. ~~검증셋 R²/MAE, prediction interval, model version 기록~~
+   — **`pointnet-geometry-v1`에 대해 완료.** `ml/reports/stage4_evaluation.json`
 5. 동일 UI contract를 유지한 채 FastAPI inference endpoint로 교체
+
+## pointnet-geometry-v1 (2026-09-14)
+
+3D 형상만 입력으로 받는 학습 모델입니다. **아직 UI에 연결되어 있지 않습니다.**
+현재 화면은 위에 기술된 `Neighbor Estimate v1`이 그대로 담당합니다.
+입력 변수·구조·근거는 [POINTNET_MODEL.md](POINTNET_MODEL.md)에 있습니다.
+
+### 입력
+
+STL 표면에서 면적 가중 샘플링한 점 1,024개와 크기 스칼라 1개.
+**부품 선택(모터·프로펠러·배터리), CAD 설계 변수, 로터 수는 입력에 없습니다.**
+
+### 검증셋 성능 (test split, 2026-09-14)
+
+| 타깃 | n | R² | MAE | RMSE | 평균 예측 | `mesh` 회귀 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Mass` | 2,723 | 0.8792 | 1.13 kg | 1.78 kg | 0.000 | 0.397 |
+| `Max_Distance` | 1,083 | 0.6233 | 1,233 m | 2,242 m | 0.000 | 0.046 |
+
+비교 기준은 두 가지입니다. `mesh`는 메시에서 잴 수 있는 스칼라 6개만 쓴 선형회귀로,
+모델과 동일한 정보를 받은 공정한 바닥입니다. `mesh+cad`(0.919 / 0.535)는 CAD 설계 변수를
+정답으로 받으므로 합격선이 아니라 지향점입니다.
+
+### Prediction interval
+
+val 잔차 분위수로 만든 곱셈형 구간이며, test에서 포함률을 검증했습니다.
+
+| 타깃 | 명목 | 실제 | 구간 |
+| --- | --- | --- | --- |
+| `Mass` | 80% / 90% | 80.8% / 90.0% | ×0.762~×1.210 / ×0.701~×1.331 |
+| `Max_Distance` | 80% / 90% | 82.3% / 91.1% | ×0.342~×1.778 / ×0.207~×2.341 |
+
+**`Max_Distance`는 점 추정 단독 노출 금지.** 90% 구간이 ×0.21~×2.34입니다.
+
+### 알려진 약점
+
+| 구간 | `Mass` 중앙 상대오차 | `Max_Distance` |
+| --- | --- | --- |
+| 날개 있음 (전체 22.9%) | 19.7% | 68.2% |
+| 로터 9개 이상 | 14.5% | 91.2% |
+| 대형 기체 861mm 이상 | 17.9% | 61.4% |
+
+부품을 보지 못하므로 같은 형상에 배터리만 바뀐 설계를 구분하지 못합니다.
+이 모델은 교체 계획의 **결합되는 한 축**이며 단독 사용을 전제로 하지 않습니다.
+
+### Model version
+
+체크포인트 sha256 `d677197f50a27923614d073c9ff84174`,
+데이터 sha256(앞 64MB) `261afb206bb3dd979fadd43de070e759`,
+split train 22,177 / val 2,803 / test 2,723 (family 해시 80/10/10).

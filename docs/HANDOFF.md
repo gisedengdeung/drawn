@@ -5,19 +5,23 @@
 
 드론 도메인 지식은 [DRONE_PRIMER.md](DRONE_PRIMER.md), 현재 추정기의 한계는 [MODEL_CARD.md](MODEL_CARD.md)를 참고하세요.
 
-> **0~3단계는 데스크탑에서 완료되었습니다 (2026-09-14).** 환경 구축, 27,714개 전수 검증,
-> 타깃 추출과 split 고정, point cloud 샘플링, PointNet 학습까지 끝났습니다.
+> **0~4단계가 데스크탑에서 완료되었습니다 (2026-09-14).** 환경 구축, 27,714개 전수 검증,
+> 타깃 추출과 split 고정, point cloud 샘플링, PointNet 학습, test 평가까지 끝났습니다.
+>
+> **최종 결과 (test split): `Mass` R² 0.879, `Max_Distance` R² 0.623.**
+> 모델이 무엇을 보고 어떻게 이 수치를 냈는지는 [POINTNET_MODEL.md](POINTNET_MODEL.md)에
+> 정리했습니다 — 입력 변수, 구조, 근거, prediction interval, 약점.
+>
 > 학습셋 `ml/data/pointclouds.npz`(333MB)와 체크포인트
-> `ml/runs/rung3_mass_distance.pt`가 있습니다(둘 다 git 제외).
+> `ml/runs/rung3_mass_distance.pt`는 git 제외입니다. 재현 절차는 [../ml/README.md](../ml/README.md),
+> 평가 기록은 `ml/reports/stage4_evaluation.json`입니다.
 >
-> **모델이 무엇을 보고 어떻게 이 결과를 냈는지는 [POINTNET_MODEL.md](POINTNET_MODEL.md)에
-> 따로 정리했습니다.** 입력 변수, 구조, 왜 이 수치가 나왔는지를 설명합니다.
+> 남은 것은 **5단계 — ONNX 내보내기 또는 FastAPI 연결**입니다. 그 전에
+> [MODEL_CARD.md](MODEL_CARD.md)의 약점 절을 읽으세요. `Max_Distance`는 90% 구간이
+> ×0.21~×2.34라 점 추정만 노출하면 안 됩니다.
 >
-> 재현 절차는 [../ml/README.md](../ml/README.md), 원본 결과는 `ml/reports/`와 `ml/runs/`입니다.
-> 남은 것은 **4단계(test split 채점, prediction interval, model version 기록)**입니다.
->
-> 특히 [4단계 baseline이 바뀌었습니다](#4단계-baseline이-바뀌었습니다) — 평균 예측이 아니라
-> `mesh` 회귀를 이겨야 하며, `mesh+cad`를 합격선으로 쓰면 안 됩니다.
+> 아래 [4단계 baseline이 바뀌었습니다](#4단계-baseline이-바뀌었습니다)도 함께 읽으세요 —
+> 평균 예측이 아니라 `mesh` 회귀가 기준이며, `mesh+cad`를 합격선으로 쓰면 안 됩니다.
 
 ## 담당 작업
 
@@ -198,7 +202,7 @@ Mot_amps_ratio_MFD, Mot_power_ratio_MFD, Batt_amps_ratio_MFD, ...
 | 1 | ~~타깃 추출, 유효성 필터, split 고정~~ **완료** | 아무 곳 | 1일 |
 | 2 | ~~STL → point cloud 샘플링, `.npz` 저장~~ **완료** (실제 2.7분) | 아무 곳 (CPU) | 2~4시간 |
 | 3 | ~~PointNet 학습~~ **완료** (실제 21.5분) → [POINTNET_MODEL.md](POINTNET_MODEL.md) | **데스크탑** | 2~3일 |
-| 4 | 검증셋 R²/MAE, baseline 대비 비교 | 데스크탑 | 1일 |
+| 4 | ~~검증셋 R²/MAE, baseline 대비 비교~~ **완료** + prediction interval, model version | 데스크탑 | 1일 |
 | 5 | ONNX 내보내기 또는 FastAPI 연결 | — | 이후 |
 
 4단계의 baseline은 **"타깃 평균으로만 예측했을 때"** 입니다. 이 기준이 없으면 R² 수치의 좋고 나쁨을 판단할 수 없습니다.

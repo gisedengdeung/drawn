@@ -99,6 +99,10 @@ class Bundle:
     mean: np.ndarray            # (T,) train mean, raw units
     std: np.ndarray             # (T,) train std, raw units
     design_id: np.ndarray
+    # Standardisation of log(scale), fitted on train. Inference is impossible
+    # without these two numbers, so they travel with every checkpoint.
+    scale_log_mean: float = 0.0
+    scale_log_std: float = 1.0
 
     def batches(self, split: str, batch_size: int, generator=None):
         index = self.indices[split]
@@ -190,5 +194,7 @@ def load_bundle(
         mean=mean,
         std=std,
         design_id=design_id,
+        scale_log_mean=scale_mean,
+        scale_log_std=scale_std,
     )
     return bundle

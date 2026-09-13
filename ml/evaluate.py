@@ -121,6 +121,47 @@ def check_coverage(bands: dict, actual, predicted) -> dict:
     return out
 
 
+def calibration_by_decile(actual, predicted) -> dict:
+    """Predicted vs actual across the target's own range.
+
+    A single R2 hides shrinkage. A model that explains part of the variance
+    pulls its predictions toward the training mean, which shows up as
+    over-prediction at the bottom of the range and under-prediction at the top.
+    That matters here because the interesting designs are the extremes.
+    """
+    usable = np.isfinite(actual)
+    actual, predicted = actual[usable], predicted[usable]
+    edges = np.quantile(actual, np.linspace(0, 1, 11))
+
+    deciles = []
+    for i in range(10):
+        selector = (
+            (actual >= edges[i]) & (actual < edges[i + 1])
+            if i < 9
+            else (actual >= edges[i]) & (actual <= edges[i + 1])
+        )
+        if selector.sum() < 5:
+            continue
+        actual_median = float(np.median(actual[selector]))
+        predicted_median = float(np.median(predicted[selector]))
+        deciles.append({
+            "decile": i + 1,
+            "actual_range": [round(float(edges[i]), 2), round(float(edges[i + 1]), 2)],
+            "n": int(selector.sum()),
+            "actual_median": round(actual_median, 2),
+            "predicted_median": round(predicted_median, 2),
+            "ratio": round(predicted_median / actual_median, 3) if actual_median else None,
+        })
+    return {
+        "deciles": deciles,
+        "actual_max": round(float(actual.max()), 2),
+        "predicted_max": round(float(predicted.max()), 2),
+        "predicted_max_over_actual_max": round(float(predicted.max() / actual.max()), 3),
+        "bottom_decile_ratio": deciles[0]["ratio"] if deciles else None,
+        "top_decile_ratio": deciles[-1]["ratio"] if deciles else None,
+    }
+
+
 def breakdown(bundle, rows, actual, predicted, column: int, data) -> dict:
     """Where the error concentrates, not just how big it is."""
     design_ids = bundle.design_id[rows]
@@ -243,6 +284,9 @@ def main(argv: list[str]) -> int:
             "error_breakdown_test": breakdown(
                 bundle, test_rows, test_actual[:, column], test_predicted[:, column], column, data
             ),
+            "calibration_test": calibration_by_decile(
+                test_actual[:, column], test_predicted[:, column]
+            ),
         }
 
         mesh = results[name]["test_baselines"]["mesh"]
@@ -280,6 +324,11 @@ def main(argv: list[str]) -> int:
             name: {"mean": round(float(bundle.mean[i]), 6), "std": round(float(bundle.std[i]), 6)}
             for i, name in enumerate(target_names)
         },
+        "scale_standardisation": {
+            "applied_to": "log(scale in mm)",
+            "mean": round(float(bundle.scale_log_mean), 10),
+            "std": round(float(bundle.scale_log_std), 10),
+        },
         "split_rule": "sha256('aircraftverse-pointcloud-v1:' + design family) -> 80/10/10; "
                       "family is the design_<n>_<uuid> prefix of design_low_level name",
         "scoring_rule": "R2 in the raw target unit, referenced to the train mean",
@@ -304,6 +353,16 @@ def main(argv: list[str]) -> int:
                 f"{label} {stats['median_relative_error']:.1%}" for label, stats in rows.items()
             )
             print(f"    {group:<20} {cells}")
+    print()
+    print("calibration (test) — predicted median / actual median, by actual decile")
+    for name, entry in results.items():
+        cal = entry["calibration_test"]
+        ratios = "  ".join(f"{d['ratio']:.2f}" for d in cal["deciles"])
+        print(f"  {name}")
+        print(f"    low -> high   {ratios}")
+        print(f"    ceiling       predicts at most {cal['predicted_max']:.0f}, "
+              f"actual reaches {cal['actual_max']:.0f} "
+              f"({cal['predicted_max_over_actual_max']:.0%})")
     print("=" * 74)
     print(f"report -> {args.report}")
     return 0

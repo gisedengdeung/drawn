@@ -11,7 +11,7 @@
 | — | `geometry_baseline.py` | 완료 — 3·4단계가 넘어야 할 바닥 |
 | 3 | `dataset.py`, `model.py`, `train.py` | 완료 — PointNet |
 | 4 | `evaluate.py` | 완료 — test 채점, prediction interval, model version |
-| 5 | — | 예정 — ONNX 또는 FastAPI 연결 |
+| 5 | `export_onnx.py` | 완료 — 자기완결 ONNX. FastAPI 연결은 미착수 |
 
 **모델 설명은 [../docs/POINTNET_MODEL.md](../docs/POINTNET_MODEL.md)에 있습니다** —
 입력 변수, 구조, 왜 그 결과가 나왔는지.
@@ -26,6 +26,23 @@ ml\.venv\Scripts\python.exe ml\evaluate.py
 
 `evaluate.py`가 **test split을 읽는 유일한 스크립트**입니다. 그 전 단계는 전부 val로만 선택했습니다.
 결과는 `ml/reports/stage4_evaluation.json`에 저장되며 prediction interval과 model version을 포함합니다.
+
+## 5단계 — ONNX 배포
+
+```powershell
+ml\.venv\Scripts\python.exe ml\export_onnx.py
+```
+
+전처리·후처리를 그래프에 편입한 자기완결 파일 `ml/runs/pointnet-geometry-v1.onnx`(5.2MB)가
+나옵니다. **mm 좌표 (batch, N, 3)을 넣으면 (batch, 2) = [kg, m]이 나옵니다.**
+PyTorch와 최대 상대차 6.6e-06, 점 순서 무관성 3.2e-06으로 검증했습니다.
+
+전달할 때 ONNX 파일만 보내지 마세요 — 샘플링 규약(면적 가중 1,024점, mm),
+`ml/reports/onnx_test_vectors.json`, 사용 한계를 함께 넘겨야 합니다.
+자세한 내용은 [POINTNET_MODEL.md](../docs/POINTNET_MODEL.md) 9절에 있습니다.
+
+> **`Max_Distance`를 랭킹에 쓰지 마세요.** 예측 상한이 19,824m인데 데이터셋 최대는 40,905m입니다.
+> Pareto knee design 20015(40,905m)를 1,400m로 예측합니다. 6절 참고.
 
 ## 환경
 

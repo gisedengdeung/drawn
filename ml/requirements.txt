@@ -3,3 +3,7 @@
 # See ml/README.md for the torch install line.
 numpy>=2.1
 trimesh>=4.5
+
+# Stage 5 export and its verification.
+onnx>=1.22
+onnxruntime>=1.30

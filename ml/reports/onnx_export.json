@@ -1,0 +1,72 @@
+{
+  "exported_at": "2026-09-14T04:32:05+0900",
+  "model_name": "pointnet-geometry-v1",
+  "onnx": {
+    "path": "C:\\Users\\OWNER\\Desktop\\drone\\drone-craft\\ml\\runs\\pointnet-geometry-v1.onnx",
+    "sha256": "c4c11030c7ebe9a77d367bbdcf5119aa",
+    "bytes": 5322769
+  },
+  "source_checkpoint": "C:\\Users\\OWNER\\Desktop\\drone\\drone-craft\\ml\\runs\\rung3_mass_distance.pt",
+  "opset": 17,
+  "io": {
+    "input": {
+      "name": "points_mm",
+      "shape": [
+        "batch",
+        "num_points",
+        3
+      ],
+      "dtype": "float32",
+      "unit": "mm"
+    },
+    "output": {
+      "name": "predictions",
+      "shape": [
+        "batch",
+        2
+      ],
+      "dtype": "float32",
+      "targets": [
+        "Mass",
+        "Max_Distance"
+      ],
+      "units": [
+        "kg",
+        "m"
+      ]
+    }
+  },
+  "baked_in": {
+    "centroid_centering": true,
+    "scale_normalisation": true,
+    "log_scale_standardisation": {
+      "mean": 6.466611436849218,
+      "std": 0.5165559324720453
+    },
+    "target_destandardisation": {
+      "Mass": {
+        "mean": 7.778900473488836,
+        "std": 5.052427802729091
+      },
+      "Max_Distance": {
+        "mean": 3098.040103247752,
+        "std": 3600.7751002484715
+      }
+    }
+  },
+  "not_baked_in": "sampling 1024 points area-weighted over the STL surface",
+  "checks": {
+    "torch_onnx_parity": {
+      "designs": 64,
+      "max_abs_diff": 0.01611328125,
+      "max_rel_diff": 6.583950380445458e-06,
+      "tolerance": 0.001,
+      "pass": true
+    },
+    "point_order_invariance": {
+      "max_rel_diff": 3.1480349207413383e-06,
+      "pass": true
+    }
+  },
+  "test_vectors": "C:\\Users\\OWNER\\Desktop\\drone\\drone-craft\\ml\\reports\\onnx_test_vectors.json"
+}

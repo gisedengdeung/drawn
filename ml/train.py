@@ -202,6 +202,10 @@ def main(argv: list[str]) -> int:
             "target_names": target_names,
             "target_mean": bundle.mean,
             "target_std": bundle.std,
+            # Without these the checkpoint cannot be used for inference
+            # unless the whole 333 MB training set is at hand.
+            "scale_log_mean": bundle.scale_log_mean,
+            "scale_log_std": bundle.scale_log_std,
             "use_scale": not args.no_scale,
             "dropout": args.dropout,
             "pool": args.pool,

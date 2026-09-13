@@ -1,11 +1,11 @@
 {
   "model_version": {
-    "evaluated_at": "2026-09-14T04:10:02+0900",
+    "evaluated_at": "2026-09-14T04:34:07+0900",
     "checkpoint": {
       "path": "C:\\Users\\OWNER\\Desktop\\drone\\drone-craft\\ml\\runs\\rung3_mass_distance.pt",
-      "sha256": "d677197f50a27923614d073c9ff84174",
-      "bytes": 5346387,
-      "hashed_prefix_bytes": 5346387,
+      "sha256": "f2ff8237103296d62ab260cac3503c4c",
+      "bytes": 5346451,
+      "hashed_prefix_bytes": 5346451,
       "partial": false
     },
     "dataset": {
@@ -45,6 +45,11 @@
         "mean": 3098.040103,
         "std": 3600.7751
       }
+    },
+    "scale_standardisation": {
+      "applied_to": "log(scale in mm)",
+      "mean": 6.4666114368,
+      "std": 0.5165559325
     },
     "split_rule": "sha256('aircraftverse-pointcloud-v1:' + design family) -> 80/10/10; family is the design_<n>_<uuid> prefix of design_low_level name",
     "scoring_rule": "R2 in the raw target unit, referenced to the train mean",
@@ -172,6 +177,125 @@
             "median_relative_error": 0.1787
           }
         }
+      },
+      "calibration_test": {
+        "deciles": [
+          {
+            "decile": 1,
+            "actual_range": [
+              1.77,
+              3.39
+            ],
+            "n": 273,
+            "actual_median": 3.02,
+            "predicted_median": 3.58,
+            "ratio": 1.186
+          },
+          {
+            "decile": 2,
+            "actual_range": [
+              3.39,
+              4.12
+            ],
+            "n": 272,
+            "actual_median": 3.76,
+            "predicted_median": 4.24,
+            "ratio": 1.13
+          },
+          {
+            "decile": 3,
+            "actual_range": [
+              4.12,
+              4.78
+            ],
+            "n": 272,
+            "actual_median": 4.45,
+            "predicted_median": 4.87,
+            "ratio": 1.093
+          },
+          {
+            "decile": 4,
+            "actual_range": [
+              4.78,
+              5.49
+            ],
+            "n": 272,
+            "actual_median": 5.12,
+            "predicted_median": 5.42,
+            "ratio": 1.06
+          },
+          {
+            "decile": 5,
+            "actual_range": [
+              5.49,
+              6.23
+            ],
+            "n": 272,
+            "actual_median": 5.89,
+            "predicted_median": 6.08,
+            "ratio": 1.033
+          },
+          {
+            "decile": 6,
+            "actual_range": [
+              6.23,
+              7.21
+            ],
+            "n": 273,
+            "actual_median": 6.65,
+            "predicted_median": 6.9,
+            "ratio": 1.038
+          },
+          {
+            "decile": 7,
+            "actual_range": [
+              7.21,
+              8.44
+            ],
+            "n": 272,
+            "actual_median": 7.82,
+            "predicted_median": 7.76,
+            "ratio": 0.993
+          },
+          {
+            "decile": 8,
+            "actual_range": [
+              8.44,
+              10.48
+            ],
+            "n": 272,
+            "actual_median": 9.39,
+            "predicted_median": 9.37,
+            "ratio": 0.998
+          },
+          {
+            "decile": 9,
+            "actual_range": [
+              10.48,
+              15.54
+            ],
+            "n": 272,
+            "actual_median": 12.28,
+            "predicted_median": 12.19,
+            "ratio": 0.993
+          },
+          {
+            "decile": 10,
+            "actual_range": [
+              15.54,
+              30.3
+            ],
+            "n": 273,
+            "actual_median": 19.04,
+            "predicted_median": 18.46,
+            "ratio": 0.969
+          }
+        ],
+        "actual_max": 30.3,
+        "predicted_max": 27.79,
+        "predicted_max_over_actual_max": 0.917,
+        "bottom_decile_ratio": 1.186,
+        "top_decile_ratio": 0.969
       }
     },
     "Max_Distance": {
@@ -286,6 +410,125 @@
             "median_relative_error": 0.6138
           }
         }
+      },
+      "calibration_test": {
+        "deciles": [
+          {
+            "decile": 1,
+            "actual_range": [
+              11.33,
+              481.57
+            ],
+            "n": 109,
+            "actual_median": 290.51,
+            "predicted_median": 1094.27,
+            "ratio": 3.767
+          },
+          {
+            "decile": 2,
+            "actual_range": [
+              481.57,
+              731.17
+            ],
+            "n": 108,
+            "actual_median": 621.19,
+            "predicted_median": 1155.12,
+            "ratio": 1.86
+          },
+          {
+            "decile": 3,
+            "actual_range": [
+              731.17,
+              939.84
+            ],
+            "n": 108,
+            "actual_median": 822.56,
+            "predicted_median": 1201.92,
+            "ratio": 1.461
+          },
+          {
+            "decile": 4,
+            "actual_range": [
+              939.84,
+              1249.81
+            ],
+            "n": 108,
+            "actual_median": 1056.35,
+            "predicted_median": 1420.04,
+            "ratio": 1.344
+          },
+          {
+            "decile": 5,
+            "actual_range": [
+              1249.81,
+              1705.84
+            ],
+            "n": 108,
+            "actual_median": 1451.75,
+            "predicted_median": 1511.76,
+            "ratio": 1.041
+          },
+          {
+            "decile": 6,
+            "actual_range": [
+              1705.84,
+              2441.72
+            ],
+            "n": 109,
+            "actual_median": 2029.12,
+            "predicted_median": 2030.02,
+            "ratio": 1.0
+          },
+          {
+            "decile": 7,
+            "actual_range": [
+              2441.72,
+              3555.08
+            ],
+            "n": 108,
+            "actual_median": 3004.38,
+            "predicted_median": 2973.2,
+            "ratio": 0.99
+          },
+          {
+            "decile": 8,
+            "actual_range": [
+              3555.08,
+              4944.46
+            ],
+            "n": 108,
+            "actual_median": 4252.77,
+            "predicted_median": 4101.78,
+            "ratio": 0.964
+          },
+          {
+            "decile": 9,
+            "actual_range": [
+              4944.46,
+              8003.51
+            ],
+            "n": 108,
+            "actual_median": 6207.53,
+            "predicted_median": 5645.02,
+            "ratio": 0.909
+          },
+          {
+            "decile": 10,
+            "actual_range": [
+              8003.51,
+              40904.94
+            ],
+            "n": 109,
+            "actual_median": 10605.37,
+            "predicted_median": 8509.54,
+            "ratio": 0.802
+          }
+        ],
+        "actual_max": 40904.94,
+        "predicted_max": 19824.15,
+        "predicted_max_over_actual_max": 0.485,
+        "bottom_decile_ratio": 3.767,
+        "top_decile_ratio": 0.802
       }
     }
   },

@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   GitCompareArrows,
   Hexagon,
+  ShoppingBag,
   Sparkles,
 } from 'lucide-react';
 
@@ -16,6 +17,8 @@ import { DesignLabView } from '@/components/views/design-lab-view';
 import { ExplorerView } from '@/components/views/explorer-view';
 import { OptimizerView } from '@/components/views/optimizer-view';
 import { SimulatorView } from '@/components/views/simulator-view';
+import { PartsAgentView } from '@/components/views/parts-agent-view';
+import { useDesignWorkspace } from '@/hooks/use-design-workspace';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type {
@@ -31,6 +34,7 @@ const navItems = [
   { id: 'simulator' as const, step: 3, label: '성능 확인', short: '성능', icon: Activity },
   { id: 'compare' as const, step: 4, label: '설계 비교', short: '비교', icon: GitCompareArrows },
   { id: 'optimizer' as const, step: 5, label: '후보 탐색', short: '후보', icon: Sparkles },
+  { id: 'parts' as const, step: 6, label: '부품 agent', short: '부품 agent', icon: ShoppingBag },
 ];
 
 export function DrawnApp() {
@@ -87,6 +91,7 @@ export function DrawnApp() {
     [designById, selectedId],
   );
   const selectedDetail = selectedId == null ? null : showcases[String(selectedId)] ?? null;
+  const designWorkspace = useDesignWorkspace(selectedSummary, selectedDetail);
   const showcaseList = useMemo(
     () => dataset?.summary.showcaseIds
       .map((id) => showcases[String(id)])
@@ -216,8 +221,10 @@ export function DrawnApp() {
                   selected={selectedSummary}
                   referenceDesign={selectedDetail}
                   datasetDesigns={dataset.designs}
+                  workspace={designWorkspace}
                   onSelect={setSelectedId}
                   onOpenDatasetCompare={() => openCompareFromExplorer(selectedSummary.id)}
+                  onOpenParts={() => setView('parts')}
                 />
               )}
               {view === 'compare' && comparePair && (
@@ -236,6 +243,11 @@ export function DrawnApp() {
                   onApplyDraft={(id) => selectShowcaseAndOpen(id, 'lab')}
                 />
               )}
+              <div hidden={view !== 'parts'}>
+                <PartsAgentView draft={designWorkspace.draft} disabled={designWorkspace.loading}
+                  selectedDesignId={selectedId} loadError={designWorkspace.loadError}
+                  onOpenDesign={() => setView('lab')} />
+              </div>
             </>
           )}
       </div>

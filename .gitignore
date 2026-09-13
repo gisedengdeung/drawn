@@ -47,3 +47,14 @@ next-env.d.ts
 /**/Geom.stp
 /**/cadfile.stl
 /corpus_dic
+
+# ML training artifacts (see docs/HANDOFF.md)
+/ml/data/
+/ml/runs/
+/ml/checkpoints/
+__pycache__/
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.onnx

@@ -21,6 +21,10 @@ npm run dev
 
 원본 84.34GiB 데이터는 복사하거나 변경하지 않으며 Git 추적에서도 제외합니다.
 
+## 도메인 입문
+
+드론 설계를 처음 접한다면 [docs/DRONE_PRIMER.md](docs/DRONE_PRIMER.md)를 먼저 읽어주세요. 부품 이름 규칙, Thrust/Drag/Lift/Power와 trim, 설계 트레이드오프, feasibility 지표를 이 레포의 실제 데이터로 설명합니다.
+
 ## 구현된 사용자 흐름
 
 1. **Design Explorer** — 27,714개 ID/topology 검색과 대표 12개 원본 STL 또는 전체 파라메트릭 프리뷰 진입

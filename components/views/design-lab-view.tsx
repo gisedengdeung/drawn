@@ -525,13 +525,57 @@ function NumberSlider({ label, unit, min, max, step, value, baseline, onChange }
   const changed = Math.abs(value - baseline) > Math.max(step / 2, 0.0001);
   const safeMin = Math.min(min, Math.floor(baseline), Math.floor(value));
   const safeMax = Math.max(max, Math.ceil(baseline), Math.ceil(value));
+  const digits = step < 1 ? 1 : 0;
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  const skipCommitRef = useRef(false);
+
+  const commit = (raw: string) => {
+    setEditing(false);
+    const parsed = Number(raw.replace(/,/g, '').trim());
+    if (!Number.isFinite(parsed)) {
+      setText(formatMetric(value, digits));
+      return;
+    }
+    const clamped = Math.min(safeMax, Math.max(safeMin, parsed));
+    if (Math.abs(clamped - value) > Math.max(step / 2, 0.0001)) onChange(clamped);
+    else setText(formatMetric(value, digits));
+  };
+
   return (
     <div className="mb-3 last:mb-0">
       <div className="mb-2 flex items-center justify-between gap-2 text-[11px]">
         <span className="text-[#607383]">{label}</span>
         <span className="flex items-center gap-1.5">
           {changed && <button onClick={() => onChange(baseline)} aria-label={`${label} 초기화`} className="rounded p-0.5 text-[#82919c] hover:bg-[#e9eff3] hover:text-[#294353]"><RotateCcw className="size-3" /></button>}
-          <span className={`min-w-16 text-right font-mono font-semibold ${changed ? 'text-[#0f7182]' : 'text-[#294353]'}`}>{formatMetric(value, step < 1 ? 1 : 0)} {unit}</span>
+          <span className="flex items-center gap-1">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={editing ? text : formatMetric(value, digits)}
+              onFocus={() => { setEditing(true); setText(formatMetric(value, digits)); }}
+              onChange={(event) => setText(event.target.value)}
+              onBlur={(event) => {
+                if (skipCommitRef.current) {
+                  skipCommitRef.current = false;
+                  return;
+                }
+                commit(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+                else if (event.key === 'Escape') {
+                  skipCommitRef.current = true;
+                  setText(formatMetric(value, digits));
+                  setEditing(false);
+                  event.currentTarget.blur();
+                }
+              }}
+              aria-label={`${label} 값 직접 입력`}
+              className={`w-16 rounded border border-transparent bg-transparent px-1 text-right font-mono font-semibold outline-none hover:border-[#dbe4ea] focus:border-[#147d91] focus:bg-white ${changed ? 'text-[#0f7182]' : 'text-[#294353]'}`}
+            />
+            <span className="text-[#95a3ad]">{unit}</span>
+          </span>
         </span>
       </div>
       <Slider value={[value]} min={safeMin} max={safeMax} step={step} onValueChange={(next) => onChange(Number(Array.isArray(next) ? next[0] : next))} aria-label={label} className="[&_[data-slot=slider-range]]:bg-[#147d91]" />

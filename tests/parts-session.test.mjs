@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTypeScript } from './helpers/load-typescript.mjs';
 
-const { restoreQuote } = await loadTypeScript('lib/parts/session.ts');
+const { restoreQuote, loadStoredQuote, saveStoredQuote } = await loadTypeScript('lib/parts/session.ts');
 const { quoteToCsv } = await loadTypeScript('lib/parts/csv.ts');
 
 function savedQuote() {
@@ -28,6 +28,74 @@ function savedQuote() {
 }
 
 const restore = (value) => restoreQuote(JSON.stringify(value));
+
+const currentKey = 'drawn.parts-quote.v1';
+const legacyKey = 'aerotwin.parts-quote.v1';
+function memoryStorage(entries = []) {
+  const values = new Map(entries);
+  return {
+    values,
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => { values.set(key, value); },
+  };
+}
+
+test('migrates a legacy quote to drawn without losing its selection, amounts or original copy', () => {
+  const text = JSON.stringify(savedQuote());
+  const storage = memoryStorage([[legacyKey, text]]);
+  const quote = loadStoredQuote(storage);
+  assert.deepEqual(quote, savedQuote());
+  assert.equal(quote.lines[0].selectedOfferId, '123:sku1');
+  assert.match(quoteToCsv(quote.snapshot, quote.lines), /40000/);
+  assert.equal(saveStoredQuote(storage, quote), true);
+  assert.deepEqual(restoreQuote(storage.values.get(currentKey)), quote);
+  assert.equal(storage.values.get(legacyKey), text);
+  assert.equal(storage.values.size, 2);
+});
+
+test('prefers a valid drawn quote over legacy data, including a valid empty quote', () => {
+  for (const empty of [false, true]) {
+    const current = savedQuote();
+    current.snapshot.designId = 1985;
+    if (empty) { current.snapshot.items = []; current.lines = []; }
+    const storage = memoryStorage([[currentKey, JSON.stringify(current)], [legacyKey, JSON.stringify(savedQuote())]]);
+    assert.deepEqual(loadStoredQuote(storage), current);
+  }
+});
+
+test('falls back to legacy when the drawn quote is missing, malformed, oversized or inconsistent', () => {
+  const inconsistent = savedQuote();
+  inconsistent.lines[0].selectedOfferId = 'unknown';
+  for (const text of [null, '', '{', 'null', ' '.repeat(1_000_001), JSON.stringify(inconsistent)]) {
+    const storage = memoryStorage([[legacyKey, JSON.stringify(savedQuote())]]);
+    if (text !== null) storage.values.set(currentKey, text);
+    assert.deepEqual(loadStoredQuote(storage), savedQuote());
+  }
+});
+
+test('storage read failures do not crash the app or prevent a readable legacy quote', () => {
+  assert.equal(loadStoredQuote(memoryStorage()), null);
+  assert.equal(loadStoredQuote(memoryStorage([[currentKey, '{}'], [legacyKey, '{']])), null);
+  assert.equal(loadStoredQuote({ getItem() { throw new Error('Storage disabled'); } }), null);
+  assert.deepEqual(loadStoredQuote({ getItem(key) {
+    if (key === currentKey) throw new Error('Current key unavailable');
+    return JSON.stringify(savedQuote());
+  } }), savedQuote());
+});
+
+test('saving writes only the drawn key and keeps previous copies when storage is full', () => {
+  const text = JSON.stringify(savedQuote());
+  const storage = memoryStorage([[legacyKey, text]]);
+  assert.equal(saveStoredQuote(storage, savedQuote()), true);
+  assert.deepEqual([...storage.values.keys()], [legacyKey, currentKey]);
+  const before = [...storage.values];
+  storage.setItem = () => { throw new Error('Quota exceeded'); };
+  const changed = savedQuote();
+  changed.snapshot.designId = 1985;
+  assert.equal(saveStoredQuote(storage, changed), false);
+  assert.deepEqual([...storage.values], before);
+  assert.deepEqual(loadStoredQuote(storage), savedQuote());
+});
 
 test('restores a valid quote and uses canonical snapshot items for UI and CSV', () => {
   const saved = savedQuote();

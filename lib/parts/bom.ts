@@ -1,4 +1,4 @@
-import type { DesignDraft, PhysicalComponent } from '../aerotwin-types';
+import type { DesignDraft, PhysicalComponent } from '../drawn-types';
 import type { BomItem, BomSnapshot, PartKind, PartSpecs } from './types';
 
 const kinds: PartKind[] = ['motor', 'propeller', 'battery', 'servo'];

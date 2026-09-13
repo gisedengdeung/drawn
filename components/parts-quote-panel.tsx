@@ -8,11 +8,10 @@ import { createBomSnapshot, draftFingerprint } from '@/lib/parts/bom';
 import { calculateOfferAmounts } from '@/lib/parts/pricing';
 import { quoteToCsv } from '@/lib/parts/csv';
 import { productLink, searchPartQueue } from '@/lib/parts/client';
-import { restoreQuote } from '@/lib/parts/session';
-import type { DesignDraft } from '@/lib/aerotwin-types';
+import { loadStoredQuote, saveStoredQuote } from '@/lib/parts/session';
+import type { DesignDraft } from '@/lib/drawn-types';
 import type { BomSnapshot, PartKind, PartSearchResult, PartSpecs, ProductOffer, QuoteLine } from '@/lib/parts/types';
 
-const SESSION_KEY = 'aerotwin.parts-quote.v1';
 const KIND_LABELS: Record<PartKind, string> = { motor: '모터', propeller: '프로펠러', battery: '배터리', servo: '서보' };
 const STATUS_LABELS: Record<PartSearchResult['status'], string> = {
   ok: '검색 완료', not_found: '검색 범위에서 미발견', not_configured: '상품 조회 연결 준비 중',
@@ -62,8 +61,7 @@ export function PartsQuotePanel({ draft, disabled = false }: { draft: DesignDraf
     queueMicrotask(() => {
       if (!active) return;
       try {
-        const text = sessionStorage.getItem(SESSION_KEY);
-        const saved = text ? restoreQuote(text) : null;
+        const saved = loadStoredQuote(sessionStorage);
         if (saved) {
           setSnapshot(saved.snapshot);
           setLines(saved.lines);
@@ -76,7 +74,7 @@ export function PartsQuotePanel({ draft, disabled = false }: { draft: DesignDraf
 
   useEffect(() => {
     if (!ready || !snapshot) return;
-    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ snapshot, lines })); } catch { /* Full or disabled storage. */ }
+    try { saveStoredQuote(sessionStorage, { snapshot, lines }); } catch { /* Access to browser storage can be disabled. */ }
   }, [ready, snapshot, lines]);
 
   const totals = useMemo(() => {
@@ -133,7 +131,7 @@ export function PartsQuotePanel({ draft, disabled = false }: { draft: DesignDraf
     const url = URL.createObjectURL(new Blob([quoteToCsv(snapshot, lines)], { type: 'text/csv;charset=utf-8;' }));
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `aerotwin-parts-${snapshot.designId}-${snapshot.createdAt.slice(0, 10)}.csv`;
+    anchor.download = `drawn-parts-${snapshot.designId}-${snapshot.createdAt.slice(0, 10)}.csv`;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }

@@ -17,7 +17,7 @@ import {
   formatComponent,
   formatHub,
   type ShowcaseDesign,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 
 type DataSource = 'DATASET' | 'INTERPOLATED' | 'DEMO ESTIMATE' | 'DATASET RANKING';
 

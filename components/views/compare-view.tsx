@@ -32,13 +32,13 @@ import type {
   DesignSummary,
   ShowcaseMap,
   TrimRow,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 import {
   formatHub,
   formatMetric,
   isAvailableMetric,
   percentChange,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 import {
   DataDisclaimer,
   DesignSelector,

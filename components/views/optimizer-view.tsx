@@ -38,14 +38,14 @@ import { Progress } from '@/components/ui/progress';
 import type {
   DatasetIndex,
   DesignSummary,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 import {
   formatDistance,
   formatHub,
   formatMetric,
   isAvailableMetric,
   percentChange,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 import {
   DataDisclaimer,
   SectionHeading,

@@ -23,7 +23,7 @@ import type {
   DesignSummary,
   ShowcaseMap,
   WorkspaceView,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 
 const navItems = [
   { id: 'explore' as const, step: 1, label: '설계 선택', short: '탐색', icon: Boxes },
@@ -33,7 +33,7 @@ const navItems = [
   { id: 'optimizer' as const, step: 5, label: '후보 탐색', short: '후보', icon: Sparkles },
 ];
 
-export function AeroTwinApp() {
+export function DrawnApp() {
   const [view, setView] = useState<WorkspaceView>('explore');
   const [dataset, setDataset] = useState<DatasetIndex | null>(null);
   const [showcases, setShowcases] = useState<ShowcaseMap>({});
@@ -126,7 +126,7 @@ export function AeroTwinApp() {
               <Hexagon className="size-4.5 text-white" />
             </div>
             <div>
-              <p className="text-sm font-semibold tracking-[-0.02em] text-[#172b3a]">AeroTwin</p>
+              <p className="text-sm font-semibold tracking-[-0.02em] text-[#172b3a]">drawn</p>
               <p className="hidden text-[10px] font-medium tracking-[0.08em] text-[#6b7d8b] sm:block">UAV 설계 워크벤치</p>
             </div>
           </button>

@@ -10,7 +10,7 @@ import type {
   DesignDraft,
   DesignSegment,
   ParameterGroup,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 
 export type ForceVectors = {
   drag?: number | null;

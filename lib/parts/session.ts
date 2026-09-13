@@ -1,6 +1,10 @@
 import { isPartSearchResult } from './client';
 import type { BomItem, BomSnapshot, PartKind, PartSpecs, QuoteLine } from './types';
 
+const SESSION_KEY = 'drawn.parts-quote.v1';
+const LEGACY_SESSION_KEY = 'aerotwin.parts-quote.v1';
+type StoredQuote = { snapshot: BomSnapshot; lines: QuoteLine[] };
+
 const kinds = new Set<PartKind>(['motor', 'propeller', 'battery', 'servo']);
 const specKeys = new Set<keyof PartSpecs>([
   'motorKv', 'diameterIn', 'pitchIn', 'cells', 'capacityMah', 'dischargeC', 'voltage',
@@ -57,7 +61,7 @@ function sameItem(left: BomItem, right: BomItem): boolean {
 }
 
 /** Restore one internally consistent v1 quote, or discard it as a whole. */
-export function restoreQuote(text: string): { snapshot: BomSnapshot; lines: QuoteLine[] } | null {
+export function restoreQuote(text: string): StoredQuote | null {
   if (text.length > 1_000_000) return null;
   let saved: unknown;
   try { saved = JSON.parse(text); } catch { return null; }
@@ -97,4 +101,26 @@ export function restoreQuote(text: string): { snapshot: BomSnapshot; lines: Quot
     },
     lines: items.map((item) => linesById.get(item.id)!),
   };
+}
+
+/** Prefer a valid current quote; older tabs can still recover their saved quote. */
+export function loadStoredQuote(storage: Pick<Storage, 'getItem'>): StoredQuote | null {
+  for (const key of [SESSION_KEY, LEGACY_SESSION_KEY]) {
+    try {
+      const text = storage.getItem(key);
+      const saved = text ? restoreQuote(text) : null;
+      if (saved) return saved;
+    } catch { /* A blocked key must not prevent legacy recovery. */ }
+  }
+  return null;
+}
+
+/** Leave the legacy copy intact, including when browser storage is full. */
+export function saveStoredQuote(storage: Pick<Storage, 'setItem'>, quote: StoredQuote): boolean {
+  try {
+    storage.setItem(SESSION_KEY, JSON.stringify(quote));
+    return true;
+  } catch {
+    return false;
+  }
 }

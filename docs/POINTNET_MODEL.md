@@ -446,6 +446,8 @@ ml\.venv\Scripts\python.exe ml\train.py --targets Mass,Max_Distance `
 | `ml/train.py` | 학습 루프, val 채점, 체크포인트 |
 | `ml/geometry_baseline.py` | `mesh` / `mesh+cad` 비교 기준 |
 | `ml/evaluate.py` | test 채점, prediction interval, model version |
+| `ml/export_onnx.py` | 자기완결 ONNX 내보내기 + 검증 |
+| `ml/verify_onnx.py` | 받는 쪽 검증 (numpy + onnxruntime만 필요) |
 | `ml/runs/rung3_mass_distance.pt` | 체크포인트 (git 제외) |
 | `ml/runs/rung3_mass_distance.json` | 전체 학습 이력 (git 제외) |
 | `ml/reports/stage4_evaluation.json` | 최종 평가 기록 (커밋) |
@@ -496,23 +498,54 @@ ml\.venv\Scripts\python.exe ml\export_onnx.py
 
 두 번째 검사는 pooling이 제대로 대칭인지 확인합니다. 점구름은 순서가 없어야 합니다.
 
-### 같이 전달할 것
+### 받는 쪽 절차
 
-ONNX 파일만 보내지 마세요. 아래가 함께 가야 합니다.
+ONNX 파일은 5MB 바이너리라 git에 넣지 않습니다(`ml/runs/`는 gitignore).
+**파일은 팀 드라이브로, 나머지는 브랜치로** 갑니다.
+
+**1. 브랜치 받기**
+
+```bash
+git fetch origin && git checkout feature/hw-drone
+```
+
+**2. 드라이브에서 받은 `.onnx`를 `ml/runs/`에 두기**
+
+**3. 검증** — 이게 핵심입니다.
+
+```bash
+pip install numpy onnxruntime          # PyTorch도 학습 데이터도 불필요
+python ml/verify_onnx.py
+```
+
+5개 검사가 돕니다.
+
+| 검사 | 잡아내는 것 |
+| --- | --- |
+| 파일 해시 | 드라이브 전송 중 손상 |
+| 입출력 시그니처 | 문서와 실제 모델 불일치 |
+| 검증 벡터 3개 | 런타임 차이, 잘못된 전처리 |
+| 점 순서 무관성 | 배열 reshape 실수 |
+| **축 순서 오용** | `(batch, 3, N)`으로 넣으면 어떤 값이 나오는지 시연 |
+
+마지막 검사가 중요합니다. 축을 바꿔 넣어도 **에러가 나지 않고** `Mass −2.4kg`,
+`Max_Distance −154.6m` 같은 값이 나옵니다. 이런 실패는 검증 없이는 못 잡습니다.
+
+**4. 구현할 것 하나** — 면적 가중 1,024점 샘플링, mm 좌표, `(1, 1024, 3)` float32.
+
+### 같이 전달할 것
 
 | | |
 | --- | --- |
 | `pointnet-geometry-v1.onnx` | 5.2MB, sha256 `c4c11030c7ebe9a77d367bbdcf5119aa` |
-| `ml/reports/onnx_test_vectors.json` | 설계 3개의 입력 좌표 + 기대 출력 |
+| (레포) `ml/verify_onnx.py` | 검증 스크립트 |
+| (레포) `ml/reports/onnx_test_vectors.json` | 설계 3개의 입력 좌표 + 기대 출력 |
 | 샘플링 규약 | 면적 가중, 1,024점, mm |
 | **사용 한계** | 6절과 7절. 특히 `Max_Distance` 수축 |
 
-**검증 벡터가 중요합니다.** 받은 쪽이 자기 런타임에서 돌려 같은 숫자가 나오는지 확인할
-수단이 없으면 "조용히 틀린 값"을 잡을 방법이 없습니다. 좌표는 소수점 3자리로 반올림해
-두었으므로 결과가 정확히 일치해야 합니다.
-
-> 검증 벡터의 20015와 13077은 **예측이 실제와 크게 다릅니다**(각 29배, 13배 과소).
-> 이건 내보내기 오류가 아니라 6절의 수축 문제입니다. 기대 출력과 일치하면 정상입니다.
+> **미리 알려주세요:** 검증 벡터의 20015와 13077은 예측이 실제와 크게 다릅니다
+> (각 29배, 13배 과소). 이건 내보내기 오류가 아니라 6절의 수축 문제입니다.
+> **기대 출력과 일치하면 정상**입니다. 이 말을 안 해두면 "ONNX가 깨졌다"고 판단합니다.
 
 ---
 

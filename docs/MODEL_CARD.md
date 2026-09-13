@@ -140,5 +140,6 @@ split train 22,177 / val 2,803 / test 2,723 (family 해시 80/10/10).
 `c4c11030c7ebe9a77d367bbdcf5119aa`)를 만듭니다. 전처리·후처리가 그래프에 편입되어 있어
 mm 좌표를 넣으면 kg·m가 나옵니다. PyTorch와 최대 상대차 6.6e-06으로 일치합니다.
 
-**ONNX 파일만 전달하면 안 됩니다.** 샘플링 규약(면적 가중 1,024점, mm)과
-`ml/reports/onnx_test_vectors.json`, 그리고 위 약점 절을 함께 넘기세요.
+**ONNX 파일만 전달하면 안 됩니다.** 샘플링 규약(면적 가중 1,024점, mm)과 위 약점 절이
+함께 가야 합니다. 받는 쪽은 `python ml/verify_onnx.py`로 자기 환경을 먼저 확인하세요
+(numpy와 onnxruntime만 있으면 됩니다).

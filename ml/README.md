@@ -37,9 +37,20 @@ ml\.venv\Scripts\python.exe ml\export_onnx.py
 나옵니다. **mm 좌표 (batch, N, 3)을 넣으면 (batch, 2) = [kg, m]이 나옵니다.**
 PyTorch와 최대 상대차 6.6e-06, 점 순서 무관성 3.2e-06으로 검증했습니다.
 
-전달할 때 ONNX 파일만 보내지 마세요 — 샘플링 규약(면적 가중 1,024점, mm),
-`ml/reports/onnx_test_vectors.json`, 사용 한계를 함께 넘겨야 합니다.
-자세한 내용은 [POINTNET_MODEL.md](../docs/POINTNET_MODEL.md) 9절에 있습니다.
+### 받는 쪽은 이것만 하면 됩니다
+
+`.onnx`는 gitignore라 레포에 없습니다. 팀 드라이브에서 받아 `ml/runs/`에 두고:
+
+```bash
+pip install numpy onnxruntime      # PyTorch도 학습 데이터도 불필요
+python ml/verify_onnx.py
+```
+
+파일 해시, 입출력 시그니처, 검증 벡터 3개, 점 순서 무관성, **축 순서 오용**까지 5개를 검사합니다.
+마지막 것은 `(batch, 3, N)`으로 잘못 넣었을 때 **에러 없이** `Mass −2.4kg`가 나오는 걸 시연합니다.
+
+전달할 때 ONNX 파일만 보내지 마세요 — 샘플링 규약(면적 가중 1,024점, mm)과 사용 한계가
+함께 가야 합니다. 자세한 절차는 [POINTNET_MODEL.md](../docs/POINTNET_MODEL.md) 9절에 있습니다.
 
 > **`Max_Distance`를 랭킹에 쓰지 마세요.** 예측 상한이 19,824m인데 데이터셋 최대는 40,905m입니다.
 > Pareto knee design 20015(40,905m)를 1,400m로 예측합니다. 6절 참고.

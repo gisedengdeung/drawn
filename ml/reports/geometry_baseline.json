@@ -34,10 +34,11 @@
         "mae": 1.0373,
         "rmse": 1.997
       },
-      "geometry_baseline_log_space": {
+      "geometry_baseline_log_space_NOT_COMPARABLE": {
         "r2": 0.8974,
         "mae": 0.1345,
-        "rmse": 0.1778
+        "rmse": 0.1778,
+        "warning": "scored in log space against a log-space mean, so its denominator differs from every other r2 here. Never compare it with the raw-space numbers."
       }
     },
     "Max_Distance": {
@@ -59,10 +60,11 @@
         "mae": 2310.8293,
         "rmse": 15687.893
       },
-      "geometry_baseline_log_space": {
+      "geometry_baseline_log_space_NOT_COMPARABLE": {
         "r2": 0.6,
         "mae": 0.518,
-        "rmse": 0.7114
+        "rmse": 0.7114,
+        "warning": "scored in log space against a log-space mean, so its denominator differs from every other r2 here. Never compare it with the raw-space numbers."
       }
     },
     "Hover_Time": {
@@ -84,10 +86,11 @@
         "mae": 76.1372,
         "rmse": 134.784
       },
-      "geometry_baseline_log_space": {
+      "geometry_baseline_log_space_NOT_COMPARABLE": {
         "r2": 0.6312,
         "mae": 0.4434,
-        "rmse": 0.5484
+        "rmse": 0.5484,
+        "warning": "scored in log space against a log-space mean, so its denominator differs from every other r2 here. Never compare it with the raw-space numbers."
       }
     },
     "Max_Speed": {
@@ -109,10 +112,11 @@
         "mae": 7.7446,
         "rmse": 9.6252
       },
-      "geometry_baseline_log_space": {
+      "geometry_baseline_log_space_NOT_COMPARABLE": {
         "r2": 0.1971,
         "mae": 0.3814,
-        "rmse": 0.5433
+        "rmse": 0.5433,
+        "warning": "scored in log space against a log-space mean, so its denominator differs from every other r2 here. Never compare it with the raw-space numbers."
       }
     },
     "Power_MFD": {
@@ -134,10 +138,11 @@
         "mae": 643.3976,
         "rmse": 1107.1239
       },
-      "geometry_baseline_log_space": {
+      "geometry_baseline_log_space_NOT_COMPARABLE": {
         "r2": 0.5012,
         "mae": 0.3513,
-        "rmse": 0.4535
+        "rmse": 0.4535,
+        "warning": "scored in log space against a log-space mean, so its denominator differs from every other r2 here. Never compare it with the raw-space numbers."
       }
     }
   }

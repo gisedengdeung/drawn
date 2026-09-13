@@ -68,9 +68,9 @@ def main(argv: list[str]) -> int:
         "targets": {},
     }
 
-    print("baselines on the frozen test split")
+    print("baselines on the frozen test split — every R2 scored in the raw target unit")
     print(f"  {'target':<14}{'n_test':>8}{'mean R2':>10}{'geom R2':>10}"
-          f"{'geom R2(log)':>14}{'mean MAE':>12}{'geom MAE':>12}")
+          f"{'geom R2 log-fit':>16}{'mean MAE':>12}{'geom MAE':>12}")
 
     for name in TARGETS:
         values = data["targets"][:, target_names.index(name)].astype(np.float64)
@@ -103,15 +103,22 @@ def main(argv: list[str]) -> int:
             "mean_baseline": mean_only,
             "geometry_baseline": linear,
             "geometry_baseline_log_fit": log_linear,
-            "geometry_baseline_log_space": log_space,
+            "geometry_baseline_log_space_NOT_COMPARABLE": {
+                **log_space,
+                "warning": "scored in log space against a log-space mean, so its "
+                           "denominator differs from every other r2 here. Never "
+                           "compare it with the raw-space numbers.",
+            },
         }
 
         print(f"  {name:<14}{int(test.sum()):>8}{mean_only['r2']:>10.3f}{linear['r2']:>10.3f}"
-              f"{log_space['r2']:>14.3f}{mean_only['mae']:>12.2f}{linear['mae']:>12.2f}")
+              f"{log_linear['r2']:>14.3f}{mean_only['mae']:>12.2f}{linear['mae']:>12.2f}")
 
     write_json(args.report, report)
     print()
     print("A point cloud model must beat the geometry column, not the mean column.")
+    print("log-fit loses on every target, so train and score in the raw unit;")
+    print("use a robust loss for the tail rather than a log transform.")
     print(f"report -> {args.report}")
     return 0
 

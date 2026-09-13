@@ -22,6 +22,7 @@ import {
 
 import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
 import { StlViewer } from '@/components/stl-viewer';
+import { PartsQuotePanel } from '@/components/parts-quote-panel';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -210,7 +211,8 @@ export function DesignLabView({
         title="설계 변수와 3D를 한 화면에서 조정하세요"
         description="치수·부품·날개 조건은 즉시 개념 형상에 반영되고, 성능은 AircraftVerse 범위 안에서 데이터 유사도 기반으로 갱신됩니다."
         actions={(
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <PartsQuotePanel draft={draft} disabled={loading} />
             <Badge variant="outline" className="border-[#b8dfe4] bg-[#eef8fa] text-[#0f6475]">원본 {parameterCount} · 편집 가능 {editableParameterCount}</Badge>
             <DesignSelector designs={designs} value={selected.id} onChange={onSelect} />
           </div>

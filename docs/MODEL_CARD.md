@@ -60,6 +60,8 @@ Optimizer는 세 파트의 27,714개 전체 설계에 대해 실제 `output.json
 
 1. `design_seq` Transformer로 Hover/Range/Mass/Speed model 학습
 2. PointNet/DGCNN geometry embedding 결합
+   — **geometry 축은 학습 완료(2026-09-14).** `Mass` val R² 0.854, `Max_Distance` 0.628.
+   입력·구조·근거는 [POINTNET_MODEL.md](POINTNET_MODEL.md). 아직 UI에 연결하지 않았습니다.
 3. design + velocity 조건부 trim model 학습
 4. 검증셋 R²/MAE, prediction interval, model version 기록
 5. 동일 UI contract를 유지한 채 FastAPI inference endpoint로 교체

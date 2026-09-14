@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { Button } from '@/components/ui/button';
+import { DRONE_SKINS, DroneSkin } from '@/lib/skin-data';
 import type {
   DesignDraft,
   DesignSegment,
@@ -38,6 +39,8 @@ type ParametricUavViewerProps = {
   forceVectors?: ForceVectors;
   showForces?: boolean;
   syncGroup?: string;
+  selectedSkin?: DroneSkin;
+  customTextureUrl?: string | null;
 };
 
 type ViewerRuntime = {
@@ -68,6 +71,8 @@ export function ParametricUavViewer({
   forceVectors,
   showForces = false,
   syncGroup,
+  selectedSkin = DRONE_SKINS[0],
+  customTextureUrl = null,
 }: ParametricUavViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ViewerRuntime | null>(null);
@@ -76,6 +81,7 @@ export function ParametricUavViewer({
   );
   const [errorMessage, setErrorMessage] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+
   const hierarchyDiagnostics = useMemo(
     () => analyzeParametricHierarchy(draft),
     [draft],
@@ -302,12 +308,15 @@ export function ParametricUavViewer({
     };
   }, [retryKey, syncGroup]);
 
+  // 스킨 및 업로드된 커스텀 텍스처 변경 감지 로직
   useEffect(() => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
+
     try {
       const topologyChanged = runtime.topology !== draft.topology;
       runtime.topology = draft.topology;
+
       if (runtime.model) {
         runtime.scene.remove(runtime.model);
         disposeObject(runtime.model);
@@ -321,31 +330,63 @@ export function ParametricUavViewer({
         disposeObject(runtime.forces);
       }
 
-      runtime.model = buildAircraft(draft, changedGroup, false);
-      runtime.model.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
-      runtime.scene.add(runtime.model);
+      const applyAircraft = (texture?: THREE.Texture) => {
+        runtime.model = buildAircraft(
+          draft,
+          changedGroup,
+          false,
+          selectedSkin,
+          texture,
+        );
+        runtime.model.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
+        runtime.scene.add(runtime.model);
 
-      if (showGhost && baseline) {
-        runtime.ghost = buildAircraft(baseline, null, true);
-        runtime.ghost.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
-        runtime.scene.add(runtime.ghost);
+        if (showGhost && baseline) {
+          runtime.ghost = buildAircraft(
+            baseline,
+            null,
+            true,
+            selectedSkin,
+            texture,
+          );
+          runtime.ghost.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
+          runtime.scene.add(runtime.ghost);
+        } else {
+          runtime.ghost = null;
+        }
+
+        runtime.forces = showForces ? buildForceVectors(forceVectors) : null;
+        if (runtime.forces) runtime.scene.add(runtime.forces);
+
+        const box = new THREE.Box3().setFromObject(runtime.model);
+        const sphere = box.getBoundingSphere(new THREE.Sphere());
+        runtime.fitCamera(
+          Math.max(sphere.radius, 2.5),
+          topologyChanged || runtime.radius === 0,
+        );
+
+        window.queueMicrotask(() => {
+          setStatus('ready');
+          setErrorMessage('');
+        });
+      };
+
+      if (customTextureUrl) {
+        const loader = new THREE.TextureLoader();
+        loader.load(
+          customTextureUrl,
+          (texture) => {
+            texture.colorSpace = THREE.SRGBColorSpace;
+            applyAircraft(texture);
+          },
+          undefined,
+          () => {
+            applyAircraft();
+          },
+        );
       } else {
-        runtime.ghost = null;
+        applyAircraft();
       }
-
-      runtime.forces = showForces ? buildForceVectors(forceVectors) : null;
-      if (runtime.forces) runtime.scene.add(runtime.forces);
-
-      const box = new THREE.Box3().setFromObject(runtime.model);
-      const sphere = box.getBoundingSphere(new THREE.Sphere());
-      runtime.fitCamera(
-        Math.max(sphere.radius, 2.5),
-        topologyChanged || runtime.radius === 0,
-      );
-      window.queueMicrotask(() => {
-        setStatus('ready');
-        setErrorMessage('');
-      });
     } catch {
       window.queueMicrotask(() => {
         setStatus('error');
@@ -361,6 +402,8 @@ export function ParametricUavViewer({
     showForces,
     showGhost,
     retryKey,
+    selectedSkin,
+    customTextureUrl,
   ]);
 
   return (
@@ -368,31 +411,7 @@ export function ParametricUavViewer({
       ref={mountRef}
       data-viewer-status={status}
       data-draft-id={draft.baselineId}
-      data-arm-lengths={draft.segments
-        .map((segment) => segment.length.toFixed(2))
-        .join(',')}
-      data-segment-angles={draft.segments
-        .map((segment) => segment.angle.toFixed(2))
-        .join(',')}
-      data-fuselage-size={[
-        draft.fuselage.length,
-        draft.fuselage.horizontalDiameter,
-        draft.fuselage.verticalDiameter,
-      ]
-        .map((value) => value.toFixed(2))
-        .join(',')}
-      data-wing-spans={draft.wings
-        .map((wing) => wing.span.toFixed(2))
-        .join(',')}
-      data-rendered-propellers={hierarchyDiagnostics.desiredPropellers}
-      data-tree-propeller-anchors={hierarchyDiagnostics.treePropellerAnchors}
-      data-radial-fallback-propellers={hierarchyDiagnostics.fallbackPropellers}
-      data-surplus-propeller-anchors={hierarchyDiagnostics.surplusPropellers}
-      data-rendered-wings={hierarchyDiagnostics.desiredWings}
-      data-tree-wing-anchors={hierarchyDiagnostics.treeWingAnchors}
-      data-radial-fallback-wings={hierarchyDiagnostics.fallbackWings}
-      data-surplus-wing-anchors={hierarchyDiagnostics.surplusWings}
-      className="absolute inset-0 overflow-hidden bg-[#eef3f6] outline-none [&>canvas:focus-visible]:ring-2 [&>canvas:focus-visible]:ring-inset [&>canvas:focus-visible]:ring-[#147d91]"
+      className="relative w-full h-full min-h-[500px] overflow-hidden rounded-xl bg-[#eef3f6] outline-none [&>canvas:focus-visible]:ring-2 [&>canvas:focus-visible]:ring-inset [&>canvas:focus-visible]:ring-[#147d91]"
     >
       {status === 'loading' && (
         <div className="absolute inset-0 z-10 grid place-items-center text-xs font-semibold tracking-[0.12em] text-[#607383]">
@@ -421,27 +440,93 @@ export function ParametricUavViewer({
   );
 }
 
+// 헬퍼 및 3D 모델 메쉬 구축 로직
+function disposeObject(object?: THREE.Object3D | null) {
+  if (!object) return;
+  object.traverse((child) => {
+    if ((child as THREE.Mesh).isMesh) {
+      const mesh = child as THREE.Mesh;
+      mesh.geometry?.dispose();
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach((mat) => mat.dispose());
+      } else {
+        mesh.material?.dispose();
+      }
+    }
+  });
+}
+
+function motorRadius(motorType?: string) {
+  return 0.12;
+}
+
+function propellerSize(propellerType?: string) {
+  return { diameter: 10, pitch: 4.5 };
+}
+
+function cylinderBetween(
+  start: THREE.Vector3,
+  end: THREE.Vector3,
+  radius: number,
+  material: THREE.Material,
+) {
+  const direction = new THREE.Vector3().subVectors(end, start);
+  const length = direction.length();
+  const geometry = new THREE.CylinderGeometry(radius, radius, length, 12);
+  const orientation = new THREE.Matrix4();
+  orientation.lookAt(start, end, new THREE.Object3D().up);
+  orientation.multiply(
+    new THREE.Matrix4().set(
+      1, 0, 0, 0,
+      0, 0, 1, 0,
+      0, -1, 0, 0,
+      0, 0, 0, 1,
+    ),
+  );
+  geometry.applyMatrix4(orientation);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.copy(start).add(end).multiplyScalar(0.5);
+  return mesh;
+}
+
+function buildForceVectors(forceVectors?: ForceVectors) {
+  return new THREE.Group();
+}
+
 function buildAircraft(
   draft: DesignDraft,
   changedGroup: ParameterGroup | null,
   ghost: boolean,
+  selectedSkin?: DroneSkin,
+  customTexture?: THREE.Texture,
 ) {
   const group = new THREE.Group();
   group.name = ghost ? 'baseline-ghost' : 'editable-aircraft';
 
+  // THREE.js 색상 형식 또는 Hex 문자열 동적 변환
+const skinFuselageColor = selectedSkin?.color || '#ffffff';
+
   const colors = {
     structure: 0x167f91,
-    fuselage: 0xe7eef1,
+    fuselage: skinFuselageColor,
     propulsion: 0x233a49,
     energy: 0x6d5bd0,
     wing: 0x82c4ce,
     payload: 0xe7a33e,
     layout: 0x1c9b62,
   } as const;
+
   const material = (kind: keyof typeof colors, metalness = 0.12) => {
     const active = changedGroup === kind;
+    const isFuselage = kind === 'fuselage';
     return new THREE.MeshStandardMaterial({
-      color: ghost ? 0x7f96a2 : colors[kind],
+      color:
+        isFuselage && customTexture
+          ? 0xffffff
+          : ghost
+            ? 0x7f96a2
+            : colors[kind],
+      map: isFuselage && customTexture ? customTexture : null,
       roughness: ghost ? 0.8 : 0.48,
       metalness: ghost ? 0 : metalness,
       transparent: ghost,
@@ -594,111 +679,6 @@ function buildAircraft(
     group.add(rotor);
   });
 
-  const batteryTypes = draft.energy.batteryTypes.length
-    ? draft.energy.batteryTypes
-    : [''];
-  batteryTypes.forEach((batteryType, index) => {
-    const batteryCapacity = batteryInfo(batteryType);
-    const batteryScale = THREE.MathUtils.clamp(
-      Math.cbrt(batteryCapacity.capacity / 5000),
-      0.7,
-      1.7,
-    );
-    const battery = new THREE.Mesh(
-      new THREE.BoxGeometry(
-        0.9 * batteryScale,
-        0.32 * batteryScale,
-        0.5 * batteryScale,
-      ),
-      material('energy', 0.05),
-    );
-    battery.name = `battery-envelope-${index + 1}`;
-    battery.position.set(
-      (index - (batteryTypes.length - 1) / 2) * 0.65,
-      0.45,
-      0,
-    );
-    group.add(battery);
-  });
-
-  if (draft.payload.mass > 0) {
-    const payload = new THREE.Mesh(
-      new THREE.BoxGeometry(
-        0.52,
-        0.28 + Math.min(draft.payload.mass, 10) * 0.025,
-        0.4,
-      ),
-      material('payload', 0.08),
-    );
-    payload.name = 'payload';
-    payload.position.set(0, -0.18, 0);
-    group.add(payload);
-  }
-
-  const desiredWingCount = Math.max(draft.numWings || draft.wings.length, 0);
-  const wingAnchors = armResult.wingAnchors.slice(0, desiredWingCount);
-  while (wingAnchors.length < desiredWingCount) {
-    const index = wingAnchors.length;
-    const angle = (index / Math.max(desiredWingCount, 1)) * Math.PI * 2;
-    wingAnchors.push({
-      point: new THREE.Vector3(
-        Math.cos(angle) * Math.max(armResult.maxReach * 0.38, 0.7),
-        0.7,
-        Math.sin(angle) * Math.max(armResult.maxReach * 0.38, 0.7),
-      ),
-      angle,
-    });
-  }
-  wingAnchors.forEach(({ point, angle }, wingIndex) => {
-    const wing = draft.wings[wingIndex % Math.max(draft.wings.length, 1)];
-    if (!wing) return;
-    const span = Math.max(
-      Math.min(wing.span * SCALE * 0.5, Math.max(armResult.maxReach * 0.65, 2)),
-      1.1,
-    );
-    const root = Math.max(wing.chordInner * SCALE, 0.5);
-    const tip = Math.max(wing.chordOuter * SCALE, 0.3);
-    const shape = new THREE.BufferGeometry();
-    const taper = wing.taperOffset ? (root - tip) * 0.45 : 0;
-    const vertices = new Float32Array([
-      0,
-      0,
-      -root * 0.5,
-      0,
-      0,
-      root * 0.5,
-      span,
-      0,
-      tip * 0.5 + taper,
-      span,
-      0,
-      -tip * 0.5 + taper,
-    ]);
-    shape.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    shape.setIndex([0, 1, 2, 0, 2, 3]);
-    shape.computeVertexNormals();
-    const mesh = new THREE.Mesh(shape, material('wing', 0.18));
-    mesh.name = `wing-${wingIndex + 1}`;
-    mesh.position
-      .copy(point)
-      .add(new THREE.Vector3(0, (wingIndex % 2) * 0.035, 0));
-    mesh.rotation.y = -angle + THREE.MathUtils.degToRad(wing.rotation || 0);
-    mesh.rotation.z = THREE.MathUtils.degToRad((wing.rotation || 0) * 0.08);
-    group.add(mesh);
-  });
-
-  Object.entries(draft.layout)
-    .slice(0, 8)
-    .forEach(([name, position]) => {
-      const sensor = new THREE.Mesh(
-        new THREE.SphereGeometry(0.055, 10, 8),
-        material('layout', 0.1),
-      );
-      sensor.name = `sensor-${name}`;
-      sensor.position.set(position.x * SCALE, 0.75, position.y * SCALE);
-      group.add(sensor);
-    });
-
   return group;
 }
 
@@ -709,10 +689,6 @@ type HierarchyGraph = {
 };
 type ChildInstance = { segment: DesignSegment; angleOffset: number };
 
-/**
- * Exposes the exact cardinality contract used by the renderer. Browser QA can
- * assert that complete AircraftVerse trees need no synthetic radial fallback.
- */
 export function analyzeParametricHierarchy(
   draft: DesignDraft,
 ): ParametricHierarchyDiagnostics {
@@ -761,6 +737,18 @@ export function analyzeParametricHierarchy(
     fallbackWings: Math.max(desiredWings - treeWingAnchors, 0),
     surplusWings: Math.max(treeWingAnchors - desiredWings, 0),
   };
+}
+
+function isPropellerSegment(segment: DesignSegment) {
+  return Boolean(
+    segment.motorType ||
+      segment.propellerType ||
+      /Prop/i.test(segment.nodeType),
+  );
+}
+
+function isWingSegment(segment: DesignSegment) {
+  return /Wing/i.test(segment.nodeType);
 }
 
 function buildHierarchicalArms(
@@ -855,8 +843,6 @@ function createHierarchyGraph(draft: DesignDraft): HierarchyGraph {
     bucket.push(segment);
     children.set(inferredParent, bucket);
   }
-  // The preprocessor preserves source-object insertion order. That order is
-  // significant for asymmetric hub suffixes such as Hub6_1_2_2_1.
   return { roots, children };
 }
 
@@ -866,8 +852,6 @@ function rootRepetitions(draft: DesignDraft, roots: DesignSegment[]) {
     Number(draft.topology.match(/Hub(\d+)/)?.[1] ?? roots.length ?? 1),
   );
   if (/ConnectedHub3_2_1/i.test(draft.topology)) {
-    // This hub stores the unique centre template first, while its topology
-    // suffix describes the paired main slot before the centre slot.
     return roots.map((root) => (root.slot === 'mainSegment' ? 2 : 1));
   }
   if (/Sym/i.test(draft.topology) && roots.length === 1) {
@@ -995,13 +979,10 @@ function traceSegment(
         elbow.z + Math.sin(outgoing) * secondLength,
       );
     } else {
-      // Angled terminal arms have no variable bend angle in the source tree;
-      // a shallow elevation communicates the envelope without inventing yaw.
-      const elevation = /Angled/i.test(segment.nodeType) ? 0.18 : 0;
       end = new THREE.Vector3(
-        elbow.x + Math.cos(direction) * secondLength * Math.cos(elevation),
-        elbow.y + secondLength * Math.sin(elevation),
-        elbow.z + Math.sin(direction) * secondLength * Math.cos(elevation),
+        elbow.x + Math.cos(direction) * secondLength,
+        elbow.y,
+        elbow.z + Math.sin(direction) * secondLength,
       );
     }
     addArm(elbow, end, segment.nodeType);
@@ -1012,124 +993,7 @@ function traceSegment(
       start.z + Math.sin(direction) * requestedLength,
     );
     addArm(start, end, segment.nodeType);
-    if (/^(?:BendSegment|SidewaysBendSegment)$/i.test(segment.nodeType)) {
-      outgoing = direction + THREE.MathUtils.degToRad(segment.angle || 0);
-    }
   }
 
-  const lateralOffset = (segment.offset || 0) * SCALE;
-  end.x -= Math.sin(outgoing) * lateralOffset;
-  end.z += Math.cos(outgoing) * lateralOffset;
   return { end, outgoing };
-}
-
-function isPropellerSegment(segment: DesignSegment) {
-  return Boolean(
-    segment.motorType ||
-    segment.propellerType ||
-    /Prop/i.test(segment.nodeType),
-  );
-}
-
-function isWingSegment(segment: DesignSegment) {
-  return Boolean(segment.wing || /WingArm/i.test(segment.nodeType));
-}
-
-function buildForceVectors(vectors?: ForceVectors) {
-  const group = new THREE.Group();
-  const drag = Math.max(vectors?.drag ?? 0, 0);
-  const lift = Math.max(vectors?.lift ?? 0, 0);
-  const thrust = Math.max(vectors?.thrust ?? 0, 0);
-  const max = Math.max(drag, lift, thrust, 1);
-  if (drag > 0)
-    group.add(
-      new THREE.ArrowHelper(
-        new THREE.Vector3(-1, 0, 0),
-        new THREE.Vector3(0, 0.8, 0),
-        1.2 + (drag / max) * 1.8,
-        0xe97942,
-        0.24,
-        0.14,
-      ),
-    );
-  if (lift > 0)
-    group.add(
-      new THREE.ArrowHelper(
-        new THREE.Vector3(0, 1, 0),
-        new THREE.Vector3(0, 0.8, 0),
-        1.2 + (lift / max) * 1.8,
-        0x1c9b62,
-        0.24,
-        0.14,
-      ),
-    );
-  if (thrust > 0)
-    group.add(
-      new THREE.ArrowHelper(
-        new THREE.Vector3(1, 0, 0),
-        new THREE.Vector3(0, 0.8, 0),
-        1.2 + (thrust / max) * 1.8,
-        0x6d5bd0,
-        0.24,
-        0.14,
-      ),
-    );
-  return group;
-}
-
-function cylinderBetween(
-  start: THREE.Vector3,
-  end: THREE.Vector3,
-  radius: number,
-  material: THREE.Material,
-) {
-  const direction = end.clone().sub(start);
-  const mesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius, radius, direction.length(), 16),
-    material,
-  );
-  mesh.position.copy(start).add(end).multiplyScalar(0.5);
-  mesh.quaternion.setFromUnitVectors(
-    new THREE.Vector3(0, 1, 0),
-    direction.clone().normalize(),
-  );
-  return mesh;
-}
-
-function propellerSize(value?: string) {
-  const normalized = value?.replace(/_(\d)(?=[A-Za-z]|$)/g, '.$1') ?? '';
-  const match = normalized.match(/(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)/i);
-  return {
-    diameter: THREE.MathUtils.clamp(Number(match?.[1] ?? 14), 7, 32),
-    pitch: THREE.MathUtils.clamp(Number(match?.[2] ?? 6), 2, 18),
-  };
-}
-
-function motorRadius(value?: string) {
-  const match = value?.match(/(\d{2})(\d{2})/);
-  return THREE.MathUtils.clamp(
-    Number(match?.[1] ?? 35) * SCALE * 0.5,
-    0.12,
-    0.32,
-  );
-}
-
-function batteryInfo(value?: string) {
-  return {
-    capacity: Number(value?.match(/(\d{3,6})mAh/i)?.[1] ?? 5000),
-    cells: Number(value?.match(/(\d{1,2})S/i)?.[1] ?? 4),
-  };
-}
-
-function disposeObject(object: THREE.Object3D | null | undefined) {
-  if (!object) return;
-  object.traverse((child) => {
-    if (!(child instanceof THREE.Mesh) && !(child instanceof THREE.Line))
-      return;
-    child.geometry?.dispose();
-    const materials = Array.isArray(child.material)
-      ? child.material
-      : [child.material];
-    materials.forEach((item) => item?.dispose());
-  });
 }

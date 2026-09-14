@@ -31,6 +31,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { SkinParameterCard } from '@/components/skin/skin-parameter-card';
+import { DRONE_SKINS, DroneSkin } from '@/lib/skin-data';
 import type {
   ComponentCatalogs,
   DesignDraft,
@@ -108,6 +110,13 @@ export function DesignLabView({
   const highlightTimeoutRef = useRef<number | null>(null);
   const estimateTimeoutRef = useRef<number | null>(null);
   const packagedReference = referenceDesign ?? ('modelPath' in selected ? selected as ShowcaseDesign : null);
+  const [selectedSkin, setSelectedSkin] = useState<DroneSkin>(DRONE_SKINS[0]);
+  const [customTextureUrl, setCustomTextureUrl] = useState<string | null>(null);
+
+  const handleSelectSkin = (skin: DroneSkin) => {
+    setSelectedSkin(skin);
+    setCustomTextureUrl(null);
+  };
 
   useEffect(() => {
     let active = true;
@@ -321,11 +330,12 @@ export function DesignLabView({
                     ))}
                   </ParameterSection>
                 )}
-
+                     
                 <ParameterSection value="source-parameters" icon={<SlidersHorizontal />} title="AircraftVerse 원본 변수" count={parameterCount} advanced>
                   <div className="rounded-xl border border-[#cfe1e5] bg-[#eef8fa] p-3 text-[10px] leading-4 text-[#45616f]">
                     설계 원본의 {parameterCount}개 변수를 1:1로 보존합니다. Optimization 변수는 성능 근접도에, CAD 파생 변수는 개념 형상에만 반영됩니다.
                   </div>
+
                   {(draft.parameterDefinitions ?? [])
                     .filter((definition) => !query || `${definition.label} ${GROUP_LABELS[definition.group]} ${definition.optimization ?? ''}`.toLocaleLowerCase('ko-KR').includes(query))
                     .map((definition) => (
@@ -340,7 +350,16 @@ export function DesignLabView({
                         )}
                       />
                     ))}
+                    
                 </ParameterSection>
+                <div className="my-3">
+    <SkinParameterCard
+      selectedSkin={selectedSkin}
+      onSelectSkin={handleSelectSkin}
+      customTextureUrl={customTextureUrl}
+      onCustomTextureUpload={(url) => setCustomTextureUrl(url)}
+    />
+  </div>
               </Accordion>
             )}
           </ScrollArea>
@@ -365,7 +384,8 @@ export function DesignLabView({
               {loading ? (
                 <div className="absolute inset-0 grid place-items-center text-sm text-[#607383]">Design #{selected.id} 형상을 불러오는 중…</div>
               ) : draft && baseline && mode === 'parametric-preview' ? (
-                <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} />
+                <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} selectedSkin={selectedSkin}
+                 customTextureUrl={customTextureUrl} />
               ) : packagedReference ? (
                 <StlViewer src={packagedReference.modelPath} />
               ) : (

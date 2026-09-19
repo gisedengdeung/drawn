@@ -1,14 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpRight,
   CircleGauge,
   Gauge,
   GitCompareArrows,
+  History,
   Route,
   Search,
   Sparkles,
+  Star,
   Weight,
 } from 'lucide-react';
 
@@ -39,6 +41,27 @@ import {
   SourceBadge,
 } from '@/components/views/shared';
 
+const FAVORITES_STORAGE_KEY = 'aerotwin:favorite-designs';
+const RECENT_STORAGE_KEY = 'aerotwin:recent-designs';
+const RECENT_LIMIT = 8;
+
+function readStoredIds(key: string): number[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((id): id is number => typeof id === 'number') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredIds(key: string, ids: number[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(ids));
+  } catch {
+    // Storage unavailable (private mode, quota) — state stays in-memory only.
+  }
+}
+
 export function ExplorerView({
   dataset,
   showcases,
@@ -64,6 +87,25 @@ export function ExplorerView({
   const [massMax, setMassMax] = useState(15);
   const [feasibleOnly, setFeasibleOnly] = useState(true);
   const [viewerOnly, setViewerOnly] = useState(true);
+  const [favorites, setFavorites] = useState<number[]>([]);
+  const [recent, setRecent] = useState<number[]>([]);
+
+  useEffect(() => {
+    window.queueMicrotask(() => {
+      setFavorites(readStoredIds(FAVORITES_STORAGE_KEY));
+      setRecent(readStoredIds(RECENT_STORAGE_KEY));
+    });
+  }, []);
+
+  const toggleFavorite = (id: number) => {
+    setFavorites((previous) => {
+      const next = previous.includes(id)
+        ? previous.filter((item) => item !== id)
+        : [id, ...previous];
+      writeStoredIds(FAVORITES_STORAGE_KEY, next);
+      return next;
+    });
+  };
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().replace(/^#/, '').toLowerCase();
@@ -97,6 +139,16 @@ export function ExplorerView({
   const visibleResults = filtered.slice(0, 60);
   const current = selected ?? visibleResults[0] ?? dataset.designs[0];
   const currentDetail = showcases[String(current.id)] ?? null;
+
+  useEffect(() => {
+    window.queueMicrotask(() => {
+      setRecent((previous) => {
+        const next = [current.id, ...previous.filter((id) => id !== current.id)].slice(0, RECENT_LIMIT);
+        writeStoredIds(RECENT_STORAGE_KEY, next);
+        return next;
+      });
+    });
+  }, [current.id]);
 
   return (
     <section className="px-4 py-4 lg:px-6">
@@ -185,40 +237,101 @@ export function ExplorerView({
             </div>
           </div>
 
+          {(favorites.length > 0 || recent.length > 0) && (
+            <div className="space-y-3 border-b border-[#dbe4ea] p-3.5">
+              {favorites.length > 0 && (
+                <div>
+                  <p className="mb-1.5 flex items-center gap-1 text-[10px] font-medium text-[#607383]">
+                    <Star className="size-3 fill-amber-400 text-amber-500" /> 즐겨찾기 · {favorites.length}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {favorites.map((id) => (
+                      <button
+                        key={id}
+                        onClick={() => onSelect(id)}
+                        className={`rounded-full border px-2 py-1 font-mono text-[10px] transition ${
+                          current.id === id
+                            ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
+                            : 'border-[#dbe4ea] bg-white text-[#526675] hover:bg-[#f4f7f9]'
+                        }`}
+                      >
+                        #{id}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {recent.length > 0 && (
+                <div>
+                  <p className="mb-1.5 flex items-center gap-1 text-[10px] font-medium text-[#607383]">
+                    <History className="size-3" /> 최근 본 설계
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {recent.map((id) => (
+                      <button
+                        key={id}
+                        onClick={() => onSelect(id)}
+                        className={`rounded-full border px-2 py-1 font-mono text-[10px] transition ${
+                          current.id === id
+                            ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
+                            : 'border-[#dbe4ea] bg-white text-[#526675] hover:bg-[#f4f7f9]'
+                        }`}
+                      >
+                        #{id}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between border-b border-[#dbe4ea] px-3.5 py-2.5 text-xs">
             <span className="text-[#607383]">검색 결과 <small className="ml-1 text-[10px]">(최대 60개 표시)</small></span>
             <span className="font-mono font-medium text-[#294353]">{filtered.length.toLocaleString()}</span>
           </div>
           <div className="max-h-[430px] overflow-y-auto p-2">
             {visibleResults.length ? (
-              visibleResults.map((design) => (
-                <button
-                  key={design.id}
-                  onClick={() => onSelect(design.id)}
-                  className={`mb-1 w-full rounded-xl border p-3 text-left transition ${
-                    current.id === design.id
-                      ? 'border-[#9ccdd6] bg-[#eef8fa] shadow-sm'
-                      : 'border-transparent hover:border-[#dbe4ea] hover:bg-[#f7f9fb]'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-mono text-xs font-semibold text-[#233b4a]">Design #{design.id}</p>
-                      <p className="mt-1 truncate text-[11px] text-[#718391]">{formatHub(design.hub)}</p>
-                    </div>
-                    {showcases[String(design.id)] ? (
-                      <Badge className="bg-[#e5f5f7] text-[9px] text-[#0f6475]">STL + 편집</Badge>
-                    ) : (
-                      <Badge variant="outline" className="border-[#dbe4ea] text-[9px] text-[#0f6475]">프리뷰 편집</Badge>
-                    )}
+              visibleResults.map((design) => {
+                const isFavorite = favorites.includes(design.id);
+                return (
+                  <div key={design.id} className="relative mb-1">
+                    <button
+                      onClick={() => onSelect(design.id)}
+                      className={`w-full rounded-xl border p-3 pr-9 text-left transition ${
+                        current.id === design.id
+                          ? 'border-[#9ccdd6] bg-[#eef8fa] shadow-sm'
+                          : 'border-transparent hover:border-[#dbe4ea] hover:bg-[#f7f9fb]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-mono text-xs font-semibold text-[#233b4a]">Design #{design.id}</p>
+                          <p className="mt-1 truncate text-[11px] text-[#718391]">{formatHub(design.hub)}</p>
+                        </div>
+                        {showcases[String(design.id)] ? (
+                          <Badge className="shrink-0 bg-[#e5f5f7] text-[9px] text-[#0f6475]">STL + 편집</Badge>
+                        ) : (
+                          <Badge variant="outline" className="shrink-0 border-[#dbe4ea] text-[9px] text-[#0f6475]">프리뷰 편집</Badge>
+                        )}
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[10px]">
+                        <span className="font-medium text-[#0f6475]">{design.maxDistance ? `${(design.maxDistance / 1000).toFixed(1)}km` : '—'}</span>
+                        <span className="text-[#607383]">{design.mass.toFixed(1)}kg</span>
+                        <span className="text-[#607383]">{design.numPropellers}P/{design.numWings}W</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => toggleFavorite(design.id)}
+                      aria-label={isFavorite ? `Design #${design.id} 즐겨찾기 해제` : `Design #${design.id} 즐겨찾기 추가`}
+                      aria-pressed={isFavorite}
+                      className="absolute right-2 top-2 rounded p-0.5 text-[#b7c3cb] hover:bg-[#e9eff3] hover:text-amber-500"
+                    >
+                      <Star className={`size-3.5 ${isFavorite ? 'fill-amber-400 text-amber-500' : ''}`} />
+                    </button>
                   </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[10px]">
-                    <span className="font-medium text-[#0f6475]">{design.maxDistance ? `${(design.maxDistance / 1000).toFixed(1)}km` : '—'}</span>
-                    <span className="text-[#607383]">{design.mass.toFixed(1)}kg</span>
-                    <span className="text-[#607383]">{design.numPropellers}P/{design.numWings}W</span>
-                  </div>
-                </button>
-              ))
+                );
+              })
             ) : (
               <div className="p-8 text-center text-xs leading-5 text-[#607383]">조건에 맞는 설계가 없습니다. 질량 조건을 완화하거나 전체 DB를 확인하세요.</div>
             )}
@@ -230,6 +343,14 @@ export function ExplorerView({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-[#172b3a]">Design #{current.id}</h2>
+                <button
+                  onClick={() => toggleFavorite(current.id)}
+                  aria-label={favorites.includes(current.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                  aria-pressed={favorites.includes(current.id)}
+                  className="rounded p-1 text-[#b7c3cb] hover:bg-[#f4f7f9] hover:text-amber-500"
+                >
+                  <Star className={`size-4 ${favorites.includes(current.id) ? 'fill-amber-400 text-amber-500' : ''}`} />
+                </button>
                 <SourceBadge />
                 {current.feasible ? (
                   <Badge className="bg-emerald-50 text-emerald-700">비행성능 유효</Badge>

@@ -216,6 +216,7 @@ export function AeroTwinApp() {
               파라메트릭 27,714개 · 원본 STL 12개
             </Badge>
           </div>
+          </div>
 
         <nav className="mx-auto flex max-w-[1720px] items-center overflow-x-auto px-2 lg:px-4" aria-label="설계 작업 단계">
           {navItems.map((item) => {

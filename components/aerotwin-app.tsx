@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   GitCompareArrows,
   Hexagon,
+  MapPin,
   Sparkles,
   Share2,
 } from 'lucide-react';
@@ -19,10 +20,16 @@ import { ExplorerView } from '@/components/views/explorer-view';
 import { OptimizerView } from '@/components/views/optimizer-view';
 import { SimulatorView } from '@/components/views/simulator-view';
 import { GalleryView } from '@/components/views/gallery-view';
+import { NearbyFlightSites } from '@/components/views/nearby-flight-sites';
 import { isDesignDraft, workspaceStorageKey } from '@/lib/design-gallery';
 import type { GalleryDetail, WorkspaceSnapshot } from '@/lib/design-gallery';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type {
   DatasetIndex,
@@ -209,6 +216,15 @@ export function AeroTwinApp() {
             </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ccd8df] bg-white px-3 py-2 text-xs font-medium text-[#3c5362] transition hover:bg-[#f4f7f9]">
+                <MapPin className="size-3.5 text-[#147d91]" />
+                <span className="hidden sm:inline">주변 비행지</span>
+              </PopoverTrigger>
+              <PopoverContent align="end" sideOffset={8} className="w-[min(22rem,calc(100vw-32px))] bg-white p-4 text-[#172b3a] shadow-xl">
+                <NearbyFlightSites />
+              </PopoverContent>
+            </Popover>
             <Link href="/packages" className="shrink-0 rounded-lg bg-[#147d91] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#0f6475]">
               패키지 상품!
             </Link>

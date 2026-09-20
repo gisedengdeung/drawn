@@ -7,7 +7,6 @@ import {
   Beaker,
   Boxes,
   CheckCircle2,
-  Hexagon,
   MapPin,
   Share2,
 } from 'lucide-react';
@@ -18,6 +17,7 @@ import { ExplorerView } from '@/components/views/explorer-view';
 import { SimulatorView } from '@/components/views/simulator-view';
 import { GalleryView } from '@/components/views/gallery-view';
 import { NearbyFlightSites } from '@/components/views/nearby-flight-sites';
+import { DrawnLogo } from '@/components/drawn-logo';
 import { isDesignDraft, workspaceStorageKey } from '@/lib/design-gallery';
 import type { GalleryDetail, WorkspaceSnapshot } from '@/lib/design-gallery';
 import { Badge } from '@/components/ui/badge';
@@ -199,9 +199,7 @@ export function AeroTwinApp() {
               onClick={() => setView('explore')}
               className="flex min-w-0 items-center gap-2.5 text-left"
             >
-              <div className="grid size-8 place-items-center rounded-lg bg-[#147d91] shadow-sm">
-                <Hexagon className="size-4.5 text-white" />
-              </div>
+              <DrawnLogo className="size-8 shrink-0 rounded-lg shadow-sm" />
               <div>
                 <p className="text-sm font-semibold tracking-[-0.02em] text-[#172b3a]">
                   AeroTwin
@@ -358,7 +356,7 @@ function LoadingWorkspace() {
     <div className="grid min-h-[calc(100vh-103px)] place-items-center px-6">
       <div className="text-center">
         <div className="mx-auto mb-5 grid size-12 place-items-center rounded-xl border border-[#b9dce3] bg-[#eef8fa]">
-          <Hexagon className="size-6 animate-pulse text-[#147d91]" />
+          <DrawnLogo className="size-7" />
         </div>
         <p className="font-medium text-[#233b4a]">
           AircraftVerse 인덱스를 준비하고 있습니다

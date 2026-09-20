@@ -1,8 +1,9 @@
 'use client';
 
-import { ArrowRight, Boxes, Gauge, Hexagon, HelpCircle, Route } from 'lucide-react';
+import { ArrowRight, Boxes, Gauge, HelpCircle, Route } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { DrawnLogo } from '@/components/drawn-logo';
 
 export function LandingView({
   onStart,
@@ -14,9 +15,7 @@ export function LandingView({
   return (
     <section className="grid min-h-[calc(100vh-103px)] place-items-center px-6 py-10">
       <div className="w-full max-w-xl text-center">
-        <div className="mx-auto mb-6 grid size-16 place-items-center rounded-2xl bg-[#3182f6] shadow-sm">
-          <Hexagon className="size-8 text-white" />
-        </div>
+        <DrawnLogo className="mx-auto mb-6 size-16 rounded-2xl shadow-sm" />
         <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#1d1d1f]">Drawn</h1>
         <p className="mt-3 text-sm leading-6 text-[#6e6e73]">
           AircraftVerse 데이터셋에 담긴 27,714개의 실제 드론 설계를 둘러보고, 치수를 직접 조정해보고,

@@ -313,7 +313,10 @@ export function DrawnApp() {
               <p className="mt-2 text-sm text-rose-200/70">{error}</p>
             </div>
           ) : !dataset || showcaseList.length === 0 ? (
-            <LoadingWorkspace />
+            <LandingView
+              onStart={() => setView('explore')}
+              onOpenGuide={() => setView('guide')}
+            />
           ) : (
             <>
               {view === 'explore' && (

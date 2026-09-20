@@ -23,6 +23,9 @@ export type DesignSummary = {
   primaryBattery: string | null;
   dragAt20: number;
   powerAt20: number;
+  powerAt0: number;
+  thrustAt0: number;
+  currentAt0: number;
   feasible: boolean;
   viewerReady: boolean;
   paretoOptimal: boolean;
@@ -271,11 +274,12 @@ export type DatasetIndex = {
 export type ShowcaseMap = Record<string, ShowcaseDesign>;
 
 export type WorkspaceView =
+  | 'home'
   | 'explore'
   | 'simulator'
   | 'lab'
-  | 'compare'
-  | 'optimizer'
+  | 'gallery'
+  | 'guide'
   | 'parts';
 
 export function formatMetric(value: number, digits = 1) {
@@ -299,6 +303,18 @@ export function formatComponent(value: string | null | undefined) {
     .replace(/_/g, ' ')
     .replace(/(\d)x(\d)/i, '$1×$2')
     .replace(/(\d)_(\d)/g, '$1.$2');
+}
+
+export type AirframeKind = 'quad' | 'hexa' | 'octo' | 'multi' | 'wing';
+
+export function classifyAirframe(
+  design: Pick<DesignSummary, 'numPropellers' | 'numWings'>,
+): { kind: AirframeKind; label: string } {
+  if (design.numWings > 0) return { kind: 'wing', label: '고정익·복합익' };
+  if (design.numPropellers === 4) return { kind: 'quad', label: '쿼드콥터' };
+  if (design.numPropellers === 6) return { kind: 'hexa', label: '헥사콥터' };
+  if (design.numPropellers === 8) return { kind: 'octo', label: '옥토콥터' };
+  return { kind: 'multi', label: '멀티콥터' };
 }
 
 export function formatHub(value: string) {

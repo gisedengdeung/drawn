@@ -22,13 +22,28 @@ npm run dev
 
 원본 84.34GiB 데이터는 `data/raw`에 보관하며 전처리에서 변경하지 않습니다. `data/` 전체는 Git 추적·개발 파일 감시·TypeScript 탐색에서 제외하고, 앱에서 사용하는 `public/data`와 대표 `public/models`만 기존처럼 추적합니다. 위치 변경과 배포 원칙은 [docs/DATA_LAYOUT.md](docs/DATA_LAYOUT.md)를 참고하세요.
 
+### 내 주변 비행 장소 (국토부 UL 공역)
+
+헤더의 "주변 비행지" 위젯은 국토교통부 초경량비행장치 비행공역(UA, data.go.kr
+dataset 15061946) 34곳을 사용합니다. 원본 CSV는 저장소에 포함하지 않으며,
+아래 명령으로 직접 내려받아 갱신합니다.
+
+```bash
+# https://www.data.go.kr/data/15061946/fileData.do 에서 로그인 없이 CSV 다운로드 후
+# 혹은 drive에 "국토교통부_항공레저_초경량비행장치공역_20251231.csv" 파일을 다운로드 후
+npm run data:prepare-drone-zones -- --csv <다운로드한 CSV 경로>
+```
+
+연 1회 갱신되는 스냅샷이라 실시간 NOTAM·임시 공역 변경은 반영하지 않습니다.
+실제 비행 전에는 [드론 원스톱](https://drone.onestop.go.kr)에서 최종 확인이 필요합니다.
+
 ## 구현된 사용자 흐름
 
 1. **Design Explorer** — 27,714개 ID/topology 검색과 대표 12개 원본 STL 또는 전체 파라메트릭 프리뷰 진입
 2. **Design Studio** — 설계당 원본 27–225개 변수를 1:1 보존하고 구조·동체·추진·전력·날개·탑재·배치를 실시간 개념 형상에 반영
 3. **Performance Simulator** — 0–50m/s trim slider, STL Pitch 자세, Drag/Lift/Thrust 벡터와 실제 성능 곡선
-4. **A/B Compare** — Baseline vs Draft 및 데이터셋 두 설계의 변경 파라미터/KPI/trim 비교
-5. **Dataset Candidate Search** — 목표·제약 필터, 실제 non-dominated Pareto와 knee 추천, 추천 ID를 Draft·A/B 흐름으로 연결
+4. **A/B Compare** — Baseline vs Draft 및 데이터셋 두 설계의 변경 파라미터/KPI/trim 비교. 별도 단계가 아니라 Design Explorer·Design Studio 어디서든 팝업으로 바로 확인
+5. **Dataset Candidate Search** — 목표·제약 필터와 실제 output.json 기반 랭킹(균형형은 non-dominated Pareto knee). 별도 단계가 아니라 Design Explorer 사이드바의 "조건으로 후보 찾기" 모드로 통합되어 있으며, 계산된 추천안은 바로 선택되어 3D·성능·A/B 비교로 이어짐
 6. **부품 agent** — 현재 설계의 부품 목록, 상품 후보 비교, 최종 구매 정리표와 CSV 저장
 
 ## 부품 agent

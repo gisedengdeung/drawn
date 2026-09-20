@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  ArrowRight,
+  ArrowLeft,
   BatteryCharging,
   CircleGauge,
   Gauge,
@@ -41,19 +41,19 @@ import {
 } from '@/components/views/shared';
 
 const overviewConfig = {
-  drag: { label: 'Drag (N)', color: '#147d91' },
-  power: { label: 'Power (W)', color: '#6750a4' },
+  drag: { label: '항력 (N)', color: '#147d91' },
+  power: { label: '전력 (W)', color: '#6750a4' },
 } satisfies ChartConfig;
 
 const aeroConfig = {
-  drag: { label: 'Drag (N)', color: '#147d91' },
-  thrust: { label: 'Thrust (N)', color: '#178653' },
-  lift: { label: 'Lift (N)', color: '#c47a13' },
+  drag: { label: '항력 (N)', color: '#147d91' },
+  thrust: { label: '추력 (N)', color: '#178653' },
+  lift: { label: '양력 (N)', color: '#c47a13' },
 } satisfies ChartConfig;
 
 const electricConfig = {
-  power: { label: 'Power (W)', color: '#6750a4' },
-  current: { label: 'Current (A)', color: '#147d91' },
+  power: { label: '전력 (W)', color: '#6750a4' },
+  current: { label: '전류 (A)', color: '#147d91' },
 } satisfies ChartConfig;
 
 type CurveMode = 'overview' | 'aero' | 'electric';
@@ -85,7 +85,7 @@ export function SimulatorView({
           <>
             <DesignSelector designs={designs} value={selected.id} onChange={onSelect} />
             <Button onClick={onOpenLab} className="bg-[#147d91] text-white hover:bg-[#0f6878]">
-              파라미터 편집 <ArrowRight />
+              <ArrowLeft /> 파라미터 편집
             </Button>
           </>
         }
@@ -138,14 +138,14 @@ export function SimulatorView({
           <div className="mt-4 min-w-0">
             {trim?.valid ? (
               <div className="grid grid-cols-2 gap-2">
-                <LiveMetric icon={<Wind />} label="Drag" value={trim.drag} unit="N" tone="cyan" />
-                <LiveMetric icon={<MoveUp />} label="Lift" value={trim.lift} unit="N" tone="amber" />
-                <LiveMetric icon={<Plane />} label="Thrust" value={trim.thrust} unit="N" tone="green" />
-                <LiveMetric icon={<Gauge />} label="Pitch" value={trim.pitch} unit="deg" tone="violet" />
-                <LiveMetric icon={<Zap />} label="Power" value={trim.power} unit="W" tone="violet" />
-                <LiveMetric icon={<BatteryCharging />} label="Current" value={trim.current} unit="A" tone="cyan" />
-                <LiveMetric icon={<Timer />} label="Flight Time" value={trim.flightTime} unit="sec" tone="green" />
-                <LiveMetric icon={<CircleGauge />} label="Distance" value={trim.distance ? trim.distance / 1000 : null} unit="km" tone="amber" />
+                <LiveMetric icon={<Wind />} label="항력" value={trim.drag} unit="N" tone="cyan" />
+                <LiveMetric icon={<MoveUp />} label="양력" value={trim.lift} unit="N" tone="amber" />
+                <LiveMetric icon={<Plane />} label="추력" value={trim.thrust} unit="N" tone="green" />
+                <LiveMetric icon={<Gauge />} label="피치각" value={trim.pitch} unit="deg" tone="violet" />
+                <LiveMetric icon={<Zap />} label="전력" value={trim.power} unit="W" tone="violet" />
+                <LiveMetric icon={<BatteryCharging />} label="전류" value={trim.current} unit="A" tone="cyan" />
+                <LiveMetric icon={<Timer />} label="비행 시간" value={trim.flightTime} unit="sec" tone="green" />
+                <LiveMetric icon={<CircleGauge />} label="비행거리" value={trim.distance ? trim.distance / 1000 : null} unit="km" tone="amber" />
               </div>
             ) : (
               <div className="grid min-h-56 place-items-center rounded-xl border border-amber-200 bg-amber-50 p-5 text-center">

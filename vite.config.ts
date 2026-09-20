@@ -19,7 +19,7 @@ const localDataDirectory = fileURLToPath(new URL('./data', import.meta.url))
 const localBindingConfig = {
   main: 'vinext/server/fetch-handler',
   compatibility_flags: ['nodejs_compat'],
-  d1_databases: d1
+  d1_databases: [...(d1
     ? [
         {
           binding: d1,
@@ -27,7 +27,11 @@ const localBindingConfig = {
           database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
         },
       ]
-    : [],
+    : []), {
+      binding: 'GALLERY_DB',
+      database_name: 'drone-craft-gallery',
+      database_id: '00000000-0000-4000-8000-000000000001',
+    }],
   r2_buckets: r2
     ? [
         {

@@ -1,7 +1,7 @@
 # 데이터 위치와 배포
 
 ```text
-aerotwin/
+drawn/
   data/                          # 로컬 전용, Git 추적 제외
     raw/
       AircraftVerse_1/design_*/

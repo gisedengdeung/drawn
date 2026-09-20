@@ -43,13 +43,12 @@ import {
   DataDisclaimer,
   DesignSelector,
   ModelStage,
-  SectionHeading,
   SourceBadge,
 } from '@/components/views/shared';
 
 const chartConfig = {
-  a: { label: 'Design A', color: '#147d91' },
-  b: { label: 'Design B', color: '#6750a4' },
+  a: { label: 'A 설계', color: '#147d91' },
+  b: { label: 'B 설계', color: '#6750a4' },
 } satisfies ChartConfig;
 
 type CurveMetric = 'power' | 'drag' | 'distance';
@@ -103,26 +102,19 @@ export function CompareView({
   const hasAnyTrim = Boolean(aDetail || bDetail);
 
   return (
-    <section className="px-4 py-4 lg:px-6">
-      <SectionHeading
-        eyebrow="4단계 · 설계 비교"
-        title="무엇이 바뀌고, 성능이 어떻게 달라졌나요?"
-        description="설계 구성의 차이를 먼저 확인한 뒤 AircraftVerse 성능 결과를 같은 단위로 비교합니다."
-        actions={<SourceBadge />}
-      />
-
+    <div>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(390px,0.85fr)]">
         <div>
           <div className="mb-3 grid grid-cols-2 gap-3">
             <DesignChoice
-              label="Design A"
+              label="A 설계"
               tone="cyan"
               designs={selectorOptions}
               value={a.id}
               onChange={(aId) => onPairChange({ aId, bId: b.id })}
             />
             <DesignChoice
-              label="Design B"
+              label="B 설계"
               tone="violet"
               designs={selectorOptions}
               value={b.id}
@@ -157,9 +149,9 @@ export function CompareView({
               </div>
               <div className="flex rounded-lg border border-[#dbe4ea] bg-[#f4f7f9] p-1">
                 {([
-                  ['power', 'Power'],
-                  ['drag', 'Drag'],
-                  ['distance', 'Distance'],
+                  ['power', '소비전력'],
+                  ['drag', '항력'],
+                  ['distance', '비행거리'],
                 ] as const).map(([id, label]) => (
                     <Button key={id} size="sm" variant="ghost" onClick={() => setCurveMetric(id)} className={curveMetric === id ? 'bg-white text-[#0f6475] shadow-sm' : 'text-[#607383]'}>{label}</Button>
                 ))}
@@ -205,13 +197,13 @@ export function CompareView({
             <span>성능 지표</span><span className="text-right text-[#0f6475]">A</span><span className="text-right text-violet-700">B</span><span className="text-right">변화</span>
           </div>
           <div className="divide-y divide-[#e5ebef]">
-            <CompareRow icon={<Route />} label="Max Distance" a={a.maxDistance / 1000} b={b.maxDistance / 1000} unit="km" better="up" />
-            <CompareRow icon={<CircleGauge />} label="Hover Time" a={a.hoverTime} b={b.hoverTime} unit="sec" better="up" digits={0} />
-            <CompareRow icon={<Gauge />} label="Max Speed" a={a.maxSpeed} b={b.maxSpeed} unit="m/s" better="up" />
-            <CompareRow icon={<Zap />} label="Power @ MFD" a={a.power} b={b.power} unit="W" better="down" digits={0} />
-            <CompareRow icon={<Wind />} label="Drag @ 20m/s" a={a.dragAt20} b={b.dragAt20} unit="N" better="down" />
-            <CompareRow icon={<Weight />} label="Mass" a={a.mass} b={b.mass} unit="kg" better="down" digits={2} />
-            <CompareRow icon={<BatteryCharging />} label="Propellers" a={a.numPropellers} b={b.numPropellers} unit="ea" better="neutral" digits={0} />
+            <CompareRow icon={<Route />} label="최대 비행거리" a={a.maxDistance / 1000} b={b.maxDistance / 1000} unit="km" better="up" />
+            <CompareRow icon={<CircleGauge />} label="체공 시간" a={a.hoverTime} b={b.hoverTime} unit="sec" better="up" digits={0} />
+            <CompareRow icon={<Gauge />} label="최고 속도" a={a.maxSpeed} b={b.maxSpeed} unit="m/s" better="up" />
+            <CompareRow icon={<Zap />} label="소비전력 (MFD)" a={a.power} b={b.power} unit="W" better="down" digits={0} />
+            <CompareRow icon={<Wind />} label="항력 (20m/s)" a={a.dragAt20} b={b.dragAt20} unit="N" better="down" />
+            <CompareRow icon={<Weight />} label="질량" a={a.mass} b={b.mass} unit="kg" better="down" digits={2} />
+            <CompareRow icon={<BatteryCharging />} label="프로펠러" a={a.numPropellers} b={b.numPropellers} unit="개" better="neutral" digits={0} />
           </div>
 
           <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50 p-4">
@@ -223,7 +215,7 @@ export function CompareView({
           <div className="mt-4"><DataDisclaimer compact /></div>
         </aside>
       </div>
-    </section>
+    </div>
   );
 }
 

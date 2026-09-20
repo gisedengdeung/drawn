@@ -135,7 +135,7 @@ export function PartsAgentView({ draft, disabled = false, selectedDesignId, load
     <section className="px-3 py-5 sm:px-5 lg:px-6" aria-labelledby="parts-agent-heading">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold text-[#147d91]">6단계 · 구매 준비</p>
+          <p className="text-xs font-semibold text-[#147d91]">5단계 · 구매 준비</p>
           <h1 id="parts-agent-heading" className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-tight text-[#172b3a]"><ShoppingBag className="size-6 text-[#147d91]" />부품 agent</h1>
           <p className="mt-2 text-sm leading-6 text-[#607383]">설계에 필요한 부품을 모으고, 구매할 상품과 금액을 정리하세요.</p>
         </div>

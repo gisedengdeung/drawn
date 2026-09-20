@@ -1,24 +1,32 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import Link from 'next/link';
 import {
   Activity,
   Beaker,
   Boxes,
   CheckCircle2,
+  HelpCircle,
   MapPin,
   Share2,
+  ShoppingBag,
 } from 'lucide-react';
 
 import { CompareView } from '@/components/views/compare-view';
 import { DesignLabView } from '@/components/views/design-lab-view';
 import { ExplorerView } from '@/components/views/explorer-view';
+import { GuideView } from '@/components/views/guide-view';
+import { LandingView } from '@/components/views/landing-view';
 import { SimulatorView } from '@/components/views/simulator-view';
+import { PartsAgentView } from '@/components/views/parts-agent-view';
+import { useDesignWorkspace } from '@/hooks/use-design-workspace';
 import { GalleryView } from '@/components/views/gallery-view';
 import { NearbyFlightSites } from '@/components/views/nearby-flight-sites';
 import { DrawnLogo } from '@/components/drawn-logo';
 import { isDesignDraft, workspaceStorageKey } from '@/lib/design-gallery';
+import { hydrateDraft } from '@/lib/design-draft';
 import type { GalleryDetail, WorkspaceSnapshot } from '@/lib/design-gallery';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,17 +49,18 @@ import type {
   DesignSummary,
   ShowcaseMap,
   WorkspaceView,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 
 const navItems = [
   { id: 'explore' as const, step: 1, label: '설계 선택', short: '탐색', icon: Boxes },
   { id: 'lab' as const, step: 2, label: '파라미터 편집', short: '편집', icon: Beaker },
   { id: 'simulator' as const, step: 3, label: '성능 확인', short: '성능', icon: Activity },
   { id: 'gallery' as const, step: 4, label: '공유 갤러리', short: '공유', icon: Share2 },
+  { id: 'parts' as const, step: 5, label: '부품 agent', short: '부품 agent', icon: ShoppingBag },
 ];
 
-export function AeroTwinApp() {
-  const [view, setView] = useState<WorkspaceView>('explore');
+export function DrawnApp() {
+  const [view, setView] = useState<WorkspaceView>('home');
   const [dataset, setDataset] = useState<DatasetIndex | null>(null);
   const [showcases, setShowcases] = useState<ShowcaseMap>({});
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -71,17 +80,19 @@ export function AeroTwinApp() {
     try { localStorage.setItem(workspaceStorageKey, JSON.stringify(snapshot)); }
     catch { setWorkspaceNotice('브라우저 저장 공간이 부족해 새로고침하면 편집 내용이 사라질 수 있습니다. 갤러리에 게시해 보관해 주세요.'); }
   }, []);
-  const sourceBaselineId = workspace?.draft.baselineId;
-  const sourceId = workspace?.sourceId ?? null;
-  const onDraftChange = useCallback((draft: DesignDraft) => {
-    saveWorkspace({ draft, sourceId: sourceBaselineId === draft.baselineId ? sourceId : null });
-  }, [saveWorkspace, sourceBaselineId, sourceId]);
+  const onDraftChange = useCallback<Dispatch<SetStateAction<DesignDraft | null>>>((update) => {
+    setWorkspace((current) => {
+      const draft = typeof update === 'function' ? update(current?.draft ?? null) : update;
+      if (!draft) return null;
+      return { draft, sourceId: current?.draft.baselineId === draft.baselineId ? current.sourceId : null };
+    });
+  }, []);
 
   const reuseDesign = (post: GalleryDetail) => {
     if (!isDesignDraft(post.draft) || !dataset?.designs.some((design) => design.id === post.baselineId)) {
       throw new Error('현재 데이터셋에서 이 설계의 기준 데이터를 찾을 수 없습니다.');
     }
-    saveWorkspace({ draft: structuredClone(post.draft), sourceId: post.id });
+    saveWorkspace({ draft: hydrateDraft(post.draft), sourceId: post.id });
     setSelectedId(post.baselineId);
     setImportVersion((value) => value + 1);
     setView('lab');
@@ -121,7 +132,7 @@ export function AeroTwinApp() {
           const stored = localStorage.getItem(workspaceStorageKey);
           const restored = stored ? JSON.parse(stored) as WorkspaceSnapshot : null;
           if (restored && isDesignDraft(restored.draft) && index.designs.some((design) => design.id === restored.draft.baselineId)) {
-            setWorkspace({ draft: restored.draft, sourceId: typeof restored.sourceId === 'string' ? restored.sourceId : null });
+            setWorkspace({ draft: hydrateDraft(restored.draft), sourceId: typeof restored.sourceId === 'string' ? restored.sourceId : null });
             setSelectedId(restored.draft.baselineId);
           }
         } catch { setWorkspaceNotice('이전에 저장한 편집 내용을 읽지 못해 기본 설계로 열었습니다.'); }
@@ -152,6 +163,26 @@ export function AeroTwinApp() {
   );
   const selectedDetail =
     selectedId == null ? null : (showcases[String(selectedId)] ?? null);
+  const designWorkspace = useDesignWorkspace(
+    selectedSummary, selectedDetail, workspace?.draft ?? null, importVersion, onDraftChange,
+  );
+  const currentDraft = designWorkspace.draft;
+  const activeWorkspace = useMemo<WorkspaceSnapshot | null>(() => currentDraft ? {
+    draft: currentDraft,
+    sourceId: workspace?.draft.baselineId === currentDraft.baselineId ? workspace.sourceId : null,
+  } : workspace, [currentDraft, workspace]);
+
+  useEffect(() => {
+    if (!activeWorkspace) return;
+    let active = true;
+    // Schedule serialization outside the render/interaction path; only failures update UI state.
+    void Promise.resolve().then(() => {
+      if (active) localStorage.setItem(workspaceStorageKey, JSON.stringify(activeWorkspace));
+    }).catch(() => {
+      if (active) setWorkspaceNotice('브라우저 저장 공간이 부족해 새로고침하면 편집 내용이 사라질 수 있습니다. 갤러리에 게시해 보관해 주세요.');
+    });
+    return () => { active = false; };
+  }, [activeWorkspace]);
   const showcaseList = useMemo(
     () =>
       dataset?.summary.showcaseIds
@@ -196,13 +227,13 @@ export function AeroTwinApp() {
         <header className="sticky top-0 z-50 border-b border-[#dbe4ea] bg-white/95 backdrop-blur-xl">
           <div className="mx-auto flex h-14 max-w-[1720px] items-center gap-4 px-4 lg:px-6">
             <button
-              onClick={() => setView('explore')}
+              onClick={() => setView('home')}
               className="flex min-w-0 items-center gap-2.5 text-left"
             >
               <DrawnLogo className="size-8 shrink-0 rounded-lg shadow-sm" />
               <div>
                 <p className="text-sm font-semibold tracking-[-0.02em] text-[#172b3a]">
-                  AeroTwin
+                  Drawn
                 </p>
                 <p className="hidden text-[10px] font-medium tracking-[0.08em] text-[#6b7d8b] sm:block">
                   UAV 설계 워크벤치
@@ -218,27 +249,37 @@ export function AeroTwinApp() {
               준비됨
             </div>
 
-          <div className="ml-auto flex items-center gap-2">
-            <Popover>
-              <PopoverTrigger className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ccd8df] bg-white px-3 py-2 text-xs font-medium text-[#3c5362] transition hover:bg-[#f4f7f9]">
-                <MapPin className="size-3.5 text-[#147d91]" />
-                <span className="hidden sm:inline">주변 비행지</span>
-              </PopoverTrigger>
-              <PopoverContent align="end" sideOffset={8} className="w-[min(22rem,calc(100vw-32px))] bg-white p-4 text-[#172b3a] shadow-xl">
-                <NearbyFlightSites />
-              </PopoverContent>
-            </Popover>
-            <Link href="/packages" className="shrink-0 rounded-lg bg-[#147d91] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#0f6475]">
-              패키지 상품!
-            </Link>
-            <Badge variant="outline" className="hidden border-[#cfdbe2] bg-[#f7f9fb] text-[10px] text-[#526675] sm:inline-flex">
-              파라메트릭 27,714개 · 원본 STL 12개
-            </Badge>
-          </div>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setView('guide')}
+                aria-current={view === 'guide' ? 'page' : undefined}
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${
+                  view === 'guide'
+                    ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
+                    : 'border-[#dbe4ea] bg-white text-[#607383] hover:bg-[#f4f7f9]'
+                }`}
+              >
+                <HelpCircle className="size-3.5" /> <span className="hidden sm:inline">가이드</span>
+              </button>
+              <Popover>
+                <PopoverTrigger className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ccd8df] bg-white px-3 py-2 text-xs font-medium text-[#3c5362] transition hover:bg-[#f4f7f9]">
+                  <MapPin className="size-3.5 text-[#147d91]" />
+                  <span className="hidden sm:inline">주변 비행지</span>
+                </PopoverTrigger>
+                <PopoverContent align="end" sideOffset={8} className="w-[min(22rem,calc(100vw-32px))] bg-white p-4 text-[#172b3a] shadow-xl">
+                  <NearbyFlightSites />
+                </PopoverContent>
+              </Popover>
+              <Link href="/packages" className="shrink-0 rounded-lg bg-[#147d91] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#0f6475]">
+                패키지 상품!
+              </Link>
+              <Badge variant="outline" className="hidden border-[#cfdbe2] bg-[#f7f9fb] text-[10px] text-[#526675] sm:inline-flex">
+                파라메트릭 27,714개 · 원본 STL 12개
+              </Badge>
+            </div>
           </div>
 
-          </div>
-        <nav className="mx-auto flex max-w-[1720px] items-center overflow-x-auto px-2 lg:px-4" aria-label="설계 작업 단계">
+          <nav className="mx-auto flex max-w-[1720px] items-center overflow-x-auto px-2 lg:px-4" aria-label="설계 작업 단계">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = item.id === view;
@@ -287,6 +328,7 @@ export function AeroTwinApp() {
                     selectShowcaseAndOpen(id, 'simulator')
                   }
                   onOpenCompare={openCompareFromExplorer}
+                  onOpenGuide={() => setView('guide')}
                 />
               )}
               {view === 'simulator' && selectedDetail && (
@@ -299,7 +341,7 @@ export function AeroTwinApp() {
               )}
               {view === 'simulator' && !selectedDetail && (
                 <ShowcaseRequiredState
-                  title="Performance Simulator"
+                  title="성능 확인"
                   selectedId={selectedId}
                   defaultId={dataset.summary.defaultShowcaseId}
                   onChoose={(id) => selectShowcaseAndOpen(id, 'simulator')}
@@ -314,16 +356,32 @@ export function AeroTwinApp() {
                   datasetDesigns={dataset.designs}
                   onSelect={setSelectedId}
                   onOpenDatasetCompare={() => openCompareFromExplorer(selectedSummary.id)}
-                  initialDraft={workspace?.draft.baselineId === selectedSummary.id ? workspace.draft : null}
-                  onDraftChange={onDraftChange}
+                  workspace={designWorkspace}
+                  onOpenParts={() => setView('parts')}
                 />
               )}
               {view === 'gallery' && (
                 <GalleryView
                   current={selectedSummary ?? designById.get(dataset.summary.defaultShowcaseId)!}
-                  workspace={workspace}
+                  workspace={activeWorkspace}
                   initialPostId={initialPostId}
                   onReuse={reuseDesign}
+                />
+              )}
+              <div hidden={view !== 'parts'}>
+                <PartsAgentView
+                  draft={designWorkspace.draft}
+                  disabled={designWorkspace.loading}
+                  selectedDesignId={selectedId}
+                  loadError={designWorkspace.loadError}
+                  onOpenDesign={() => setView('lab')}
+                />
+              </div>
+              {view === 'guide' && <GuideView onBack={() => setView('explore')} />}
+              {view === 'home' && (
+                <LandingView
+                  onStart={() => setView('explore')}
+                  onOpenGuide={() => setView('guide')}
                 />
               )}
             </>

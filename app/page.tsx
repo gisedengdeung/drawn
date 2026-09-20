@@ -1,5 +1,5 @@
-import { AeroTwinApp } from '@/components/aerotwin-app';
+import { DrawnApp } from '@/components/drawn-app';
 
 export default function Home() {
-  return <AeroTwinApp />;
+  return <DrawnApp />;
 }

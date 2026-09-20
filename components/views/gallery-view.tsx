@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { galleryPurposes, galleryRequest, isDesignDraft, loadDesignDraft } from '@/lib/design-gallery';
 import type { GalleryDetail, GalleryPost, WorkspaceSnapshot } from '@/lib/design-gallery';
-import type { DesignDraft, DesignSummary } from '@/lib/aerotwin-types';
+import type { DesignDraft, DesignSummary } from '@/lib/drawn-types';
 
 const field = 'w-full rounded-lg border border-[#cfdbe2] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#147d91] focus:ring-1 focus:ring-[#147d91]';
 

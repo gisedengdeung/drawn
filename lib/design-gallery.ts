@@ -1,4 +1,4 @@
-import type { DesignDraft } from '@/lib/aerotwin-types';
+import type { DesignDraft } from '@/lib/drawn-types';
 
 export const galleryPurposes = ['취미·입문', '촬영·관측', '장거리 비행', '레이싱', '운송·탑재', '연구·실험'] as const;
 export type GalleryPost = {
@@ -16,7 +16,7 @@ export type GalleryPost = {
 };
 export type GalleryDetail = GalleryPost & { draft: DesignDraft };
 export type WorkspaceSnapshot = { draft: DesignDraft; sourceId: string | null };
-export const workspaceStorageKey = 'aerotwin-workspace-v1';
+export const workspaceStorageKey = 'drawn-workspace-v1';
 
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const text = (value: unknown): value is string => typeof value === 'string' && value.length <= 2000;

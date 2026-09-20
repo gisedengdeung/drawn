@@ -22,7 +22,7 @@ export function MiniDroneDetail() {
     <main className="min-h-screen bg-white text-[#20272e]">
       <header className="border-b border-slate-200">
         <div className="mx-auto flex min-h-16 max-w-[1440px] flex-wrap items-center justify-between gap-3 px-5 py-3 lg:px-8">
-          <Link href="/packages" className="flex items-center gap-2 text-sm font-semibold"><Package className="size-6 text-[#147d91]" />AeroTwin <span className="ml-2 border-l pl-4 font-normal text-slate-500">패키지 스토어</span></Link>
+          <Link href="/packages" className="flex items-center gap-2 text-sm font-semibold"><Package className="size-6 text-[#147d91]" />Drawn <span className="ml-2 border-l pl-4 font-normal text-slate-500">패키지 스토어</span></Link>
           <Link href="/packages" className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs hover:bg-slate-50"><ArrowLeft className="size-4" />패키지 목록</Link>
         </div>
       </header>

@@ -8,36 +8,36 @@ import {
   Gauge,
   GitCompareArrows,
   History,
+  Info,
   PackageCheck,
   Radar,
   Route,
-  Search,
   ShieldCheck,
   Sparkles,
   Star,
   Trophy,
   Weight,
+  X,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import type {
+  AirframeKind,
   DatasetIndex,
   DesignSummary,
   ShowcaseMap,
-} from '@/lib/aerotwin-types';
-import { formatDistance, formatHub, formatMetric } from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
+import {
+  classifyAirframe,
+  formatDistance,
+  formatHub,
+  formatMetric,
+} from '@/lib/drawn-types';
 import {
   CANDIDATE_OBJECTIVES,
   CANDIDATE_PRESETS,
@@ -55,9 +55,19 @@ import {
   SourceBadge,
 } from '@/components/views/shared';
 
-const FAVORITES_STORAGE_KEY = 'aerotwin:favorite-designs';
-const RECENT_STORAGE_KEY = 'aerotwin:recent-designs';
+const FAVORITES_STORAGE_KEY = 'drawn:favorite-designs';
+const RECENT_STORAGE_KEY = 'drawn:recent-designs';
+const ONBOARDING_STORAGE_KEY = 'drawn:onboarding-dismissed';
 const RECENT_LIMIT = 8;
+
+const AIRFRAME_KIND_OPTIONS: { value: 'all' | AirframeKind; label: string }[] = [
+  { value: 'all', label: '전체 형태' },
+  { value: 'quad', label: '쿼드콥터' },
+  { value: 'hexa', label: '헥사콥터' },
+  { value: 'octo', label: '옥토콥터' },
+  { value: 'multi', label: '멀티콥터' },
+  { value: 'wing', label: '고정익·복합익' },
+];
 
 const PRESET_ICONS: Record<string, typeof PackageCheck> = {
   Delivery: PackageCheck,
@@ -93,6 +103,7 @@ export function ExplorerView({
   onOpenLab,
   onOpenSimulator,
   onOpenCompare,
+  onOpenGuide,
 }: {
   dataset: DatasetIndex;
   showcases: ShowcaseMap;
@@ -101,16 +112,16 @@ export function ExplorerView({
   onOpenLab: (id: number) => void;
   onOpenSimulator: (id: number) => void;
   onOpenCompare: (aId: number, preferredBId?: number) => void;
+  onOpenGuide: () => void;
 }) {
   const [mode, setMode] = useState<SearchMode>('filter');
-  const [query, setQuery] = useState('');
-  const [propellers, setPropellers] = useState('all');
-  const [wingMode, setWingMode] = useState('all');
+  const [airframeKind, setAirframeKind] = useState<'all' | AirframeKind>('all');
   const [massMax, setMassMax] = useState(15);
   const [feasibleOnly, setFeasibleOnly] = useState(true);
   const [viewerOnly, setViewerOnly] = useState(true);
   const [favorites, setFavorites] = useState<number[]>([]);
   const [recent, setRecent] = useState<number[]>([]);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const [preset, setPreset] = useState('Delivery');
   const [objective, setObjective] = useState<Objective>('range');
@@ -129,8 +140,22 @@ export function ExplorerView({
     window.queueMicrotask(() => {
       setFavorites(readStoredIds(FAVORITES_STORAGE_KEY));
       setRecent(readStoredIds(RECENT_STORAGE_KEY));
+      try {
+        setShowOnboarding(localStorage.getItem(ONBOARDING_STORAGE_KEY) !== '1');
+      } catch {
+        setShowOnboarding(true);
+      }
     });
   }, []);
+
+  const dismissOnboarding = () => {
+    setShowOnboarding(false);
+    try {
+      localStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
+    } catch {
+      // Storage unavailable — dismissal just won't persist across reloads.
+    }
+  };
 
   const toggleFavorite = (id: number) => {
     setFavorites((previous) => {
@@ -143,33 +168,16 @@ export function ExplorerView({
   };
 
   const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().replace(/^#/, '').toLowerCase();
     return dataset.designs
       .filter((design) => {
         if (viewerOnly && !showcases[String(design.id)]) return false;
         if (feasibleOnly && !design.feasible) return false;
         if (design.mass > massMax) return false;
-        if (propellers !== 'all' && design.numPropellers !== Number(propellers)) return false;
-        if (wingMode === 'winged' && design.numWings === 0) return false;
-        if (wingMode === 'wingless' && design.numWings > 0) return false;
-        if (
-          normalizedQuery &&
-          !String(design.id).includes(normalizedQuery) &&
-          !design.hub.toLowerCase().includes(normalizedQuery)
-        ) {
-          return false;
-        }
+        if (airframeKind !== 'all' && classifyAirframe(design).kind !== airframeKind) return false;
         return true;
       })
-      .sort((a, b) => {
-        if (normalizedQuery) {
-          const aExact = String(a.id) === normalizedQuery;
-          const bExact = String(b.id) === normalizedQuery;
-          if (aExact !== bExact) return aExact ? -1 : 1;
-        }
-        return b.maxDistance - a.maxDistance || a.id - b.id;
-      });
-  }, [dataset.designs, feasibleOnly, massMax, propellers, query, showcases, viewerOnly, wingMode]);
+      .sort((a, b) => b.maxDistance - a.maxDistance || a.id - b.id);
+  }, [airframeKind, dataset.designs, feasibleOnly, massMax, showcases, viewerOnly]);
 
   const visibleResults = filtered.slice(0, 60);
   const current = selected ?? visibleResults[0] ?? dataset.designs[0];
@@ -229,14 +237,29 @@ export function ExplorerView({
         eyebrow="1단계 · 기준 설계 선택"
         title="설계 탐색"
         description="27,714개 전체 설계는 파라메트릭 개념 형상으로 편집하고, 대표 12개는 원본 STL까지 함께 확인할 수 있습니다."
-        actions={
-          mode === 'filter' && (
-            <Button onClick={() => setMode('candidate')} className="bg-[#147d91] text-white hover:bg-[#0f6878]">
-              <Sparkles /> 조건으로 후보 찾기 <ArrowUpRight />
-            </Button>
-          )
-        }
       />
+
+      {showOnboarding && (
+        <div className="workspace-panel relative mb-4 flex items-center gap-3 overflow-hidden rounded-xl border border-[#b9dce3] bg-[#eef8fa] px-4 py-3">
+          <Info className="size-4 shrink-0 text-[#0f6475]" />
+          <p className="flex-1 text-xs text-[#3d6873]">
+            드론을 잘 몰라도 괜찮아요. 화면 용어와 사용 흐름을 3분 안에 정리해드려요.
+          </p>
+          <button
+            onClick={onOpenGuide}
+            className="shrink-0 rounded-lg bg-[#147d91] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0f6878]"
+          >
+            처음이신가요? 가이드 보기 →
+          </button>
+          <button
+            onClick={dismissOnboarding}
+            aria-label="안내 닫기"
+            className="shrink-0 rounded p-1 text-[#5f8a94] hover:bg-white/60 hover:text-[#0f6475]"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[290px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(500px,1fr)_300px]">
         <aside className="workspace-panel overflow-hidden rounded-xl">
@@ -246,13 +269,13 @@ export function ExplorerView({
                 onClick={() => setMode('filter')}
                 className={`rounded-md px-2 py-2 transition ${mode === 'filter' ? 'bg-white text-[#0f6475] shadow-sm' : 'text-[#607383]'}`}
               >
-                필터로 찾기
+                모델 정하기
               </button>
               <button
                 onClick={() => setMode('candidate')}
                 className={`rounded-md px-2 py-2 transition ${mode === 'candidate' ? 'bg-white text-[#0f6475] shadow-sm' : 'text-[#607383]'}`}
               >
-                조건으로 후보 찾기
+                목적에 따라 모델 추천 받기
               </button>
             </div>
 
@@ -272,38 +295,20 @@ export function ExplorerView({
                     프리뷰 · 27,714
                   </button>
                 </div>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#718391]" />
-                  <Input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="설계 ID 또는 topology 검색"
-                    className="h-10 border-[#ccd8df] bg-white pl-9 text-[#172b3a]"
-                  />
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <Select value={propellers} onValueChange={(value) => setPropellers(String(value))}>
-                    <SelectTrigger className="w-full border-[#ccd8df] bg-white text-xs text-[#304958]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="border-[#ccd8df] bg-white text-[#304958]">
-                      <SelectItem value="all">전체 Prop 수</SelectItem>
-                      {[2, 4, 6, 8, 12, 16].map((count) => (
-                        <SelectItem key={count} value={String(count)}>{count} Propellers</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={wingMode} onValueChange={(value) => setWingMode(String(value))}>
-                    <SelectTrigger className="w-full border-[#ccd8df] bg-white text-xs text-[#304958]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="border-[#ccd8df] bg-white text-[#304958]">
-                      <SelectItem value="all">전체 Wing</SelectItem>
-                      <SelectItem value="wingless">Wingless</SelectItem>
-                      <SelectItem value="winged">Winged</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-wrap gap-1.5">
+                  {AIRFRAME_KIND_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setAirframeKind(option.value)}
+                      className={`rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition ${
+                        airframeKind === option.value
+                          ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
+                          : 'border-[#dbe4ea] bg-white text-[#607383] hover:bg-[#f4f7f9]'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="mt-4">
@@ -323,8 +328,8 @@ export function ExplorerView({
 
                 <div className="mt-4 rounded-lg border border-[#dbe4ea] bg-[#f7f9fb] p-3">
                   <div className="flex items-center justify-between gap-3 text-xs text-[#526675]">
-                    유효 비행성능만
-                    <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="유효 비행성능만" />
+                    비행거리 계산 가능한 설계도
+                    <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="비행거리 계산 가능한 설계도" />
                   </div>
                 </div>
               </>
@@ -369,12 +374,6 @@ export function ExplorerView({
                   </div>
                 </div>
 
-            <div className="mt-4 rounded-lg border border-[#dbe4ea] bg-[#f7f9fb] p-3">
-              <div className="flex items-center justify-between gap-3 text-xs text-[#526675]">
-                비행거리 계산 가능한 설계도
-                <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="비행거리 계산 가능한 설계도" />
-              </div>
-            </div>
                 <div className="mt-2 flex items-center justify-between rounded-lg border border-[#dbe4ea] bg-[#f4f7f9] px-3 py-2 text-xs">
                   <span className="text-[#607383]">조건 통과 후보</span>
                   <span className="font-mono font-semibold text-[#0f6475]">{candidatePool.length.toLocaleString()}개</span>
@@ -436,16 +435,6 @@ export function ExplorerView({
             </div>
           )}
 
-          <div className="flex items-center justify-between border-b border-[#dbe4ea] px-3.5 py-2.5 text-xs">
-            <span className="text-[#607383]">검색 결과 <small className="ml-1 text-[10px]">(최대 60개 표시)</small></span>
-            <span className="font-mono font-medium text-[#294353]">{filtered.length.toLocaleString()}</span>
-          </div>
-          <div className="max-h-[430px] overflow-y-auto p-2">
-            {visibleResults.length ? (
-              visibleResults.map((design) => {
-                const isFavorite = favorites.includes(design.id);
-                return (
-                  <div key={design.id} className="relative mb-2 last:mb-0">
           {mode === 'filter' ? (
             <>
               <div className="flex items-center justify-between border-b border-[#dbe4ea] px-3.5 py-2.5 text-xs">
@@ -457,18 +446,20 @@ export function ExplorerView({
                   visibleResults.map((design) => {
                     const isFavorite = favorites.includes(design.id);
                     return (
-                      <div key={design.id} className="relative mb-1">
+                      <div key={design.id} className="relative mb-2 last:mb-0">
                         <button
                           onClick={() => onSelect(design.id)}
                           className={`w-full rounded-xl border p-3 pr-9 text-left transition ${
                             current.id === design.id
                               ? 'border-[#9ccdd6] bg-[#eef8fa] shadow-sm'
-                              : 'border-transparent hover:border-[#dbe4ea] hover:bg-[#f7f9fb]'
+                              : 'border-[#cfdbe2] bg-white hover:border-[#9ccdd6] hover:bg-[#f7f9fb]'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="font-mono text-xs font-semibold text-[#233b4a]">Design #{design.id}</p>
+                              <p className="text-xs font-semibold text-[#233b4a]">
+                                {classifyAirframe(design).label} <span className="font-mono font-normal text-[#8796a1]">#{design.id}</span>
+                              </p>
                               <p className="mt-1 truncate text-[11px] text-[#718391]">{formatHub(design.hub)}</p>
                             </div>
                             {showcases[String(design.id)] ? (
@@ -519,14 +510,14 @@ export function ExplorerView({
                       className={`mb-1 w-full rounded-xl border p-3 text-left transition ${
                         current.id === design.id
                           ? 'border-[#9ccdd6] bg-[#eef8fa] shadow-sm'
-                          : 'border-[#cfdbe2] bg-white hover:border-[#9ccdd6] hover:bg-[#f7f9fb]'
+                          : 'border-transparent hover:border-[#dbe4ea] hover:bg-[#f7f9fb]'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="flex items-center gap-1.5 font-mono text-xs font-semibold text-[#233b4a]">
+                          <p className="flex items-center gap-1.5 text-xs font-semibold text-[#233b4a]">
                             {index === 0 && <Trophy className="size-3 text-violet-700" />}
-                            순위 {index + 1} · Design #{design.id}
+                            순위 {index + 1} · {classifyAirframe(design).label} <span className="font-mono font-normal text-[#8796a1]">#{design.id}</span>
                           </p>
                           <p className="mt-1 truncate text-[11px] text-[#718391]">{formatHub(design.hub)}</p>
                         </div>
@@ -558,11 +549,13 @@ export function ExplorerView({
           )}
         </aside>
 
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-col">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#dbe4ea] bg-white px-4 py-3 shadow-sm">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-[#172b3a]">Design #{current.id}</h2>
+                <h2 className="text-lg font-semibold text-[#172b3a]">
+                  {classifyAirframe(current).label} <span className="font-mono text-base font-normal text-[#8796a1]">#{current.id}</span>
+                </h2>
                 <button
                   onClick={() => toggleFavorite(current.id)}
                   aria-label={favorites.includes(current.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
@@ -590,12 +583,12 @@ export function ExplorerView({
                 </Button>
               )}
               <Button onClick={() => onOpenLab(current.id)} className="bg-[#147d91] text-white hover:bg-[#0f6878]">
-                3D 편집 <ArrowUpRight />
+                파라미터 편집 <ArrowUpRight />
               </Button>
             </div>
           </div>
 
-          <ModelStage design={currentDetail} emptyDesignId={current.id} className="min-h-[430px] lg:min-h-[470px]" />
+          <ModelStage design={currentDetail} emptyDesignId={current.id} className="min-h-[430px] flex-1 lg:min-h-[470px]" />
           <div className="mt-3"><DataDisclaimer compact /></div>
         </div>
 
@@ -610,10 +603,10 @@ export function ExplorerView({
             ) : (
               <div className="divide-y divide-[#e5ebef]">
                 {[
-                  ['Hub', formatHub(current.hub)],
-                  ['Propellers', String(current.numPropellers)],
-                  ['Wings', String(current.numWings)],
-                  ['Arm Length', current.armLength ? `${current.armLength.toFixed(1)} mm` : '—'],
+                  ['허브', formatHub(current.hub)],
+                  ['프로펠러', String(current.numPropellers)],
+                  ['날개', String(current.numWings)],
+                  ['암 길이', current.armLength ? `${current.armLength.toFixed(1)} mm` : '—'],
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between gap-3 py-3 text-xs"><span className="text-[#718391]">{label}</span><span className="text-[#294353]">{value}</span></div>
                 ))}
@@ -622,10 +615,10 @@ export function ExplorerView({
           </div>
 
           <div className="contents">
-            <MetricTile icon={<Route className="size-4" />} label="Maximum Distance" value={current.maxDistance ? formatMetric(current.maxDistance / 1000, 2) : '—'} unit={current.maxDistance ? 'km' : undefined} note={current.speedMfd ? `at ${current.speedMfd} m/s` : '성능 데이터 없음'} tone="cyan" />
-            <MetricTile icon={<CircleGauge className="size-4" />} label="Hover Time" value={current.hoverTime ? formatMetric(current.hoverTime, 0) : '—'} unit={current.hoverTime ? 'sec' : undefined} note={current.hoverTime ? `${formatMetric(current.hoverTime / 60, 1)} minutes` : '성능 데이터 없음'} tone="violet" />
-            <MetricTile icon={<Gauge className="size-4" />} label="Max Speed" value={current.maxSpeed ? formatMetric(current.maxSpeed, 1) : '—'} unit={current.maxSpeed ? 'm/s' : undefined} tone="green" />
-            <MetricTile icon={<Weight className="size-4" />} label="Mass" value={formatMetric(current.mass, 2)} unit="kg" note={`Local rank · ${formatDistance(current.maxDistance)}`} />
+            <MetricTile icon={<Route className="size-4" />} label="최대 비행거리" value={current.maxDistance ? formatMetric(current.maxDistance / 1000, 2) : '—'} unit={current.maxDistance ? 'km' : undefined} note={current.speedMfd ? `${current.speedMfd} m/s 기준` : '성능 데이터 없음'} tone="cyan" />
+            <MetricTile icon={<CircleGauge className="size-4" />} label="체공 시간" value={current.hoverTime ? formatMetric(current.hoverTime, 0) : '—'} unit={current.hoverTime ? 'sec' : undefined} note={current.hoverTime ? `${formatMetric(current.hoverTime / 60, 1)}분` : '성능 데이터 없음'} tone="violet" />
+            <MetricTile icon={<Gauge className="size-4" />} label="최고 속도" value={current.maxSpeed ? formatMetric(current.maxSpeed, 1) : '—'} unit={current.maxSpeed ? 'm/s' : undefined} tone="green" />
+            <MetricTile icon={<Weight className="size-4" />} label="질량" value={formatMetric(current.mass, 2)} unit="kg" note={`데이터셋 내 순위 · ${formatDistance(current.maxDistance)}`} />
           </div>
         </aside>
       </div>

@@ -62,11 +62,11 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 const objectives: { id: Objective; label: string; detail: string; icon: typeof Route }[] = [
-  { id: 'range', label: '비행거리 최대', detail: 'Range ↑', icon: Route },
-  { id: 'hover', label: '체공시간 최대', detail: 'Hover ↑', icon: CircleGauge },
-  { id: 'power', label: '소비전력 최소', detail: 'Power ↓', icon: Zap },
-  { id: 'drag', label: '항력 최소', detail: 'Drag @20 ↓', icon: Wind },
-  { id: 'speed', label: '최대속도 최대', detail: 'Speed ↑', icon: Gauge },
+  { id: 'range', label: '비행거리 최대', detail: '비행거리 ↑', icon: Route },
+  { id: 'hover', label: '체공시간 최대', detail: '체공시간 ↑', icon: CircleGauge },
+  { id: 'power', label: '소비전력 최소', detail: '소비전력 ↓', icon: Zap },
+  { id: 'drag', label: '항력 최소', detail: '항력 ↓', icon: Wind },
+  { id: 'speed', label: '최대속도 최대', detail: '최고속도 ↑', icon: Gauge },
   { id: 'balanced', label: '균형형', detail: '3목적 Pareto knee', icon: Radar },
 ];
 
@@ -247,15 +247,15 @@ export function OptimizerView({
         <div className="min-w-0 space-y-4">
           <section className="workspace-panel rounded-xl p-4 lg:p-5">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div><div className="flex items-center gap-2"><h2 className="font-semibold text-[#172b3a]">Range–Power 2목적 Pareto</h2><SourceBadge /></div><p className="mt-1 text-xs text-[#607383]">회색은 최대 240개 표본, 청록색은 더 낮은 전력과 더 긴 거리에 동시에 지배되지 않는 실제 2목적 후보입니다.</p></div>
-              <div className="flex flex-wrap gap-4 text-[10px] text-[#607383]"><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-[#9aabb5]" /> 표본 후보</span><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-[#147d91]" /> Pareto {paretoPoints.length}개</span><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-violet-700" /> 현재 추천</span></div>
+              <div><div className="flex items-center gap-2"><h2 className="font-semibold text-[#172b3a]">비행거리–소비전력 2목적 Pareto</h2><SourceBadge /></div><p className="mt-1 text-xs text-[#607383]">회색은 최대 240개 표본, 청록색은 더 낮은 전력과 더 긴 거리에 동시에 지배되지 않는 실제 2목적 후보입니다.</p></div>
+              <div className="flex flex-wrap gap-4 text-[10px] text-[#607383]"><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-[#9aabb5]" /> 조건 통과 후보</span><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-[#147d91]" /> Pareto {paretoPoints.length}개</span><span className="flex items-center gap-2"><i className="size-2 rounded-full bg-violet-700" /> 현재 추천</span></div>
             </div>
             <ChartContainer config={chartConfig} className="h-[310px] w-full aspect-auto" initialDimension={{ width: 900, height: 310 }}>
               <ScatterChart margin={{ left: 0, right: 16, top: 10, bottom: 6 }}>
                 <CartesianGrid stroke="#e2e8ec" />
-                <XAxis type="number" dataKey="power" name="Power" unit="W" tickLine={false} axisLine={false} tickMargin={8} />
-                <YAxis type="number" dataKey="range" name="Range" unit="km" tickLine={false} axisLine={false} width={56} />
-                <ZAxis type="number" dataKey="mass" range={[24, 100]} name="Mass" unit="kg" />
+                <XAxis type="number" dataKey="power" name="소비전력" unit="W" tickLine={false} axisLine={false} tickMargin={8} />
+                <YAxis type="number" dataKey="range" name="비행거리" unit="km" tickLine={false} axisLine={false} width={56} />
+                <ZAxis type="number" dataKey="mass" range={[24, 100]} name="질량" unit="kg" />
                 <ChartTooltip cursor={{ strokeDasharray: '3 3' }} content={<ChartTooltipContent />} />
                 <Scatter data={designSpaceSample} fill="var(--color-candidate)" fillOpacity={0.42} />
                 <Scatter data={paretoPoints} fill="var(--color-pareto)" fillOpacity={0.9} />
@@ -286,11 +286,11 @@ export function OptimizerView({
                   </div>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
-                  <DeltaMetric label="Range" before={current.maxDistance} after={best.maxDistance} unit="m" better="up" />
-                  <DeltaMetric label="Hover" before={current.hoverTime} after={best.hoverTime} unit="sec" better="up" />
-                  <DeltaMetric label="Power" before={current.power} after={best.power} unit="W" better="down" />
-                  <DeltaMetric label="Mass" before={current.mass} after={best.mass} unit="kg" better="down" />
-                  <DeltaMetric label="Drag @20" before={current.dragAt20} after={best.dragAt20} unit="N" better="down" />
+                  <DeltaMetric label="비행거리" before={current.maxDistance} after={best.maxDistance} unit="m" better="up" />
+                  <DeltaMetric label="체공시간" before={current.hoverTime} after={best.hoverTime} unit="sec" better="up" />
+                  <DeltaMetric label="소비전력" before={current.power} after={best.power} unit="W" better="down" />
+                  <DeltaMetric label="질량" before={current.mass} after={best.mass} unit="kg" better="down" />
+                  <DeltaMetric label="항력" before={current.dragAt20} after={best.dragAt20} unit="N" better="down" />
                 </div>
               </section>
             </>
@@ -377,10 +377,10 @@ function RecommendationCard({ design, rank }: { design: ScoredDesign; rank: numb
       <div className="flex items-start justify-between"><div><p className="text-[10px] font-medium tracking-[0.08em] text-[#718391]">순위 {rank}</p><p className="mt-1 font-mono text-sm font-semibold text-[#233b4a]">Design #{design.id}</p></div>{rank === 1 && <Badge className="bg-violet-100 text-violet-800"><Trophy /> 추천</Badge>}</div>
       <p className="mt-3 truncate text-[11px] text-[#607383]">{formatHub(design.hub)}</p>
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-        <Mini label="Range" value={formatDistance(design.maxDistance)} />
-        <Mini label="Power" value={`${formatMetric(design.power, 0)} W`} />
-        <Mini label="Hover" value={isAvailableMetric(design.hoverTime) ? `${formatMetric(design.hoverTime, 0)} s` : '—'} />
-        <Mini label="Mass" value={`${formatMetric(design.mass, 2)} kg`} />
+        <Mini label="비행거리" value={formatDistance(design.maxDistance)} />
+        <Mini label="소비전력" value={`${formatMetric(design.power, 0)} W`} />
+        <Mini label="체공시간" value={isAvailableMetric(design.hoverTime) ? `${formatMetric(design.hoverTime, 0)} s` : '—'} />
+        <Mini label="질량" value={`${formatMetric(design.mass, 2)} kg`} />
       </div>
       <div className="mt-4 flex items-center justify-between border-t border-[#e5ebef] pt-3 text-[10px]"><span className="text-[#718391]">데이터셋 점수</span><span className="font-mono font-semibold text-violet-700">{design.score.toFixed(3)}</span></div>
     </article>

@@ -215,7 +215,7 @@ export function ModelStage({
                 variant="outline"
                 className="border-[#cfdae0] bg-white/85 text-[#294353] backdrop-blur"
               >
-                {design.numPropellers} PROP
+                프로펠러 {design.numPropellers}개
               </Badge>
             </div>
           )}
@@ -225,13 +225,13 @@ export function ModelStage({
           {showForceVectors && (
             <div className="absolute right-4 top-4 z-20 flex flex-wrap justify-end gap-2 text-[10px] font-medium">
               <span className="rounded-full border border-[#b9dce2] bg-white/90 px-2 py-1 text-[#147d91]">
-                Drag
+                항력
               </span>
               <span className="rounded-full border border-amber-200 bg-white/90 px-2 py-1 text-amber-700">
-                Lift
+                양력
               </span>
               <span className="rounded-full border border-emerald-200 bg-white/90 px-2 py-1 text-emerald-700">
-                Thrust
+                추력
               </span>
             </div>
           )}
@@ -267,19 +267,19 @@ export function ModelStage({
 
 export function ConfigurationList({ design }: { design: ShowcaseDesign }) {
   const rows = [
-    ['Hub', formatHub(design.hub)],
-    ['Motor', formatComponent(design.motor)],
-    ['Propeller', formatComponent(design.propeller)],
-    ['Battery', formatComponent(design.battery)],
+    ['허브', formatHub(design.hub)],
+    ['모터', formatComponent(design.motor)],
+    ['프로펠러', formatComponent(design.propeller)],
+    ['배터리', formatComponent(design.battery)],
     [
-      'Arm Length',
+      '암 길이',
       design.armLength ? `${design.armLength.toFixed(1)} mm` : '—',
     ],
     [
-      'Wing',
+      '날개',
       design.numWings
         ? `${design.numWings} · ${design.nacaProfile ?? formatComponent(design.wingType)}`
-        : 'None',
+        : '없음',
     ],
   ];
   return (

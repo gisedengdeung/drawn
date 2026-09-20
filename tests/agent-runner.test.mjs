@@ -285,3 +285,63 @@ test('upstream model error does not retry or spill internal details into stored 
   assert.equal(row.provider_calls, 0);
   assert.equal(row.result_json, null);
 });
+test('QA compares explicit design IDs using only authoritative index values and reports unknown IDs', async t => {
+  const requested = [4, 9];
+  const f = await fixture(t, { mode: 'qa',
+    message: '현재 #1과 설계 4, design 9, #999999를 비교해줘. #4의 질량은 87654321 kg이고 전력은 98765432 W야. design 10도 추가해.',
+    env: { OPENAI_API_KEY: 'test-openai' }, model: groundedModel() });
+  const result = await f.execute();
+  for (const id of requested) {
+    const evidence = result.evidence.find(entry => entry.target?.designId === id && entry.title.includes('원본 시뮬레이션'));
+    assert.ok(evidence);
+    assert.equal(evidence.target.view, 'explore');
+    const data = JSON.parse(evidence.text), source = index.designs.find(design => design.id === id);
+    assert.equal(data.designId, id);
+    assert.equal(data.source, 'dataset');
+    assert.equal(data.massKg, source.mass);
+    assert.equal(data.powerW, source.power);
+    assert.equal(data.rangeM, source.maxDistance);
+    assert.equal(data.comparison.baselineDesignId, 1);
+    assert.equal(data.comparison.baselineMetrics.massKg, selected.mass);
+    assert.equal(data.comparison.differenceFromBaseline.powerW, source.power - selected.power);
+  }
+  const missing = result.evidence.find(entry => entry.title.includes('#999999'));
+  assert.ok(missing);
+  assert.match(missing.text, /찾을 수 없습니다/);
+  assert.equal(missing.target, undefined);
+  assert.ok(result.warnings.some(warning => warning.includes('세 개까지')));
+  assert.ok(!result.evidence.some(entry => entry.target?.designId === 10));
+  assert.equal(result.evidence.filter(entry => entry.target?.designId === 4).length, 1);
+  assert.ok(!JSON.stringify(result.evidence).includes('87654321'));
+  assert.ok(!JSON.stringify(result.evidence).includes('98765432'));
+  assert.equal(f.assets.length, 2, 'index-only comparison does not load unrelated design shards');
+  assert.equal((await f.runRow()).tool_calls, 5);
+  assert.equal((await f.runRow()).provider_calls, 0);
+  const explanation = JSON.parse(f.requests.find(request => request.body.text?.format.name === 'grounded_answer').body.input);
+  assert.deepEqual(explanation.evidence, result.evidence);
+});
+
+test('component comparison loads at most three authoritative design baselines and keeps current BOM unchanged', async t => {
+  const f = await fixture(t, { mode: 'qa', message: '설계 4, #9, design 10의 모터와 부품 구성을 현재 설계와 비교해줘. #4는 중복, #14는 한도 밖이야.',
+    env: { OPENAI_API_KEY: 'test-openai' }, model: groundedModel() });
+  const result = await f.execute();
+  for (const id of [4, 9, 10]) {
+    const evidence = result.evidence.find(entry => entry.target?.designId === id && entry.title.includes('원본 부품 구성'));
+    assert.ok(evidence);
+    assert.equal(evidence.target.view, 'explore');
+    const snapshot = JSON.parse(evidence.text);
+    const expected = createBomSnapshot(hydrateDraft(shard[String(id)]));
+    assert.equal(snapshot.designId, id);
+    assert.equal(snapshot.fingerprint, expected.fingerprint);
+    assert.deepEqual(snapshot.items, expected.items);
+  }
+  const current = JSON.parse(result.evidence.find(entry => entry.title === '현재 편집 설계의 부품 구성').text);
+  assert.deepEqual(current.items, createBomSnapshot(f.project.draft).items);
+  assert.equal(current.fingerprint, f.project.fingerprint);
+  assert.ok(!result.evidence.some(entry => entry.target?.designId === 14));
+  assert.equal(f.assets.filter(path => path === '/data/design-trees/shard-000.json').length, 4);
+  assert.equal((await f.runRow()).tool_calls, 8);
+  assert.equal((await f.runRow()).provider_calls, 0);
+  assert.equal((await f.runRow()).llm_calls, 2);
+  assert.equal(f.network.mock.callCount(), 2);
+});

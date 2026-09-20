@@ -449,6 +449,106 @@ export async function executeRun(args: {
         text: JSON.stringify(bom),
         target: { view: 'parts', designId: selected.id },
       });
+      const mentionedIds = [
+        ...new Set(
+          Array.from(
+            message.matchAll(
+              /(?:#\s*|설계\s*#?\s*|\bdesign\s*#?\s*)(\d{1,15})(?!\d)/gi,
+            ),
+            (match) => Number(match[1]),
+          ),
+        ),
+      ].filter((id) => Number.isSafeInteger(id) && id !== selected.id);
+      const requestedIds = mentionedIds.slice(0, 3);
+      if (mentionedIds.length > requestedIds.length)
+        warnings.push(
+          '한 질문에서는 현재 설계 외에 먼저 지정한 설계 세 개까지 비교합니다.',
+        );
+      if (requestedIds.length) {
+        const references = await tool(
+          '지정한 설계 번호의 원본 성능을 비교하고 있습니다.',
+          () =>
+            requestedIds.map((id) => ({
+              id,
+              design: index.designs.find((design) => design.id === id),
+            })),
+        );
+        const metrics = (design: typeof selected) => ({
+          massKg: design.mass,
+          rangeM: design.maxDistance,
+          hoverSeconds: design.hoverTime,
+          powerW: design.power,
+          maxSpeedMps: design.maxSpeed,
+          dragAt20N: design.dragAt20,
+        });
+        const currentMetrics = metrics(selected);
+        const needsComponents =
+          /부품|구성|모터|프로펠러|배터리|서보|\b(?:bom|components?|parts?|motors?|propellers?|batter(?:y|ies)|servos?)\b/i.test(
+            message,
+          );
+        for (const { id, design } of references) {
+          if (!design) {
+            add({
+              kind: 'dataset-output',
+              title: '비교 요청 설계 #' + id + ' · 확인 불가',
+              text:
+                '서버 데이터셋에서 설계 #' +
+                id +
+                '를 찾을 수 없습니다. 이 설계의 성능·부품 값은 비교하거나 추정하지 않았습니다.',
+            });
+            continue;
+          }
+          const referenceMetrics = metrics(design);
+          add({
+            kind: 'dataset-output',
+            title: '비교 설계 #' + id + ' · 원본 시뮬레이션',
+            text: JSON.stringify({
+              designId: id,
+              source: 'dataset',
+              topology: design.hub,
+              numPropellers: design.numPropellers,
+              numWings: design.numWings,
+              ...referenceMetrics,
+              comparison: {
+                baselineDesignId: selected.id,
+                basis: 'original-dataset-simulation',
+                baselineMetrics: currentMetrics,
+                differenceFromBaseline: Object.fromEntries(
+                  Object.entries(referenceMetrics).map(([key, value]) => [
+                    key,
+                    value - currentMetrics[key as keyof typeof currentMetrics],
+                  ]),
+                ),
+              },
+            }),
+            target: { view: 'explore', designId: id },
+          });
+          if (needsComponents) {
+            try {
+              const reference = await tool(
+                '비교 설계 #' + id + '의 실제 부품 구성을 확인하고 있습니다.',
+                () => loadContext(env, { ...project.draft, baselineId: id }),
+              );
+              add({
+                kind: 'dataset-output',
+                title: '비교 설계 #' + id + ' · 원본 부품 구성',
+                text: JSON.stringify(createBomSnapshot(reference.baseline)),
+                target: { view: 'explore', designId: id },
+              });
+            } catch (error) {
+              if (error instanceof ApiError && error.code === 'cancelled')
+                throw error;
+              await check();
+              add({
+                kind: 'dataset-output',
+                title: '비교 설계 #' + id + ' · 부품 구성 확인 불가',
+                text: '이 설계의 원본 부품 구성을 불러오지 못했습니다. 성능 비교에는 서버 인덱스의 원본 값만 사용했습니다.',
+                target: { view: 'explore', designId: id },
+              });
+            }
+          }
+        }
+      }
       const info = getParameterInfo(project.draft, message);
       for (const parameter of info)
         add({

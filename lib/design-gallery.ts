@@ -16,7 +16,7 @@ export type GalleryPost = {
 };
 export type GalleryDetail = GalleryPost & { draft: DesignDraft };
 export type WorkspaceSnapshot = { draft: DesignDraft; sourceId: string | null };
-export const workspaceStorageKey = 'aerotwin-workspace-v1';
+export const workspaceStorageKey = 'drawn-workspace-v1';
 
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const text = (value: unknown): value is string => typeof value === 'string' && value.length <= 2000;

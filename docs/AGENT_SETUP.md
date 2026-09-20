@@ -82,18 +82,18 @@ PARTS_OPENAI_MODEL=gpt-5-mini
 
 ## 5. Sites 배포와 D1
 
-개인 계정·프로젝트·revision·대화 실행·견적·한도는 **Cloudflare D1의 `AGENT_DB` binding**을 사용한다. 이 저장소는 `.openai/hosting.json`에 `"d1": "AGENT_DB"`를 선언한다. Sites 배포는 이 선언으로 호스팅 DB를 준비하고, 패키지에 포함된 `drizzle/` migration을 적용한다. `GALLERY_DB`는 기존 공유 갤러리용으로 구분한다.
+개인 계정·프로젝트·revision·대화 실행·견적·한도는 **Cloudflare D1의 `AGENT_DB` binding**을 사용한다. 이 저장소는 `.openai/hosting.json`에 `"d1": "AGENT_DB"`를 선언한다. Sites 배포는 이 선언으로 호스팅 DB를 준비하고, 패키지에 포함된 `drizzle/` migration을 적용한다. `GALLERY_DB`가 있으면 기존 갤러리 저장소를 유지하고, Sites에서는 `AGENT_DB`의 공유 갤러리 테이블을 사용한다.
 
 - Git에 들어가는 값은 binding 이름·migration·환경변수 예시다. 실제 서버 Secret은 배포 환경의 변수/Secret 설정에 별도로 저장한다.
 - 로컬 `.env.local`을 작성해도 Sites 서버 환경변수가 자동으로 설정되는 것은 아니다. 운영 `APP_BASE_URL`은 HTTPS 주소로, 로컬 값은 localhost로 각각 설정한다.
 - 배포 후 `/api/agent/session`의 `configured`·`missing`과 배포 migration 결과를 확인한다. Google 로그인 뒤 사용자별 프로젝트 저장까지 성공해야 연결이 완료된다.
 - 운영 DB에는 로컬 명령의 `--local`을 `--remote`로 바꿔 임의 실행하지 않는다. 운영 migration은 Sites 배포 흐름에서 관리한다.
 
-`drizzle/0000_agent_public_service.sql`은 계정·프로젝트·실행 테이블을, `drizzle/0001_agent_atomic_guards.sql`은 revision·일일 한도·동시 실행 보호를 만든다. 적용 순서와 migration 이력을 유지한다.
+`drizzle/`의 journal에 등록된 migration을 순서대로 적용한다. 현재 계정·프로젝트·실행 테이블, revision·한도 보호, 공유 갤러리 테이블 migration이 포함되어 있다. Sites 배포와 로컬 migration 도구가 적용 이력을 관리하므로 개별 SQL을 수동으로 재실행하지 않는다.
 
 ## 6. Windows PowerShell에서 로컬 테스트
 
-아래 명령은 저장소 루트에서 실행한다. Node.js는 `package.json`의 요구 버전(22.13 이상)을 사용한다.
+아래 명령은 저장소 루트에서 실행한다. Node.js는 `package.json`의 요구 버전(22.15 이상)을 사용한다.
 
 ```powershell
 Set-Location -LiteralPath 'C:\Dev\drawn\drawn'
@@ -115,10 +115,11 @@ APP_BASE_URL=http://localhost:5173
 node -e "const fs=require('node:fs');const p='.env.local';const s=fs.readFileSync(p,'utf8');const r=/^BETTER_AUTH_SECRET=\r?$/m;if(!r.test(s))throw new Error('BETTER_AUTH_SECRET must be empty');fs.writeFileSync(p,s.replace(r,'BETTER_AUTH_SECRET='+require('node:crypto').randomBytes(32).toString('base64url')));"
 ```
 
-빌드 후 생성된 `dist/server/wrangler.json`을 기준으로 로컬 D1을 준비한다. 개발 서버와 Wrangler 모두 같은 `.wrangler/state`를 사용해야 한다. 로컬 DB 초기화 명령은 이 절 아래의 검증된 명령을 따른다.
+빌드 후 생성된 `dist/server/wrangler.json`을 기준으로 로컬 D1을 준비한다. 개발 서버와 Wrangler 모두 같은 `.wrangler/state`를 사용한다. 아래 명령은 현재 저장소의 로컬 D1에서 검증되었으며, 아직 적용하지 않은 migration만 반영한다.
 
 ```powershell
 npm.cmd run build
+npm.cmd run db:migrate:local
 ```
 
 DB 준비가 끝나면 첫 번째 터미널에서 개발 서버를 실행하고 브라우저는 반드시 `http://localhost:5173`로 연다.
@@ -135,7 +136,7 @@ curl.exe -s http://localhost:5173/api/agent/session
 curl.exe -s -i http://localhost:5173/api/projects
 ```
 
-callback은 안내 응답이어야 하고, 설정된 서버의 비로그인 `/api/projects` 요청은 401이어야 한다. 설정 부족이면 503과 미설정 안내를 먼저 해결한다. 실제 가격 조회는 브라우저에서 Google 로그인 → 프로젝트 저장 → **부품 찾기**를 실행한다. 기존 `npm run parts:check`의 비로그인 호출은 인증된 연결 검증을 대신하지 않는다.
+callback은 안내 응답이어야 하고, 설정된 서버의 비로그인 `/api/projects` 요청은 401이어야 한다. 설정 부족이면 503과 미설정 안내를 먼저 해결한다. 실제 가격 조회는 브라우저에서 Google 로그인 → 프로젝트 저장 → **부품 찾기**를 실행한다. 인증 쿠키 없는 터미널 조회만으로 실제 Google 로그인·상품 검색 연결을 검증할 수는 없다.
 
 변경 후 기본 검증:
 

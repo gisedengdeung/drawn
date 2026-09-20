@@ -17,7 +17,7 @@ export function LandingView({
         <div className="mx-auto mb-6 grid size-16 place-items-center rounded-2xl bg-[#147d91] shadow-sm">
           <Hexagon className="size-8 text-white" />
         </div>
-        <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#172b3a]">drawn</h1>
+        <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#172b3a]">Drawn</h1>
         <p className="mt-3 text-sm leading-6 text-[#607383]">
           AircraftVerse 데이터셋에 담긴 27,714개의 실제 드론 설계를 둘러보고, 치수를 직접 조정해보고,
           원하는 조건에 맞는 기체를 찾아보세요. 드론을 잘 몰라도 괜찮아요.

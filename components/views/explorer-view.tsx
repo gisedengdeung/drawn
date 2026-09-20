@@ -12,7 +12,6 @@ import {
   PackageCheck,
   Radar,
   Route,
-  Search,
   ShieldCheck,
   Sparkles,
   Star,
@@ -25,21 +24,20 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import type {
+  AirframeKind,
   DatasetIndex,
   DesignSummary,
   ShowcaseMap,
 } from '@/lib/drawn-types';
-import { formatDistance, formatHub, formatMetric } from '@/lib/drawn-types';
+import {
+  classifyAirframe,
+  formatDistance,
+  formatHub,
+  formatMetric,
+} from '@/lib/drawn-types';
 import {
   CANDIDATE_OBJECTIVES,
   CANDIDATE_PRESETS,
@@ -57,10 +55,19 @@ import {
   SourceBadge,
 } from '@/components/views/shared';
 
-const FAVORITES_STORAGE_KEY = 'aerotwin:favorite-designs';
-const RECENT_STORAGE_KEY = 'aerotwin:recent-designs';
-const ONBOARDING_STORAGE_KEY = 'aerotwin:onboarding-dismissed';
+const FAVORITES_STORAGE_KEY = 'drawn:favorite-designs';
+const RECENT_STORAGE_KEY = 'drawn:recent-designs';
+const ONBOARDING_STORAGE_KEY = 'drawn:onboarding-dismissed';
 const RECENT_LIMIT = 8;
+
+const AIRFRAME_KIND_OPTIONS: { value: 'all' | AirframeKind; label: string }[] = [
+  { value: 'all', label: '전체 형태' },
+  { value: 'quad', label: '쿼드콥터' },
+  { value: 'hexa', label: '헥사콥터' },
+  { value: 'octo', label: '옥토콥터' },
+  { value: 'multi', label: '멀티콥터' },
+  { value: 'wing', label: '고정익·복합익' },
+];
 
 const PRESET_ICONS: Record<string, typeof PackageCheck> = {
   Delivery: PackageCheck,
@@ -108,9 +115,7 @@ export function ExplorerView({
   onOpenGuide: () => void;
 }) {
   const [mode, setMode] = useState<SearchMode>('filter');
-  const [query, setQuery] = useState('');
-  const [propellers, setPropellers] = useState('all');
-  const [wingMode, setWingMode] = useState('all');
+  const [airframeKind, setAirframeKind] = useState<'all' | AirframeKind>('all');
   const [massMax, setMassMax] = useState(15);
   const [feasibleOnly, setFeasibleOnly] = useState(true);
   const [viewerOnly, setViewerOnly] = useState(true);
@@ -163,33 +168,16 @@ export function ExplorerView({
   };
 
   const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().replace(/^#/, '').toLowerCase();
     return dataset.designs
       .filter((design) => {
         if (viewerOnly && !showcases[String(design.id)]) return false;
         if (feasibleOnly && !design.feasible) return false;
         if (design.mass > massMax) return false;
-        if (propellers !== 'all' && design.numPropellers !== Number(propellers)) return false;
-        if (wingMode === 'winged' && design.numWings === 0) return false;
-        if (wingMode === 'wingless' && design.numWings > 0) return false;
-        if (
-          normalizedQuery &&
-          !String(design.id).includes(normalizedQuery) &&
-          !design.hub.toLowerCase().includes(normalizedQuery)
-        ) {
-          return false;
-        }
+        if (airframeKind !== 'all' && classifyAirframe(design).kind !== airframeKind) return false;
         return true;
       })
-      .sort((a, b) => {
-        if (normalizedQuery) {
-          const aExact = String(a.id) === normalizedQuery;
-          const bExact = String(b.id) === normalizedQuery;
-          if (aExact !== bExact) return aExact ? -1 : 1;
-        }
-        return b.maxDistance - a.maxDistance || a.id - b.id;
-      });
-  }, [dataset.designs, feasibleOnly, massMax, propellers, query, showcases, viewerOnly, wingMode]);
+      .sort((a, b) => b.maxDistance - a.maxDistance || a.id - b.id);
+  }, [airframeKind, dataset.designs, feasibleOnly, massMax, showcases, viewerOnly]);
 
   const visibleResults = filtered.slice(0, 60);
   const current = selected ?? visibleResults[0] ?? dataset.designs[0];
@@ -249,13 +237,6 @@ export function ExplorerView({
         eyebrow="1단계 · 기준 설계 선택"
         title="설계 탐색"
         description="27,714개 전체 설계는 파라메트릭 개념 형상으로 편집하고, 대표 12개는 원본 STL까지 함께 확인할 수 있습니다."
-        actions={
-          mode === 'filter' && (
-            <Button onClick={() => setMode('candidate')} className="bg-[#147d91] text-white hover:bg-[#0f6878]">
-              <Sparkles /> 조건으로 후보 찾기 <ArrowUpRight />
-            </Button>
-          )
-        }
       />
 
       {showOnboarding && (
@@ -288,13 +269,13 @@ export function ExplorerView({
                 onClick={() => setMode('filter')}
                 className={`rounded-md px-2 py-2 transition ${mode === 'filter' ? 'bg-white text-[#0f6475] shadow-sm' : 'text-[#607383]'}`}
               >
-                필터로 찾기
+                모델 정하기
               </button>
               <button
                 onClick={() => setMode('candidate')}
                 className={`rounded-md px-2 py-2 transition ${mode === 'candidate' ? 'bg-white text-[#0f6475] shadow-sm' : 'text-[#607383]'}`}
               >
-                조건으로 후보 찾기
+                목적에 따라 모델 추천 받기
               </button>
             </div>
 
@@ -314,38 +295,20 @@ export function ExplorerView({
                     프리뷰 · 27,714
                   </button>
                 </div>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#718391]" />
-                  <Input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="설계 ID 또는 topology 검색"
-                    className="h-10 border-[#ccd8df] bg-white pl-9 text-[#172b3a]"
-                  />
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <Select value={propellers} onValueChange={(value) => setPropellers(String(value))}>
-                    <SelectTrigger className="w-full border-[#ccd8df] bg-white text-xs text-[#304958]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="border-[#ccd8df] bg-white text-[#304958]">
-                      <SelectItem value="all">전체 프로펠러 수</SelectItem>
-                      {[2, 4, 6, 8, 12, 16].map((count) => (
-                        <SelectItem key={count} value={String(count)}>프로펠러 {count}개</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={wingMode} onValueChange={(value) => setWingMode(String(value))}>
-                    <SelectTrigger className="w-full border-[#ccd8df] bg-white text-xs text-[#304958]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="border-[#ccd8df] bg-white text-[#304958]">
-                      <SelectItem value="all">전체 날개 형태</SelectItem>
-                      <SelectItem value="wingless">날개 없음</SelectItem>
-                      <SelectItem value="winged">날개 있음</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-wrap gap-1.5">
+                  {AIRFRAME_KIND_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setAirframeKind(option.value)}
+                      className={`rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition ${
+                        airframeKind === option.value
+                          ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
+                          : 'border-[#dbe4ea] bg-white text-[#607383] hover:bg-[#f4f7f9]'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="mt-4">
@@ -494,7 +457,9 @@ export function ExplorerView({
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="font-mono text-xs font-semibold text-[#233b4a]">Design #{design.id}</p>
+                              <p className="text-xs font-semibold text-[#233b4a]">
+                                {classifyAirframe(design).label} <span className="font-mono font-normal text-[#8796a1]">#{design.id}</span>
+                              </p>
                               <p className="mt-1 truncate text-[11px] text-[#718391]">{formatHub(design.hub)}</p>
                             </div>
                             {showcases[String(design.id)] ? (
@@ -550,9 +515,9 @@ export function ExplorerView({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="flex items-center gap-1.5 font-mono text-xs font-semibold text-[#233b4a]">
+                          <p className="flex items-center gap-1.5 text-xs font-semibold text-[#233b4a]">
                             {index === 0 && <Trophy className="size-3 text-violet-700" />}
-                            순위 {index + 1} · Design #{design.id}
+                            순위 {index + 1} · {classifyAirframe(design).label} <span className="font-mono font-normal text-[#8796a1]">#{design.id}</span>
                           </p>
                           <p className="mt-1 truncate text-[11px] text-[#718391]">{formatHub(design.hub)}</p>
                         </div>
@@ -584,11 +549,13 @@ export function ExplorerView({
           )}
         </aside>
 
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-col">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#dbe4ea] bg-white px-4 py-3 shadow-sm">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-[#172b3a]">Design #{current.id}</h2>
+                <h2 className="text-lg font-semibold text-[#172b3a]">
+                  {classifyAirframe(current).label} <span className="font-mono text-base font-normal text-[#8796a1]">#{current.id}</span>
+                </h2>
                 <button
                   onClick={() => toggleFavorite(current.id)}
                   aria-label={favorites.includes(current.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
@@ -621,7 +588,7 @@ export function ExplorerView({
             </div>
           </div>
 
-          <ModelStage design={currentDetail} emptyDesignId={current.id} className="min-h-[430px] lg:min-h-[470px]" />
+          <ModelStage design={currentDetail} emptyDesignId={current.id} className="min-h-[430px] flex-1 lg:min-h-[470px]" />
           <div className="mt-3"><DataDisclaimer compact /></div>
         </div>
 

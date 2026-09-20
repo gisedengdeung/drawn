@@ -63,7 +63,10 @@ function SelectContent({
   sideOffset = 4,
   align = 'center',
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  // 선택된 항목을 트리거 위치에 맞추려면 위·아래로 목록 전체를 그릴 공간이 필요해,
+  // 항목이 많은 목록(모터 49개·프로펠러 146개 등)에서 팝업이 뷰포트를 넘어갑니다.
+  // 트리거 바로 아래/위에 붙는 일반적인 드롭다운 동작을 기본값으로 둡니다.
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<

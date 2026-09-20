@@ -38,8 +38,13 @@ import type {
   DatasetIndex,
   DesignSummary,
   ShowcaseMap,
-} from '@/lib/aerotwin-types';
-import { formatDistance, formatHub, formatMetric } from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
+import {
+  classifyAirframe,
+  formatDistance,
+  formatHub,
+  formatMetric,
+} from '@/lib/drawn-types';
 import {
   CANDIDATE_OBJECTIVES,
   CANDIDATE_PRESETS,
@@ -57,9 +62,9 @@ import {
   SourceBadge,
 } from '@/components/views/shared';
 
-const FAVORITES_STORAGE_KEY = 'aerotwin:favorite-designs';
-const RECENT_STORAGE_KEY = 'aerotwin:recent-designs';
-const ONBOARDING_STORAGE_KEY = 'aerotwin:onboarding-dismissed';
+const FAVORITES_STORAGE_KEY = 'drawn:favorite-designs';
+const RECENT_STORAGE_KEY = 'drawn:recent-designs';
+const ONBOARDING_STORAGE_KEY = 'drawn:onboarding-dismissed';
 const RECENT_LIMIT = 8;
 
 const PRESET_ICONS: Record<string, typeof PackageCheck> = {
@@ -494,7 +499,9 @@ export function ExplorerView({
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="font-mono text-xs font-semibold text-[#233b4a]">Design #{design.id}</p>
+                              <p className="text-xs font-semibold text-[#233b4a]">
+                                {classifyAirframe(design).label} <span className="font-mono font-normal text-[#8796a1]">#{design.id}</span>
+                              </p>
                               <p className="mt-1 truncate text-[11px] text-[#718391]">{formatHub(design.hub)}</p>
                             </div>
                             {showcases[String(design.id)] ? (
@@ -550,9 +557,9 @@ export function ExplorerView({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="flex items-center gap-1.5 font-mono text-xs font-semibold text-[#233b4a]">
+                          <p className="flex items-center gap-1.5 text-xs font-semibold text-[#233b4a]">
                             {index === 0 && <Trophy className="size-3 text-violet-700" />}
-                            순위 {index + 1} · Design #{design.id}
+                            순위 {index + 1} · {classifyAirframe(design).label} <span className="font-mono font-normal text-[#8796a1]">#{design.id}</span>
                           </p>
                           <p className="mt-1 truncate text-[11px] text-[#718391]">{formatHub(design.hub)}</p>
                         </div>
@@ -588,7 +595,9 @@ export function ExplorerView({
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#dbe4ea] bg-white px-4 py-3 shadow-sm">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-[#172b3a]">Design #{current.id}</h2>
+                <h2 className="text-lg font-semibold text-[#172b3a]">
+                  {classifyAirframe(current).label} <span className="font-mono text-base font-normal text-[#8796a1]">#{current.id}</span>
+                </h2>
                 <button
                   onClick={() => toggleFavorite(current.id)}
                   aria-label={favorites.includes(current.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}

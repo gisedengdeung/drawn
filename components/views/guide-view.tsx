@@ -105,7 +105,7 @@ export function GuideView({ onBack }: { onBack: () => void }) {
       <SectionHeading
         eyebrow="이용 가이드"
         title="드론을 몰라도 괜찮아요, 기초부터 짚고 갑니다"
-        description="AeroTwin은 AircraftVerse 데이터셋의 27,714개 드론 설계를 다루는 도구예요. 버튼 누르는 법보다, 화면에 나오는 수치와 형태가 실제로 뭘 뜻하는지부터 정리했습니다 — 전부 우리 데이터로 직접 확인한 내용이에요."
+        description="Drawn은 AircraftVerse 데이터셋의 27,714개 드론 설계를 다루는 도구예요. 버튼 누르는 법보다, 화면에 나오는 수치와 형태가 실제로 뭘 뜻하는지부터 정리했습니다 — 전부 우리 데이터로 직접 확인한 내용이에요."
         actions={
           <Button onClick={onBack} variant="outline" className="border-[#ccd8df] bg-white text-[#3c5362] hover:bg-[#f4f7f9]">
             <ArrowLeft /> 설계 선택으로 돌아가기
@@ -194,7 +194,7 @@ export function GuideView({ onBack }: { onBack: () => void }) {
         </div>
         <p className="mt-3 text-[11px] leading-5 text-[#8a99a4]">
           헥사콥터가 실제로 “잘 나는” 설계가 나올 확률이 가장 높고, 쿼드콥터는 가장 가볍고 효율적이라 전체에서
-          진짜 최적이라 부를 수 있는 설계의 66%를 차지해요. 이 패턴은 AeroTwin이 쓰는 AircraftVerse
+          진짜 최적이라 부를 수 있는 설계의 66%를 차지해요. 이 패턴은 Drawn이 쓰는 AircraftVerse
           데이터셋 안에서 나온 결과이고, 드론 공학의 절대 법칙은 아니에요.
         </p>
 

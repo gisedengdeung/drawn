@@ -41,8 +41,8 @@ import type {
   ParameterGroup,
   ShowcaseDesign,
   WingParameters,
-} from '@/lib/aerotwin-types';
-import { formatComponent, formatMetric, isAvailableMetric, percentChange } from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
+import { formatComponent, formatMetric, isAvailableMetric, percentChange } from '@/lib/drawn-types';
 import { DataDisclaimer, DesignSelector, SectionHeading, SourceBadge } from '@/components/views/shared';
 
 type DraftEstimate = {

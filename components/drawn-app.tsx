@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   HelpCircle,
   Hexagon,
+  Home,
   MapPin,
   Share2,
 } from 'lucide-react';
@@ -44,7 +45,7 @@ import type {
   DesignSummary,
   ShowcaseMap,
   WorkspaceView,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 
 const navItems = [
   { id: 'explore' as const, step: 1, label: '설계 선택', short: '탐색', icon: Boxes },
@@ -53,7 +54,7 @@ const navItems = [
   { id: 'gallery' as const, step: 4, label: '공유 갤러리', short: '공유', icon: Share2 },
 ];
 
-export function AeroTwinApp() {
+export function DrawnApp() {
   const [view, setView] = useState<WorkspaceView>('home');
   const [dataset, setDataset] = useState<DatasetIndex | null>(null);
   const [showcases, setShowcases] = useState<ShowcaseMap>({});
@@ -207,7 +208,7 @@ export function AeroTwinApp() {
               </div>
               <div>
                 <p className="text-sm font-semibold tracking-[-0.02em] text-[#172b3a]">
-                  AeroTwin
+                  Drawn
                 </p>
                 <p className="hidden text-[10px] font-medium tracking-[0.08em] text-[#6b7d8b] sm:block">
                   UAV 설계 워크벤치
@@ -224,6 +225,17 @@ export function AeroTwinApp() {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setView('home')}
+                aria-current={view === 'home' ? 'page' : undefined}
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${
+                  view === 'home'
+                    ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
+                    : 'border-[#dbe4ea] bg-white text-[#607383] hover:bg-[#f4f7f9]'
+                }`}
+              >
+                <Home className="size-3.5" /> <span className="hidden sm:inline">시작 페이지</span>
+              </button>
               <button
                 onClick={() => setView('guide')}
                 aria-current={view === 'guide' ? 'page' : undefined}

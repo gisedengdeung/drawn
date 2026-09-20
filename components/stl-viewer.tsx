@@ -8,7 +8,7 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 
 import { Button } from '@/components/ui/button';
 
-const AUTO_ROTATE_STORAGE_KEY = 'aerotwin-stl-auto-rotate';
+const AUTO_ROTATE_STORAGE_KEY = 'drawn-stl-auto-rotate';
 
 type StlViewerProps = {
   src: string;

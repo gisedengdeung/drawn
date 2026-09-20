@@ -240,21 +240,21 @@ export function ExplorerView({
       />
 
       {showOnboarding && (
-        <div className="workspace-panel relative mb-4 flex items-center gap-3 overflow-hidden rounded-xl border border-[#b9dce3] bg-[#eef8fa] px-4 py-3">
-          <Info className="size-4 shrink-0 text-[#0f6475]" />
-          <p className="flex-1 text-xs text-[#3d6873]">
+        <div className="workspace-panel relative mb-4 flex items-center gap-3 overflow-hidden rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3">
+          <Info className="size-4 shrink-0 text-[#1b64da]" />
+          <p className="flex-1 text-xs text-[#3c3c43]">
             드론을 잘 몰라도 괜찮아요. 화면 용어와 사용 흐름을 3분 안에 정리해드려요.
           </p>
           <button
             onClick={onOpenGuide}
-            className="shrink-0 rounded-lg bg-[#147d91] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0f6878]"
+            className="shrink-0 rounded-lg bg-[#3182f6] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1b64da]"
           >
             처음이신가요? 가이드 보기 →
           </button>
           <button
             onClick={dismissOnboarding}
             aria-label="안내 닫기"
-            className="shrink-0 rounded p-1 text-[#5f8a94] hover:bg-white/60 hover:text-[#0f6475]"
+            className="shrink-0 rounded p-1 text-[#6b8cae] hover:bg-white/60 hover:text-[#1b64da]"
           >
             <X className="size-4" />
           </button>
@@ -263,17 +263,17 @@ export function ExplorerView({
 
       <div className="grid gap-4 lg:grid-cols-[290px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(500px,1fr)_300px]">
         <aside className="workspace-panel overflow-hidden rounded-xl">
-          <div className="border-b border-[#dbe4ea] p-3.5">
-            <div className="mb-3 grid grid-cols-2 rounded-lg bg-[#eef2f5] p-1 text-[11px] font-medium">
+          <div className="border-b border-[#e5e5ea] p-3.5">
+            <div className="mb-3 grid grid-cols-2 rounded-lg bg-[#f5f5f7] p-1 text-[11px] font-medium">
               <button
                 onClick={() => setMode('filter')}
-                className={`rounded-md px-2 py-2 transition ${mode === 'filter' ? 'bg-white text-[#0f6475] shadow-sm' : 'text-[#607383]'}`}
+                className={`rounded-md px-2 py-2 transition ${mode === 'filter' ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73]'}`}
               >
                 모델 정하기
               </button>
               <button
                 onClick={() => setMode('candidate')}
-                className={`rounded-md px-2 py-2 transition ${mode === 'candidate' ? 'bg-white text-[#0f6475] shadow-sm' : 'text-[#607383]'}`}
+                className={`rounded-md px-2 py-2 transition ${mode === 'candidate' ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73]'}`}
               >
                 목적에 따라 모델 추천 받기
               </button>
@@ -281,16 +281,16 @@ export function ExplorerView({
 
             {mode === 'filter' ? (
               <>
-                <div className="mb-3 grid grid-cols-2 rounded-lg bg-[#eef2f5] p-1 text-[11px] font-medium">
+                <div className="mb-3 grid grid-cols-2 rounded-lg bg-[#f5f5f7] p-1 text-[11px] font-medium">
                   <button
                     onClick={() => setViewerOnly(true)}
-                    className={`rounded-md px-2 py-2 transition ${viewerOnly ? 'bg-white text-[#0f6475] shadow-sm' : 'text-[#607383]'}`}
+                    className={`rounded-md px-2 py-2 transition ${viewerOnly ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73]'}`}
                   >
                     원본 STL · 12
                   </button>
                   <button
                     onClick={() => setViewerOnly(false)}
-                    className={`rounded-md px-2 py-2 transition ${!viewerOnly ? 'bg-white text-[#0f6475] shadow-sm' : 'text-[#607383]'}`}
+                    className={`rounded-md px-2 py-2 transition ${!viewerOnly ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73]'}`}
                   >
                     프리뷰 · 27,714
                   </button>
@@ -302,8 +302,8 @@ export function ExplorerView({
                       onClick={() => setAirframeKind(option.value)}
                       className={`rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition ${
                         airframeKind === option.value
-                          ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
-                          : 'border-[#dbe4ea] bg-white text-[#607383] hover:bg-[#f4f7f9]'
+                          ? 'border-[#93c5fd] bg-[#eff6ff] text-[#1b64da]'
+                          : 'border-[#e5e5ea] bg-white text-[#6e6e73] hover:bg-[#f5f5f7]'
                       }`}
                     >
                       {option.label}
@@ -312,8 +312,8 @@ export function ExplorerView({
                 </div>
 
                 <div className="mt-4">
-                  <div className="mb-2 flex justify-between text-xs text-[#607383]">
-                    <span>최대 질량</span><span className="font-mono font-medium text-[#294353]">≤ {massMax} kg</span>
+                  <div className="mb-2 flex justify-between text-xs text-[#6e6e73]">
+                    <span>최대 질량</span><span className="font-mono font-medium text-[#3c3c43]">≤ {massMax} kg</span>
                   </div>
                   <Slider
                     value={[massMax]}
@@ -321,13 +321,13 @@ export function ExplorerView({
                     max={30}
                     step={1}
                     onValueChange={(value) => setMassMax(Number(Array.isArray(value) ? value[0] : value))}
-                    className="[&_[data-slot=slider-range]]:bg-[#147d91]"
+                    className="[&_[data-slot=slider-range]]:bg-[#3182f6]"
                     aria-label="최대 질량"
                   />
                 </div>
 
-                <div className="mt-4 rounded-lg border border-[#dbe4ea] bg-[#f7f9fb] p-3">
-                  <div className="flex items-center justify-between gap-3 text-xs text-[#526675]">
+                <div className="mt-4 rounded-lg bg-[#f5f5f7] p-3">
+                  <div className="flex items-center justify-between gap-3 text-xs text-[#6e6e73]">
                     비행거리 계산 가능한 설계도
                     <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="비행거리 계산 가능한 설계도" />
                   </div>
@@ -339,12 +339,12 @@ export function ExplorerView({
                   <SourceBadge source="DATASET RANKING" />
                   <Badge variant="outline" className="border-[#d8cfee] bg-violet-50 text-[10px] text-violet-700">학습 AI 아닌 데이터셋 랭킹</Badge>
                 </div>
-                <p className="mb-3 text-sm font-medium text-[#294353]">임무 Preset</p>
+                <p className="mb-3 text-sm font-medium text-[#3c3c43]">임무 Preset</p>
                 <div className="grid grid-cols-2 gap-2">
                   {CANDIDATE_PRESETS.map(({ name }) => {
                     const Icon = PRESET_ICONS[name];
                     return (
-                      <button key={name} onClick={() => applyPreset(name)} className={`rounded-lg border p-2.5 text-left transition ${preset === name ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]' : 'border-[#dbe4ea] bg-white text-[#607383] hover:bg-[#f4f7f9]'}`}>
+                      <button key={name} onClick={() => applyPreset(name)} className={`rounded-lg border p-2.5 text-left transition ${preset === name ? 'border-[#93c5fd] bg-[#eff6ff] text-[#1b64da]' : 'border-[#e5e5ea] bg-white text-[#6e6e73] hover:bg-[#f5f5f7]'}`}>
                         <Icon className="mb-1.5 size-4" />
                         <span className="text-[11px] font-medium">{name}</span>
                       </button>
@@ -352,33 +352,33 @@ export function ExplorerView({
                   })}
                 </div>
 
-                <p className="mb-2 mt-4 text-sm font-medium text-[#294353]">탐색 목표</p>
+                <p className="mb-2 mt-4 text-sm font-medium text-[#3c3c43]">탐색 목표</p>
                 <div className="grid grid-cols-2 gap-2">
                   {CANDIDATE_OBJECTIVES.map((item) => (
-                    <button key={item.id} onClick={() => { cancelPendingRun(); setObjective(item.id); }} className={`rounded-lg border p-2.5 text-left transition ${objective === item.id ? 'border-violet-300 bg-violet-50' : 'border-[#dbe4ea] bg-white hover:bg-[#f4f7f9]'}`}>
-                      <p className={`text-[11px] font-medium ${objective === item.id ? 'text-violet-900' : 'text-[#526675]'}`}>{item.label}</p>
-                      <p className="mt-0.5 text-[10px] text-[#718391]">{item.detail}</p>
+                    <button key={item.id} onClick={() => { cancelPendingRun(); setObjective(item.id); }} className={`rounded-lg border p-2.5 text-left transition ${objective === item.id ? 'border-violet-300 bg-violet-50' : 'border-[#e5e5ea] bg-white hover:bg-[#f5f5f7]'}`}>
+                      <p className={`text-[11px] font-medium ${objective === item.id ? 'text-violet-900' : 'text-[#6e6e73]'}`}>{item.label}</p>
+                      <p className="mt-0.5 text-[10px] text-[#6e6e73]">{item.detail}</p>
                     </button>
                   ))}
                 </div>
 
-                <p className="mb-2 mt-4 text-xs font-medium text-[#294353]">제약조건</p>
+                <p className="mb-2 mt-4 text-xs font-medium text-[#3c3c43]">제약조건</p>
                 <div className="mb-2 grid grid-cols-2 gap-2">
                   <div>
-                    <span className="mb-1 block text-[10px] text-[#718391]">최대 질량 kg</span>
-                    <Input aria-label="최대 질량" type="number" min={2} max={100} value={candidateMassLimit} onChange={(event) => { cancelPendingRun(); setCandidateMassLimit(Number(event.target.value)); }} className="h-9 border-[#ccd8df] bg-white font-mono text-xs text-[#172b3a]" />
+                    <span className="mb-1 block text-[10px] text-[#6e6e73]">최대 질량 kg</span>
+                    <Input aria-label="최대 질량" type="number" min={2} max={100} value={candidateMassLimit} onChange={(event) => { cancelPendingRun(); setCandidateMassLimit(Number(event.target.value)); }} className="h-9 border-[#e5e5ea] bg-white font-mono text-xs text-[#1d1d1f]" />
                   </div>
                   <div>
-                    <span className="mb-1 block text-[10px] text-[#718391]">최대 전력 W</span>
-                    <Input aria-label="최대 소비전력" type="number" min={200} max={10000} step={100} value={candidatePowerLimit} onChange={(event) => { cancelPendingRun(); setCandidatePowerLimit(Number(event.target.value)); }} className="h-9 border-[#ccd8df] bg-white font-mono text-xs text-[#172b3a]" />
+                    <span className="mb-1 block text-[10px] text-[#6e6e73]">최대 전력 W</span>
+                    <Input aria-label="최대 소비전력" type="number" min={200} max={10000} step={100} value={candidatePowerLimit} onChange={(event) => { cancelPendingRun(); setCandidatePowerLimit(Number(event.target.value)); }} className="h-9 border-[#e5e5ea] bg-white font-mono text-xs text-[#1d1d1f]" />
                   </div>
                 </div>
 
-                <div className="mt-2 flex items-center justify-between rounded-lg border border-[#dbe4ea] bg-[#f4f7f9] px-3 py-2 text-xs">
-                  <span className="text-[#607383]">조건 통과 후보</span>
-                  <span className="font-mono font-semibold text-[#0f6475]">{candidatePool.length.toLocaleString()}개</span>
+                <div className="mt-2 flex items-center justify-between rounded-lg bg-[#f5f5f7] px-3 py-2 text-xs">
+                  <span className="text-[#6e6e73]">조건 통과 후보</span>
+                  <span className="font-mono font-semibold text-[#1b64da]">{candidatePool.length.toLocaleString()}개</span>
                 </div>
-                <Button disabled={running || candidatePool.length === 0} onClick={runCandidateSearch} className="mt-3 h-10 w-full bg-[#147d91] text-white hover:bg-[#0f6878]">
+                <Button disabled={running || candidatePool.length === 0} onClick={runCandidateSearch} className="mt-3 h-10 w-full bg-[#3182f6] text-white hover:bg-[#1b64da]">
                   <Sparkles /> {running ? '후보 순위 계산 중…' : '상위 후보 계산'}
                 </Button>
                 {running && <Progress value={82} className="mt-2 [&_[data-slot=progress-indicator]]:bg-violet-400" />}
@@ -387,10 +387,10 @@ export function ExplorerView({
           </div>
 
           {mode === 'filter' && (favorites.length > 0 || recent.length > 0) && (
-            <div className="space-y-3 border-b border-[#dbe4ea] p-3.5">
+            <div className="space-y-3 border-b border-[#e5e5ea] p-3.5">
               {favorites.length > 0 && (
                 <div>
-                  <p className="mb-1.5 flex items-center gap-1 text-[10px] font-medium text-[#607383]">
+                  <p className="mb-1.5 flex items-center gap-1 text-[10px] font-medium text-[#6e6e73]">
                     <Star className="size-3 fill-amber-400 text-amber-500" /> 즐겨찾기 · {favorites.length}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -400,8 +400,8 @@ export function ExplorerView({
                         onClick={() => onSelect(id)}
                         className={`rounded-full border px-2 py-1 font-mono text-[10px] transition ${
                           current.id === id
-                            ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
-                            : 'border-[#dbe4ea] bg-white text-[#526675] hover:bg-[#f4f7f9]'
+                            ? 'border-[#93c5fd] bg-[#eff6ff] text-[#1b64da]'
+                            : 'border-[#e5e5ea] bg-white text-[#6e6e73] hover:bg-[#f5f5f7]'
                         }`}
                       >
                         #{id}
@@ -412,7 +412,7 @@ export function ExplorerView({
               )}
               {recent.length > 0 && (
                 <div>
-                  <p className="mb-1.5 flex items-center gap-1 text-[10px] font-medium text-[#607383]">
+                  <p className="mb-1.5 flex items-center gap-1 text-[10px] font-medium text-[#6e6e73]">
                     <History className="size-3" /> 최근 본 설계
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -422,8 +422,8 @@ export function ExplorerView({
                         onClick={() => onSelect(id)}
                         className={`rounded-full border px-2 py-1 font-mono text-[10px] transition ${
                           current.id === id
-                            ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
-                            : 'border-[#dbe4ea] bg-white text-[#526675] hover:bg-[#f4f7f9]'
+                            ? 'border-[#93c5fd] bg-[#eff6ff] text-[#1b64da]'
+                            : 'border-[#e5e5ea] bg-white text-[#6e6e73] hover:bg-[#f5f5f7]'
                         }`}
                       >
                         #{id}
@@ -437,48 +437,44 @@ export function ExplorerView({
 
           {mode === 'filter' ? (
             <>
-              <div className="flex items-center justify-between border-b border-[#dbe4ea] px-3.5 py-2.5 text-xs">
-                <span className="text-[#607383]">검색 결과 <small className="ml-1 text-[10px]">(최대 60개 표시)</small></span>
-                <span className="font-mono font-medium text-[#294353]">{filtered.length.toLocaleString()}</span>
+              <div className="flex items-center justify-between border-b border-[#e5e5ea] px-3.5 py-2.5 text-xs">
+                <span className="text-[#6e6e73]">검색 결과 <small className="ml-1 text-[10px]">(최대 60개 표시)</small></span>
+                <span className="font-mono font-medium text-[#3c3c43]">{filtered.length.toLocaleString()}</span>
               </div>
-              <div className="max-h-[430px] overflow-y-auto p-2">
+              <div className="max-h-[430px] divide-y divide-[#e5e5ea] overflow-y-auto">
                 {visibleResults.length ? (
                   visibleResults.map((design) => {
                     const isFavorite = favorites.includes(design.id);
                     return (
-                      <div key={design.id} className="relative mb-2 last:mb-0">
+                      <div key={design.id} className={`relative ${current.id === design.id ? 'bg-[#eff6ff]' : 'hover:bg-[#f5f5f7]'}`}>
                         <button
                           onClick={() => onSelect(design.id)}
-                          className={`w-full rounded-xl border p-3 pr-9 text-left transition ${
-                            current.id === design.id
-                              ? 'border-[#9ccdd6] bg-[#eef8fa] shadow-sm'
-                              : 'border-[#cfdbe2] bg-white hover:border-[#9ccdd6] hover:bg-[#f7f9fb]'
-                          }`}
+                          className="w-full px-3.5 py-3 pr-9 text-left transition"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-xs font-semibold text-[#233b4a]">
-                                {classifyAirframe(design).label} <span className="font-mono font-normal text-[#8796a1]">#{design.id}</span>
+                              <p className="text-xs font-semibold text-[#3c3c43]">
+                                {classifyAirframe(design).label} <span className="font-mono font-normal text-[#6e6e73]">#{design.id}</span>
                               </p>
-                              <p className="mt-1 truncate text-[11px] text-[#718391]">{formatHub(design.hub)}</p>
+                              <p className="mt-1 truncate text-[11px] text-[#6e6e73]">{formatHub(design.hub)}</p>
                             </div>
                             {showcases[String(design.id)] ? (
-                              <Badge className="shrink-0 bg-[#e5f5f7] text-[9px] text-[#0f6475]">STL + 편집</Badge>
+                              <Badge className="shrink-0 bg-[#eff6ff] text-[9px] text-[#1b64da]">STL + 편집</Badge>
                             ) : (
-                              <Badge variant="outline" className="shrink-0 border-[#dbe4ea] text-[9px] text-[#0f6475]">프리뷰 편집</Badge>
+                              <Badge variant="outline" className="shrink-0 border-[#e5e5ea] text-[9px] text-[#1b64da]">프리뷰 편집</Badge>
                             )}
                           </div>
                           <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[10px]">
-                            <span className="font-medium text-[#0f6475]">{design.maxDistance ? `${(design.maxDistance / 1000).toFixed(1)}km` : '—'}</span>
-                            <span className="text-[#607383]">{design.mass.toFixed(1)}kg</span>
-                            <span className="text-[#607383]">{design.numPropellers}P/{design.numWings}W</span>
+                            <span className="font-medium text-[#1b64da]">{design.maxDistance ? `${(design.maxDistance / 1000).toFixed(1)}km` : '—'}</span>
+                            <span className="text-[#6e6e73]">{design.mass.toFixed(1)}kg</span>
+                            <span className="text-[#6e6e73]">{design.numPropellers}P/{design.numWings}W</span>
                           </div>
                         </button>
                         <button
                           onClick={() => toggleFavorite(design.id)}
                           aria-label={isFavorite ? `Design #${design.id} 즐겨찾기 해제` : `Design #${design.id} 즐겨찾기 추가`}
                           aria-pressed={isFavorite}
-                          className="absolute right-2 top-2 rounded p-0.5 text-[#b7c3cb] hover:bg-[#e9eff3] hover:text-amber-500"
+                          className="absolute right-2.5 top-3 rounded p-0.5 text-[#86868b] hover:bg-[#e5e5ea] hover:text-amber-500"
                         >
                           <Star className={`size-3.5 ${isFavorite ? 'fill-amber-400 text-amber-500' : ''}`} />
                         </button>
@@ -486,17 +482,17 @@ export function ExplorerView({
                     );
                   })
                 ) : (
-                  <div className="p-8 text-center text-xs leading-5 text-[#607383]">조건에 맞는 설계가 없습니다. 질량 조건을 완화하거나 전체 DB를 확인하세요.</div>
+                  <div className="p-8 text-center text-xs leading-5 text-[#6e6e73]">조건에 맞는 설계가 없습니다. 질량 조건을 완화하거나 전체 DB를 확인하세요.</div>
                 )}
               </div>
             </>
           ) : (
             <>
-              <div className="flex items-center justify-between border-b border-[#dbe4ea] px-3.5 py-2.5 text-xs">
-                <span className="text-[#607383]">{running ? '순위 계산 중' : results.length ? '순위 후보' : '아직 계산 전'}</span>
-                {results.length > 0 && <span className="font-mono font-medium text-[#294353]">{results.length}개</span>}
+              <div className="flex items-center justify-between border-b border-[#e5e5ea] px-3.5 py-2.5 text-xs">
+                <span className="text-[#6e6e73]">{running ? '순위 계산 중' : results.length ? '순위 후보' : '아직 계산 전'}</span>
+                {results.length > 0 && <span className="font-mono font-medium text-[#3c3c43]">{results.length}개</span>}
               </div>
-              <div className="max-h-[430px] overflow-y-auto p-2">
+              <div className="max-h-[430px] divide-y divide-[#e5e5ea] overflow-y-auto">
                 {running ? (
                   <div className="grid min-h-40 place-items-center p-8 text-center">
                     <div><Sparkles className="mx-auto mb-3 size-6 animate-pulse text-violet-700" /><p className="text-xs text-violet-700">제약 필터 → 목적 점수 → 상위 후보</p></div>
@@ -507,35 +503,35 @@ export function ExplorerView({
                       key={design.id}
                       onClick={() => onSelect(design.id)}
                       aria-label={`순위 ${index + 1} Design #${design.id} 선택`}
-                      className={`mb-1 w-full rounded-xl border p-3 text-left transition ${
+                      className={`w-full px-3.5 py-3 text-left transition ${
                         current.id === design.id
-                          ? 'border-[#9ccdd6] bg-[#eef8fa] shadow-sm'
-                          : 'border-transparent hover:border-[#dbe4ea] hover:bg-[#f7f9fb]'
+                          ? 'bg-[#eff6ff]'
+                          : 'hover:bg-[#f5f5f7]'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="flex items-center gap-1.5 text-xs font-semibold text-[#233b4a]">
+                          <p className="flex items-center gap-1.5 text-xs font-semibold text-[#3c3c43]">
                             {index === 0 && <Trophy className="size-3 text-violet-700" />}
-                            순위 {index + 1} · {classifyAirframe(design).label} <span className="font-mono font-normal text-[#8796a1]">#{design.id}</span>
+                            순위 {index + 1} · {classifyAirframe(design).label} <span className="font-mono font-normal text-[#6e6e73]">#{design.id}</span>
                           </p>
-                          <p className="mt-1 truncate text-[11px] text-[#718391]">{formatHub(design.hub)}</p>
+                          <p className="mt-1 truncate text-[11px] text-[#6e6e73]">{formatHub(design.hub)}</p>
                         </div>
                         <span className="shrink-0 font-mono text-[10px] font-semibold text-violet-700">{design.score.toFixed(3)}</span>
                       </div>
                       <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[10px]">
-                        <span className="font-medium text-[#0f6475]">{design.maxDistance ? `${(design.maxDistance / 1000).toFixed(1)}km` : '—'}</span>
-                        <span className="text-[#607383]">{design.mass.toFixed(1)}kg</span>
-                        <span className="text-[#607383]">{formatMetric(design.power, 0)}W</span>
+                        <span className="font-medium text-[#1b64da]">{design.maxDistance ? `${(design.maxDistance / 1000).toFixed(1)}km` : '—'}</span>
+                        <span className="text-[#6e6e73]">{design.mass.toFixed(1)}kg</span>
+                        <span className="text-[#6e6e73]">{formatMetric(design.power, 0)}W</span>
                       </div>
                     </button>
                   ))
                 ) : (
-                  <div className="p-8 text-center text-xs leading-5 text-[#607383]">목표와 제약조건을 검토한 뒤 &lsquo;상위 후보 계산&rsquo;을 눌러보세요.</div>
+                  <div className="p-8 text-center text-xs leading-5 text-[#6e6e73]">목표와 제약조건을 검토한 뒤 &lsquo;상위 후보 계산&rsquo;을 눌러보세요.</div>
                 )}
               </div>
               {results.length > 0 && searchBaselineId != null && searchBaselineId !== current.id && (
-                <div className="border-t border-[#dbe4ea] p-3">
+                <div className="border-t border-[#e5e5ea] p-3">
                   <Button
                     onClick={() => onOpenCompare(current.id, searchBaselineId)}
                     variant="outline"
@@ -550,17 +546,17 @@ export function ExplorerView({
         </aside>
 
         <div className="flex min-w-0 flex-col">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#dbe4ea] bg-white px-4 py-3 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e5e5ea] bg-white px-4 py-3 shadow-sm">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-[#172b3a]">
-                  {classifyAirframe(current).label} <span className="font-mono text-base font-normal text-[#8796a1]">#{current.id}</span>
+                <h2 className="text-lg font-semibold text-[#1d1d1f]">
+                  {classifyAirframe(current).label} <span className="font-mono text-base font-normal text-[#6e6e73]">#{current.id}</span>
                 </h2>
                 <button
                   onClick={() => toggleFavorite(current.id)}
                   aria-label={favorites.includes(current.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
                   aria-pressed={favorites.includes(current.id)}
-                  className="rounded p-1 text-[#b7c3cb] hover:bg-[#f4f7f9] hover:text-amber-500"
+                  className="rounded p-1 text-[#86868b] hover:bg-[#f5f5f7] hover:text-amber-500"
                 >
                   <Star className={`size-4 ${favorites.includes(current.id) ? 'fill-amber-400 text-amber-500' : ''}`} />
                 </button>
@@ -571,18 +567,18 @@ export function ExplorerView({
                   <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">성능 해석 불가</Badge>
                 )}
               </div>
-              <p className="mt-1 text-xs text-[#607383]">{formatHub(current.hub)} · 프로펠러 {current.numPropellers}개 · 날개 {current.numWings}개</p>
+              <p className="mt-1 text-xs text-[#6e6e73]">{formatHub(current.hub)} · 프로펠러 {current.numPropellers}개 · 날개 {current.numWings}개</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button onClick={() => onOpenCompare(current.id)} variant="outline" className="border-[#ccd8df] bg-white text-[#3c5362] hover:bg-[#f4f7f9]">
+              <Button onClick={() => onOpenCompare(current.id)} variant="outline" className="border-[#e5e5ea] bg-white text-[#3c3c43] hover:bg-[#f5f5f7]">
                 <GitCompareArrows /> 비교
               </Button>
               {currentDetail && (
-                <Button onClick={() => onOpenSimulator(current.id)} variant="outline" className="border-[#ccd8df] bg-white text-[#3c5362] hover:bg-[#f4f7f9]">
+                <Button onClick={() => onOpenSimulator(current.id)} variant="outline" className="border-[#e5e5ea] bg-white text-[#3c3c43] hover:bg-[#f5f5f7]">
                   성능 확인
                 </Button>
               )}
-              <Button onClick={() => onOpenLab(current.id)} className="bg-[#147d91] text-white hover:bg-[#0f6878]">
+              <Button onClick={() => onOpenLab(current.id)} className="bg-[#3182f6] text-white hover:bg-[#1b64da]">
                 파라미터 편집 <ArrowUpRight />
               </Button>
             </div>
@@ -595,20 +591,20 @@ export function ExplorerView({
         <aside className="grid gap-3 lg:col-span-2 lg:grid-cols-[minmax(220px,1.35fr)_repeat(4,minmax(140px,1fr))] 2xl:col-span-1 2xl:grid-cols-1">
           <div className="workspace-panel rounded-xl p-4">
             <div className="mb-1 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-[#294353]">설계 구성</h3>
+              <h3 className="text-sm font-medium text-[#3c3c43]">설계 구성</h3>
               <SourceBadge />
             </div>
             {currentDetail ? (
               <ConfigurationList design={currentDetail} />
             ) : (
-              <div className="divide-y divide-[#e5ebef]">
+              <div className="divide-y divide-[#e5e5ea]">
                 {[
                   ['허브', formatHub(current.hub)],
                   ['프로펠러', String(current.numPropellers)],
                   ['날개', String(current.numWings)],
                   ['암 길이', current.armLength ? `${current.armLength.toFixed(1)} mm` : '—'],
                 ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between gap-3 py-3 text-xs"><span className="text-[#718391]">{label}</span><span className="text-[#294353]">{value}</span></div>
+                  <div key={label} className="flex justify-between gap-3 py-3 text-xs"><span className="text-[#6e6e73]">{label}</span><span className="text-[#3c3c43]">{value}</span></div>
                 ))}
               </div>
             )}

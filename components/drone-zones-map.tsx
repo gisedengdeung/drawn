@@ -8,7 +8,7 @@ import type { DroneZone } from '@/lib/drone-zones';
 import type { LatLng } from '@/hooks/use-geolocation';
 
 const KOREA_CENTER: L.LatLngTuple = [36.4, 127.9];
-const ZONE_COLOR = '#147d91';
+const ZONE_COLOR = '#3182f6';
 const NEAREST_COLOR = '#6750a4';
 
 type DroneZonesMapProps = {

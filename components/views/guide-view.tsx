@@ -24,10 +24,10 @@ import { SectionHeading } from '@/components/views/shared';
 
 function MediaPlaceholder({ label, className = '' }: { label: string; className?: string }) {
   return (
-    <div className={`flex aspect-video items-center justify-center rounded-lg border border-dashed border-[#c7d3d9] bg-[#f4f7f9] text-center ${className}`}>
+    <div className={`flex aspect-video items-center justify-center rounded-lg border border-dashed border-[#e5e5ea] bg-[#f5f5f7] text-center ${className}`}>
       <div>
-        <ImageIcon className="mx-auto size-5 text-[#a7b6bd]" />
-        <p className="mt-1.5 max-w-40 text-[10px] leading-4 text-[#8a99a4]">{label}</p>
+        <ImageIcon className="mx-auto size-5 text-[#86868b]" />
+        <p className="mt-1.5 max-w-40 text-[10px] leading-4 text-[#86868b]">{label}</p>
       </div>
     </div>
   );
@@ -107,17 +107,17 @@ export function GuideView({ onBack }: { onBack: () => void }) {
         title="드론을 몰라도 괜찮아요, 기초부터 짚고 갑니다"
         description="Drawn은 AircraftVerse 데이터셋의 27,714개 드론 설계를 다루는 도구예요. 버튼 누르는 법보다, 화면에 나오는 수치와 형태가 실제로 뭘 뜻하는지부터 정리했습니다 — 전부 우리 데이터로 직접 확인한 내용이에요."
         actions={
-          <Button onClick={onBack} variant="outline" className="border-[#ccd8df] bg-white text-[#3c5362] hover:bg-[#f4f7f9]">
+          <Button onClick={onBack} variant="outline" className="border-[#e5e5ea] bg-white text-[#3c3c43] hover:bg-[#f5f5f7]">
             <ArrowLeft /> 설계 선택으로 돌아가기
           </Button>
         }
       />
 
       <section className="workspace-panel rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-[#172b3a]">
-          <Zap className="size-4 text-[#147d91]" /> 드론은 어떻게 뜨나요?
+        <h2 className="flex items-center gap-2 text-base font-semibold text-[#1d1d1f]">
+          <Zap className="size-4 text-[#3182f6]" /> 드론은 어떻게 뜨나요?
         </h2>
-        <p className="mt-2 text-sm leading-6 text-[#526675]">
+        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
           비행은 결국 4가지 힘의 줄다리기예요. 추력이 중력을 이기면 뜨고, 항력을 뚫고 나가면 앞으로 가고,
           날개가 있으면 양력이 추가로 도와줍니다.
         </p>
@@ -125,24 +125,24 @@ export function GuideView({ onBack }: { onBack: () => void }) {
           {FORCES.map((force) => (
             <div key={force.label}>
               <MediaPlaceholder label={`${force.label} 이미지/애니메이션 자리`} />
-              <p className="mt-2 text-xs font-semibold text-[#294353]">{force.label}</p>
-              <p className="mt-1 text-[11px] leading-4 text-[#718391]">{force.desc}</p>
+              <p className="mt-2 text-xs font-semibold text-[#3c3c43]">{force.label}</p>
+              <p className="mt-1 text-[11px] leading-4 text-[#6e6e73]">{force.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       <section className="workspace-panel mt-4 rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-[#172b3a]">
-          <Layers3 className="size-4 text-[#147d91]" /> 드론은 어떤 부품으로 이루어져 있나요?
+        <h2 className="flex items-center gap-2 text-base font-semibold text-[#1d1d1f]">
+          <Layers3 className="size-4 text-[#3182f6]" /> 드론은 어떤 부품으로 이루어져 있나요?
         </h2>
         <div className="mt-3 grid gap-4 lg:grid-cols-[280px_1fr]">
           <MediaPlaceholder label="드론 부품 대표 이미지 자리" className="aspect-square lg:aspect-auto lg:h-full" />
-          <div className="divide-y divide-[#e7edf1]">
+          <div className="divide-y divide-[#e5e5ea]">
             {PARTS.map((part) => (
               <div key={part.label} className="py-2.5">
-                <p className="text-xs font-semibold text-[#294353]">{part.label}</p>
-                <p className="mt-1 text-[11px] leading-5 text-[#607383]">{part.desc}</p>
+                <p className="text-xs font-semibold text-[#3c3c43]">{part.label}</p>
+                <p className="mt-1 text-[11px] leading-5 text-[#6e6e73]">{part.desc}</p>
               </div>
             ))}
           </div>
@@ -150,13 +150,13 @@ export function GuideView({ onBack }: { onBack: () => void }) {
       </section>
 
       <section className="workspace-panel mt-4 rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-[#172b3a]">
-          <Boxes className="size-4 text-[#147d91]" /> 드론의 형태, 그리고 그게 곧 설계도의 기본 틀입니다
+        <h2 className="flex items-center gap-2 text-base font-semibold text-[#1d1d1f]">
+          <Boxes className="size-4 text-[#3182f6]" /> 드론의 형태, 그리고 그게 곧 설계도의 기본 틀입니다
         </h2>
         <div className="mt-3 grid gap-4 lg:grid-cols-[280px_1fr]">
           <MediaPlaceholder label="형태별(쿼드/헥사/옥토/고정익) 대표 이미지 자리" className="aspect-square lg:aspect-auto lg:h-full" />
           <div>
-            <p className="text-sm leading-6 text-[#526675]">
+            <p className="text-sm leading-6 text-[#6e6e73]">
               지금부터 화면에서 보게 될 3D 모양이 곧 그 드론 설계의 기본 틀(설계도)이에요. 프로펠러 개수와
               날개 유무로 5가지 형태로 나뉘는데, 27,714개 전체를 직접 계산해보면 형태마다 뚜렷한 경향이
               있어요 (아래는 실제로 비행 가능하다고 확인된 설계만 놓고 평균낸 값).
@@ -167,7 +167,7 @@ export function GuideView({ onBack }: { onBack: () => void }) {
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-xs">
             <thead>
-              <tr className="border-b border-[#dbe4ea] text-left text-[10px] uppercase tracking-[0.04em] text-[#8a99a4]">
+              <tr className="border-b border-[#e5e5ea] text-left text-[10px] uppercase tracking-[0.04em] text-[#86868b]">
                 <th className="py-2 pr-3 font-medium">형태</th>
                 <th className="py-2 pr-3 font-medium">설계 성공률</th>
                 <th className="py-2 pr-3 font-medium">평균 질량</th>
@@ -179,52 +179,52 @@ export function GuideView({ onBack }: { onBack: () => void }) {
             </thead>
             <tbody>
               {AIRFRAME_STATS.map((row) => (
-                <tr key={row.label} className="border-b border-[#e5ebef]">
-                  <td className="py-2.5 pr-3 font-medium text-[#294353]">{row.label}</td>
-                  <td className="py-2.5 pr-3 font-mono text-[#3c5362]">{row.successRate}</td>
-                  <td className="py-2.5 pr-3 font-mono text-[#3c5362]">{row.mass}</td>
-                  <td className="py-2.5 pr-3 font-mono text-[#3c5362]">{row.distance}</td>
-                  <td className="py-2.5 pr-3 font-mono text-[#3c5362]">{row.hover}</td>
-                  <td className="py-2.5 pr-3 font-mono text-[#3c5362]">{row.power}</td>
-                  <td className="py-2.5 font-mono text-[#3c5362]">{row.pareto}</td>
+                <tr key={row.label} className="border-b border-[#e5e5ea]">
+                  <td className="py-2.5 pr-3 font-medium text-[#3c3c43]">{row.label}</td>
+                  <td className="py-2.5 pr-3 font-mono text-[#3c3c43]">{row.successRate}</td>
+                  <td className="py-2.5 pr-3 font-mono text-[#3c3c43]">{row.mass}</td>
+                  <td className="py-2.5 pr-3 font-mono text-[#3c3c43]">{row.distance}</td>
+                  <td className="py-2.5 pr-3 font-mono text-[#3c3c43]">{row.hover}</td>
+                  <td className="py-2.5 pr-3 font-mono text-[#3c3c43]">{row.power}</td>
+                  <td className="py-2.5 font-mono text-[#3c3c43]">{row.pareto}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-[11px] leading-5 text-[#8a99a4]">
+        <p className="mt-3 text-[11px] leading-5 text-[#86868b]">
           헥사콥터가 실제로 “잘 나는” 설계가 나올 확률이 가장 높고, 쿼드콥터는 가장 가볍고 효율적이라 전체에서
           진짜 최적이라 부를 수 있는 설계의 66%를 차지해요. 이 패턴은 Drawn이 쓰는 AircraftVerse
           데이터셋 안에서 나온 결과이고, 드론 공학의 절대 법칙은 아니에요.
         </p>
 
-        <div className="mt-5 border-t border-[#e5ebef] pt-4">
-          <p className="text-sm leading-6 text-[#526675]">
+        <div className="mt-5 border-t border-[#e5e5ea] pt-4">
+          <p className="text-sm leading-6 text-[#6e6e73]">
             형태만으로는 “어디에 쓰기 좋은지” 알기 어려워서, 실제로 비행 가능한 10,737개 설계를 질량·비행거리·
             체공시간·속도·소비전력 5가지 기준으로 컴퓨터가 스스로 5개 그룹으로 묶도록 했어요(군집분석). 사람이
             미리 정한 기준이 아니라 데이터가 알아서 나눈 결과예요.
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {PURPOSE_CLUSTERS.map((cluster) => (
-              <div key={cluster.label} className="rounded-xl border border-[#e2e9ee] bg-[#f8fafb] p-3.5">
+              <div key={cluster.label} className="rounded-xl bg-[#f5f5f7] p-3.5">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-[#294353]">{cluster.label}</p>
-                  <span className="font-mono text-[10px] text-[#8a99a4]">{cluster.share}</span>
+                  <p className="text-xs font-semibold text-[#3c3c43]">{cluster.label}</p>
+                  <span className="font-mono text-[10px] text-[#86868b]">{cluster.share}</span>
                 </div>
-                <p className="mt-1.5 text-[11px] leading-5 text-[#607383]">{cluster.desc}</p>
+                <p className="mt-1.5 text-[11px] leading-5 text-[#6e6e73]">{cluster.desc}</p>
               </div>
             ))}
           </div>
-          <p className="mt-3 text-[11px] leading-5 text-[#8a99a4]">
+          <p className="mt-3 text-[11px] leading-5 text-[#86868b]">
             형태(구조)와 목적(용도)은 완전히 같은 게 아니에요 — 같은 쿼드콥터라도 어떻게 설계하느냐에 따라
             경량형이 될 수도, 고속형이 될 수도 있습니다.
           </p>
         </div>
 
-        <div className="mt-5 border-t border-[#e5ebef] pt-4">
-          <p className="text-sm leading-6 text-[#526675]">
+        <div className="mt-5 border-t border-[#e5e5ea] pt-4">
+          <p className="text-sm leading-6 text-[#6e6e73]">
             다만 이 설계도가 전부 같은 정밀도는 아니에요. 27,714개 중{' '}
-            <strong className="text-[#0f6475]">12개만 실제로 정밀하게 만들어진 3D 파일(STL)</strong>이 있어서
+            <strong className="text-[#1b64da]">12개만 실제로 정밀하게 만들어진 3D 파일(STL)</strong>이 있어서
             정확한 모습 그대로 보이고, 나머지 27,702개는 저장된 치수만으로 앱이 그 자리에서 계산해 그려주는
             근사치예요. 요약 수치(질량·비행거리 등)는 12개든 27,702개든 전부 진짜 데이터라 믿고 봐도 되지만,
             정확한 겉모습과 속도별 세부 성능은 정밀 3D 12개에서만 볼 수 있어요.
@@ -233,10 +233,10 @@ export function GuideView({ onBack }: { onBack: () => void }) {
       </section>
 
       <section className="workspace-panel mt-4 rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-[#172b3a]">
-          <Target className="size-4 text-[#147d91]" /> 설계 카드, 이렇게 읽으면 됩니다
+        <h2 className="flex items-center gap-2 text-base font-semibold text-[#1d1d1f]">
+          <Target className="size-4 text-[#3182f6]" /> 설계 카드, 이렇게 읽으면 됩니다
         </h2>
-        <p className="mt-2 text-sm leading-6 text-[#526675]">
+        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
           “설계 카드”는 설계 선택 화면에서 드론 하나하나의 정보를 보여주는 네모난 박스예요. 아래 자리에
           실제 카드 예시 이미지가 들어갈 예정이에요.
         </p>
@@ -249,62 +249,62 @@ export function GuideView({ onBack }: { onBack: () => void }) {
             ['최고 속도', '낼 수 있는 가장 빠른 속도.'],
           ].map(([label, desc]) => (
             <div key={label} className="grid grid-cols-[90px_1fr] gap-3 py-2 text-xs">
-              <span className="font-medium text-[#294353]">{label}</span>
-              <span className="text-[#607383]">{desc}</span>
+              <span className="font-medium text-[#3c3c43]">{label}</span>
+              <span className="text-[#6e6e73]">{desc}</span>
             </div>
           ))}
         </div>
       </section>
 
       <section className="workspace-panel mt-4 rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-[#172b3a]">
-          <Sparkles className="size-4 text-[#147d91]" /> 설계를 편집하면 성능이 바로 정확하게 계산되나요?
+        <h2 className="flex items-center gap-2 text-base font-semibold text-[#1d1d1f]">
+          <Sparkles className="size-4 text-[#3182f6]" /> 설계를 편집하면 성능이 바로 정확하게 계산되나요?
         </h2>
-        <p className="mt-2 text-sm leading-6 text-[#526675]">
+        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
           아니요, <strong>추정치</strong>예요. “파라미터 편집” 화면에서 치수를 바꾸면 성능 변화가 바로 뜨는데,
           이건 실제로 다시 시뮬레이션한 값이 아니라 데이터셋에서 비슷한 설계 5개를 찾아 가중평균한 근사치입니다
           (화면에 작게 “INTERPOLATED”라고 표시돼요). 정밀 3D가 있는 12개를 편집해도 마찬가지고요.
         </p>
-        <p className="mt-2 text-sm leading-6 text-[#526675]">
+        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
           그리고 “성능 확인” 화면의 속도별 곡선은 <strong>편집 내용을 반영하지 않고 항상 원본 그대로</strong> 보여줍니다.
           편집한 설계의 속도별 변화를 보고 싶어도, 그 기능은 아직 없어요 — 편집 화면의 추정 패널이 지금 볼 수 있는 전부입니다.
         </p>
       </section>
 
       <section className="workspace-panel mt-4 rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-[#172b3a]">
-          <Route className="size-4 text-[#147d91]" /> 전체 사용 흐름 (6단계)
+        <h2 className="flex items-center gap-2 text-base font-semibold text-[#1d1d1f]">
+          <Route className="size-4 text-[#3182f6]" /> 전체 사용 흐름 (6단계)
         </h2>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {WORKFLOW_STEPS.map(({ icon: Icon, label, desc }) => (
-            <div key={label} className="rounded-xl border border-[#e2e9ee] bg-[#f8fafb] p-3.5">
-              <Icon className="size-4 text-[#147d91]" />
-              <p className="mt-2 text-xs font-semibold text-[#294353]">{label}</p>
-              <p className="mt-1 text-[11px] leading-4 text-[#718391]">{desc}</p>
+            <div key={label} className="rounded-xl bg-[#f5f5f7] p-3.5">
+              <Icon className="size-4 text-[#3182f6]" />
+              <p className="mt-2 text-xs font-semibold text-[#3c3c43]">{label}</p>
+              <p className="mt-1 text-[11px] leading-4 text-[#6e6e73]">{desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       <section className="workspace-panel mt-4 rounded-2xl p-5">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-[#172b3a]">
-          <Gauge className="size-4 text-[#147d91]" /> 자주 나오는 용어
+        <h2 className="flex items-center gap-2 text-base font-semibold text-[#1d1d1f]">
+          <Gauge className="size-4 text-[#3182f6]" /> 자주 나오는 용어
         </h2>
         <div className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">
           {GLOSSARY.map((item) => (
             <div key={item.term} className="flex gap-3 text-xs">
-              <span className="w-24 shrink-0 font-medium text-[#294353]">{item.term}</span>
-              <span className="text-[#607383]">{item.def}</span>
+              <span className="w-24 shrink-0 font-medium text-[#3c3c43]">{item.term}</span>
+              <span className="text-[#6e6e73]">{item.def}</span>
             </div>
           ))}
         </div>
-        <p className="mt-4 flex items-center gap-1.5 text-[11px] text-[#8a99a4]">
+        <p className="mt-4 flex items-center gap-1.5 text-[11px] text-[#86868b]">
           <Weight className="size-3" /> <CircleGauge className="size-3" /> <Wind className="size-3" /> 이 외에도 헷갈리는 용어가 있으면 화면 각 항목에 붙은 물음표·툴팁을 확인해 보세요.
         </p>
       </section>
 
       <div className="mt-5 flex justify-center">
-        <Button onClick={onBack} className="bg-[#147d91] text-white hover:bg-[#0f6878]">
+        <Button onClick={onBack} className="bg-[#3182f6] text-white hover:bg-[#1b64da]">
           <ArrowLeft /> 설계 선택으로 돌아가기
         </Button>
       </div>

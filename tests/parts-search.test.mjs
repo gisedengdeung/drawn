@@ -220,7 +220,7 @@ test('permission and rate limits are distinct and upstream bodies never leak', a
 });
 
 test('DS response preserves option price/stock and rejects foreign IDs', async () => {
-  const result = await searchParts(request, { config: { ...config, accessToken: 'test-session' }, fetcher: async (_url, init) => {
+  const result = await searchParts(request, { config: { ...config, dsEnabled: true, accessToken: 'test-session' }, fetcher: async (_url, init) => {
     const params = new URLSearchParams(init.body);
     const method = params.get('method');
     if (method !== 'aliexpress.ds.product.get') return affiliateResponse(method);

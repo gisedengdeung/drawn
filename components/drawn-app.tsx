@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   Activity,
   Beaker,
+  Bot,
   Boxes,
   CheckCircle2,
   HelpCircle,
@@ -23,6 +24,9 @@ import { LandingView } from '@/components/views/landing-view';
 import { SimulatorView } from '@/components/views/simulator-view';
 import { PartsAgentView } from '@/components/views/parts-agent-view';
 import { useDesignWorkspace } from '@/hooks/use-design-workspace';
+import { useAgentWorkspace } from '@/hooks/use-agent-workspace';
+import { DesignAssistant } from '@/components/agent/design-assistant';
+import type { AgentMode, Evidence, Project } from '@/lib/agent/types';
 import { GalleryView } from '@/components/views/gallery-view';
 import { NearbyFlightSites } from '@/components/views/nearby-flight-sites';
 import { isDesignDraft, workspaceStorageKey } from '@/lib/design-gallery';
@@ -74,6 +78,9 @@ export function DrawnApp() {
   const [workspaceNotice, setWorkspaceNotice] = useState('');
   const [initialPostId, setInitialPostId] = useState<string | null>(null);
   const [importVersion, setImportVersion] = useState(0);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantMode, setAssistantMode] = useState<AgentMode>('qa');
+  const [focusedParameterId, setFocusedParameterId] = useState<string | undefined>();
 
   const saveWorkspace = useCallback((snapshot: WorkspaceSnapshot) => {
     setWorkspace(snapshot);
@@ -183,6 +190,28 @@ export function DrawnApp() {
     });
     return () => { active = false; };
   }, [activeWorkspace]);
+  const importAgentProject = useCallback((project: Project) => {
+    if (!dataset?.designs.some((design) => design.id === project.draft.baselineId)) {
+      throw new Error('현재 데이터셋에서 이 프로젝트의 기준 설계를 찾을 수 없습니다.');
+    }
+    saveWorkspace({ draft: hydrateDraft(project.draft), sourceId: project.sourceId });
+    setSelectedId(project.draft.baselineId);
+    setImportVersion((value) => value + 1);
+    setView('lab');
+    setFocusedParameterId(undefined);
+    setWorkspaceNotice(`「${project.title}」 v${project.revision}을 열었습니다.`);
+  }, [dataset, saveWorkspace]);
+  const agentWorkspace = useAgentWorkspace({
+    draft: currentDraft,
+    sourceId: activeWorkspace?.sourceId ?? null,
+    onImport: importAgentProject,
+  });
+  const openPartsAssistant = () => { setAssistantMode('parts'); setAssistantOpen(true); };
+  const navigateEvidence = (target: NonNullable<Evidence['target']>) => {
+    if (target.designId != null && designById.has(target.designId)) setSelectedId(target.designId);
+    setFocusedParameterId(target.parameterId);
+    setView(target.view);
+  };
   const showcaseList = useMemo(
     () =>
       dataset?.summary.showcaseIds
@@ -252,6 +281,9 @@ export function DrawnApp() {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
+              <button type="button" onClick={() => setAssistantOpen((value) => !value)} aria-expanded={assistantOpen} aria-label="설계 도우미 열기" className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${assistantOpen ? 'border-[#147d91] bg-[#eef8fa] text-[#0f6475]' : 'border-[#dbe4ea] bg-white text-[#607383] hover:bg-[#f4f7f9]'}`}>
+                <Bot className="size-4" /><span className="hidden sm:inline">설계 도우미</span>
+              </button>
               <button
                 onClick={() => setView('guide')}
                 aria-current={view === 'guide' ? 'page' : undefined}
@@ -308,7 +340,8 @@ export function DrawnApp() {
         </nav>
       </header>
 
-      <div className="mx-auto min-h-[calc(100vh-103px)] max-w-[1720px] min-w-0">
+      <div className="mx-auto flex max-w-[1720px] items-start">
+      <div className="min-h-[calc(100vh-103px)] min-w-0 flex-1">
           {workspaceNotice && <output className="m-4 flex items-start justify-between gap-4 rounded-lg border border-[#c6e0e5] bg-[#eef8fa] p-3 text-xs text-[#0f6475]"><span>{workspaceNotice}</span><button type="button" onClick={() => setWorkspaceNotice('')} className="shrink-0 underline">닫기</button></output>}
           {error ? (
             <div className="m-6 rounded-2xl border border-rose-400/20 bg-rose-400/8 p-8 text-rose-200">
@@ -359,6 +392,7 @@ export function DrawnApp() {
                   onSelect={setSelectedId}
                   onOpenDatasetCompare={() => openCompareFromExplorer(selectedSummary.id)}
                   workspace={designWorkspace}
+                  focusedParameterId={focusedParameterId}
                   onOpenParts={() => setView('parts')}
                 />
               )}
@@ -377,6 +411,10 @@ export function DrawnApp() {
                   selectedDesignId={selectedId}
                   loadError={designWorkspace.loadError}
                   onOpenDesign={() => setView('lab')}
+                  agentQuote={agentWorkspace.displayQuote}
+                  onRequestSearch={openPartsAssistant}
+                  authRequired={!agentWorkspace.session?.user}
+                  onSaveQuote={agentWorkspace.resultRunId ? agentWorkspace.saveQuote : undefined}
                 />
               </div>
               {view === 'guide' && <GuideView onBack={() => setView('explore')} />}
@@ -390,6 +428,17 @@ export function DrawnApp() {
           )}
         </div>
 
+        <DesignAssistant
+          open={assistantOpen}
+          onOpenChange={setAssistantOpen}
+          mode={assistantMode}
+          onModeChange={setAssistantMode}
+          controller={agentWorkspace}
+          draft={currentDraft}
+          onNavigate={navigateEvidence}
+          onCompare={(id) => { if (selectedId != null) openCompare(selectedId, id); }}
+        />
+        </div>
         <Dialog open={compareDialogOpen && Boolean(dataset && comparePair)} onOpenChange={setCompareDialogOpen}>
           <DialogContent className="max-h-[92vh] overflow-y-auto border-[#dbe4ea] bg-[#f7f9fb] p-5 text-[#172b3a] sm:max-w-[1180px]">
             <DialogHeader>

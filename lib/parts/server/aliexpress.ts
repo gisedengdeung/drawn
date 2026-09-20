@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { affiliatePromotionLink, canonicalProductLink } from '../links';
 import type { PartsConfig } from './config';
 import { fetchJson, list, PartsError, plain, positiveNumber, record, scalarText, type Fetcher } from './http';
 
@@ -6,6 +7,7 @@ export type SourceProduct = {
   productId: string;
   title: string;
   url: string;
+  promotionUrl?: string | null;
   price: number | null;
   currency: string;
   description: string;
@@ -30,16 +32,7 @@ export function signTop(params: Record<string, string>, secret: string): string 
 }
 
 export function productUrl(value: unknown, productId: string): string | null {
-  try {
-    const url = new URL(scalarText(value));
-    if (url.protocol !== 'https:' || !/(^|\.)aliexpress\.com$/i.test(url.hostname)) return null;
-    if (url.username || url.password || url.port) return null;
-    // A provider supplied item URL must identify the same product; reject redirect/search URLs.
-    if (!new RegExp(`^/item/(?:[^/]+/)?${productId}\\.html$`).test(url.pathname)) return null;
-    url.search = '';
-    url.hash = '';
-    return url.toString();
-  } catch { return null; }
+  return canonicalProductLink(value, productId);
 }
 
 function providerFailure(value: Record<string, unknown>): void {
@@ -67,7 +60,7 @@ export function parseAffiliateProducts(value: unknown): SourceProduct[] {
     const targetPrice = positiveNumber(entry.target_sale_price);
     const sourcePrice = positiveNumber(entry.sale_price);
     const currency = plain(targetPrice !== null ? entry.target_sale_price_currency : entry.sale_price_currency, 3).toUpperCase();
-    return [{ productId, title, url, price: /^[A-Z]{3}$/.test(currency) ? targetPrice ?? sourcePrice : null,
+    return [{ productId, title, url, promotionUrl: affiliatePromotionLink(entry.promotion_link, productId), price: /^[A-Z]{3}$/.test(currency) ? targetPrice ?? sourcePrice : null,
       currency: /^[A-Z]{3}$/.test(currency) ? currency : 'KRW', description: '', skus: [] }];
   });
 }
@@ -116,6 +109,25 @@ export class AliExpressProvider {
       ...(this.config.trackingId ? { tracking_id: this.config.trackingId } : {}),
     });
     return parseAffiliateProducts(result.products);
+  }
+
+  async promotionLinks(products: SourceProduct[]): Promise<SourceProduct[]> {
+    if (!this.config.trackingId || !products.length) return products;
+    const bounded = products.slice(0, 6);
+    const result = await this.call('aliexpress.affiliate.link.generate', {
+      promotion_link_type: '0', source_values: bounded.map((product) => product.url).join(','),
+      tracking_id: this.config.trackingId,
+    });
+    if (result.tracking_id && scalarText(result.tracking_id) !== this.config.trackingId) return products;
+    const links = new Map<string, string>();
+    for (const row of list(result.promotion_links, 'promotion_link')) {
+      // Bind every redirect to the exact source sent in this request, never array order.
+      const product = bounded.find((candidate) => candidate.url === row.source_value);
+      if (!product) continue;
+      const link = affiliatePromotionLink(row.promotion_link, product.productId);
+      if (link) links.set(product.productId, link);
+    }
+    return products.map((product) => ({ ...product, promotionUrl: links.get(product.productId) ?? product.promotionUrl ?? null }));
   }
 
   async skuDetails(product: SourceProduct): Promise<SourceProduct> {

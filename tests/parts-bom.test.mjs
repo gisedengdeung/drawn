@@ -152,7 +152,7 @@ test('CSV matches pricing and snapshot, preserves URLs, quotes newlines and neut
   const rows = parseCsv(csv);
   assert.equal(csv.charCodeAt(0), 0xfeff);
   assert.equal(rows.length, 3);
-  assert.ok(rows.every((row) => row.length === 25));
+  assert.ok(rows.every((row) => row.length === 29));
   assert.equal(rows[1][9], `'${selected.title}`);
   assert.equal(rows[1][10], selected.url);
   assert.equal(rows[1][11], `'${selected.optionLabel}`);

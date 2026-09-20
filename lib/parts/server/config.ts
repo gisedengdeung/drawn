@@ -3,6 +3,7 @@ export type PartsConfig = {
   appSecret: string;
   trackingId: string;
   accessToken: string;
+  dsEnabled?: boolean;
   gateway: string;
   openaiKey: string;
   openaiModel: string;
@@ -14,6 +15,7 @@ export function getPartsConfig(env: Record<string, string | undefined> = process
     appSecret: env.ALIEXPRESS_APP_SECRET?.trim() ?? '',
     trackingId: env.ALIEXPRESS_TRACKING_ID?.trim() ?? '',
     accessToken: env.ALIEXPRESS_ACCESS_TOKEN?.trim() ?? '',
+    dsEnabled: env.ALIEXPRESS_DS_ENABLED === 'true',
     // A deployment setting, never an arbitrary URL supplied by a request.
     gateway: env.ALIEXPRESS_TOP_REGION === 'US'
       ? 'https://api.taobao.com/router/rest'

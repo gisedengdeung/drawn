@@ -25,7 +25,8 @@ export async function fetchJson(
         redirect: 'error',
         signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof PartsError) throw error;
       if (attempt === 0 && !signal.aborted) continue;
       throw new PartsError('error', '외부 상품 서비스 연결이 지연되거나 실패했습니다. 잠시 후 다시 시도하세요.');
     }

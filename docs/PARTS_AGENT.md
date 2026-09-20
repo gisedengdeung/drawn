@@ -1,42 +1,56 @@
-# 부품 구매 후보 에이전트
+# 부품 구매 후보 Agent
 
-상단 **부품 agent** 작업 탭은 설계의 BOM을 바로 보여주고, **현재 설계로 검색**으로 조회를 시작한다. 상품 후보를 선택하면 **최종 구매 정리** 표와 CSV가 같은 선택·수량·금액을 사용한다. 설계 편집의 **부품 agent에서 정리** 버튼도 이 탭으로 이동한다.
+현재 설계의 실제 BOM을 기준으로 AliExpress 제휴 상품의 표시 가격과 구매 링크를 찾는다. 모델이 가격·URL·상품 ID를 생성하지 않는다. 검색 결과는 제휴 상품 범위이며 전체 쇼핑몰의 최저가나 구매 가능성을 보장하지 않는다.
 
-선택 설계의 편집 상태는 앱의 공유 workspace에서 관리하고, 견적 화면은 작업 탭 이동에도 유지되어 진행 중인 검색을 취소하지 않는다. 새 기준 설계나 편집 내용과 기존 견적이 다르면 이전 설계 기준으로 표시한다. **현재 설계로 새 견적**은 이전 검색을 취소하고 새 snapshot으로 시작한다. 견적 세션 저장 형식과 API 계약은 그대로 유지한다.
+## 기본 모드: Affiliates API
 
-견적 BOM의 각 행을 `POST /api/parts/search`에 보내면 한국 배송·KRW 기준으로 실제 AliExpress 후보를 최대 3개 반환한다. 모델이 가격이나 URL을 생성하지 않는다. AliExpress 검색과 상세 결과에 실제로 존재한 상품 ID·URL·가격만 결과로 반환한다.
+서버는 `aliexpress.affiliate.product.query`로 검색하고, `aliexpress.affiliate.productdetail.get`으로 실제 상세 가격을 다시 조회한다. Tracking ID가 설정되면 `aliexpress.affiliate.link.generate`도 호출한다. 검색 결과가 있어도 상세에서 사라진 상품은 제외한다.
 
-## 서버 설정과 실행
+- `url`: 동일 상품 ID의 정규 상품 URL. 이전 v1 견적과 호환되도록 유지한다.
+- `promotionUrl`: API가 반환한 HTTPS 제휴 링크 또는 null. 생성 응답의 `source_value`가 요청한 상품 URL과 정확히 일치할 때만 연결한다. 임의 리다이렉트·유사 도메인·인증 정보가 포함된 URL은 거부한다.
+- `priceKind: listing`: 상품 표시 가격. 원하는 옵션의 가격인지 확인되지 않았으므로 확정 소계에 포함하지 않는다.
+- `priceKind: sku`: 명시적으로 활성화한 DS 조회에서 받은 옵션 가격. 실제 옵션·모델·규격·묶음 수량 검증을 통과해야 소계에 포함된다.
+- `market`: 한국 조건과 KRW 요청이라는 조회 범위를 기록한다. 응답 통화가 다르면 변환하거나 원화로 가장하지 않는다.
 
-`.env.example`을 참고하여 로컬 서버 환경에 `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET`을 설정한다. 비밀값은 Git에 올리지 않는다. `OPENAI_API_KEY`가 있으면 Responses API의 구조화 출력으로 검색어와 근거가 있는 후보 순위를 생성한다. 기본 모델은 `gpt-5-mini`, 변경은 `PARTS_OPENAI_MODEL`로 한다. OpenAI 키가 없거나 분석이 실패하면 모델명/규격 규칙으로 검색하며 UI에 그 상태를 표시한다. AliExpress 키가 없으면 `not_configured`를 반환하고 가상 가격을 만들지 않는다.
+기본 모드는 DS 토큰을 요구하지 않으며 DS 권한이 없다는 경고도 표시하지 않는다. 상품 카드에는 표시 가격, 조회 시각, 규격 확인 상태와 제휴 링크를 보여준다. 링크 생성이 실패하면 확인한 가격과 일반 상품 URL을 유지한다. 상품 표시 가격을 개당 가격·필요 수량별 확정 견적으로 바꾸지 않는다.
 
-`ALIEXPRESS_ACCESS_TOKEN`은 선택 설정이다. 해당 앱에 허용된 DS 사용자 승인 토큰이 있으면 SKU 가격·옵션·재고를 추가 확인한다. 토큰 발급·갱신 UI는 이번 범위에 포함하지 않았다. 토큰 만료나 권한 오류를 숨기지 않고 경고에 표시한다. `ALIEXPRESS_TRACKING_ID`는 선택 사항이며 결과에는 API가 반환한 직접 상품 URL을 사용한다.
+## 서버 설정
 
-개발 서버가 실행된 상태에서 `node scripts/check-parts-api.mjs`를 실행한다. 기본 주소는 `http://localhost:5173`이며 모터·프로펠러·배터리 3개 모델을 순서대로 조회한다. 다른 로컬 포트는 `PARTS_SMOKE_BASE_URL`, 검증할 모터명은 `PARTS_SMOKE_MODEL`로 지정한다. 이 명령은 구매 없이 상품 조회만 하며 자격 증명을 출력하지 않는다. 키가 없으면 첫 요청의 `not_configured`를 표시하고 종료 코드 2로 멈춘다. 조회 오류·검색 결과 없음은 종료 코드 1이다. 종료 코드 0은 상품 조회 성공이며 출력의 `optionVerified`가 false면 SKU 가격 검증까지 성공한 것은 아니다. 실제 키가 없는 개발 환경에서는 라이브 조회를 검증했다고 주장하지 않는다.
+`.env.example`을 참고한다. 다음 값은 서버 비밀 설정이며 브라우저용 접두사를 붙이지 않는다.
 
-## 공식 프로토콜과 확인 범위
+| 설정 | 용도 |
+|---|---|
+| `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET` | 상품 조회와 서명 |
+| `ALIEXPRESS_TRACKING_ID` | 제휴 링크 생성. 없으면 일반 상품 링크 사용 |
+| `ALIEXPRESS_TOP_REGION` | `CN` 기본값 또는 `US`의 고정 TOP 게이트웨이 |
+| `ALIEXPRESS_DS_ENABLED=true` | 선택적인 DS 옵션 조회 활성화 |
+| `ALIEXPRESS_ACCESS_TOKEN` | DS를 명시적으로 켠 경우에만 사용하는 승인 토큰 |
+| `OPENAI_API_KEY`, `PARTS_OPENAI_MODEL` | 단독 부품 검색에서 선택적인 검색어·근거 분석 |
 
-본 구현은 공개된 개별 API 문서가 명시하는 **TOP 프로토콜**을 사용한다. 기본 HTTPS 게이트웨이는 `https://eco.taobao.com/router/rest`, `ALIEXPRESS_TOP_REGION=US`일 때는 공식 기존 해외 게이트웨이 `https://api.taobao.com/router/rest`다. 임의의 요청 URL은 허용하지 않는다. 파라미터를 ASCII순으로 정렬하고 키+값을 연결하여 App Secret으로 UTF-8 HMAC-MD5를 수행한다. 결과는 대문자 16진수이며 `sign_method=hmac`다. timestamp는 GMT+8이다.
+DS 토큰을 넣는 것만으로 DS 호출을 시작하지 않는다. 권한을 확보하고 `ALIEXPRESS_DS_ENABLED=true`도 설정해야 한다. 토큰 발급·갱신은 이 공급자 모듈에 포함하지 않는다.
 
-- [공식 Affiliate 검색 API](https://developer.alibaba.com/docs/api.htm?apiId=45803): 키워드, 배송 국가, 통화, 상품 링크와 상품 가격.
-- [공식 Affiliate 상세 API](https://developer.alibaba.com/docs/api.htm?apiId=48595): 상품 ID별 현재 데이터. 검색 상품도 상세로 다시 확인한다.
-- [공식 DS 상품 API](https://developer.alibaba.com/docs/api.htm?apiId=60452): 승인 필요, SKU 옵션·가격·재고.
-- [공식 TOP 서명 설명](https://developer.alibaba.com/docs/doc.htm?articleId=122464&docType=1&treeId=846): HMAC-MD5와 정렬 규칙.
-- [기존 Affiliate 호출 안내](https://developer.alibaba.com/docs/doc.htm?articleId=118934&docType=1&treeId=674): 해외 TOP 게이트웨이. 안내 묶음이 폐기 표시되어 있어 현재 계정에서 호출 권한을 먼저 검증해야 한다.
-- [AliExpress IOP 서명](https://developer.alibaba.com/docs/doc.htm?articleId=120692&docType=1&treeId=727)은 다른 `/rest` SHA256 프로토콜이다. 이 구현의 TOP 서명과 혼합하지 않는다.
+공통 Agent는 이미 의도를 해석하므로 `searchParts(..., { allowAI: false, consumeBudget })`로 호출한다. `consumeBudget(kind)`는 모든 외부 HTTP 시도 직전에 호출되며 재시도도 포함한다. `kind`는 `provider` 또는 `ai`이고, false를 반환하거나 예외가 발생하면 네트워크 호출을 막는다. 호출 한도는 상위 실행 예산과 연결해야 하며 이 훅은 사용자 인증을 대신하지 않는다.
 
-현재 계정에서 이 TOP API가 허용되는지는 실제 발급 키로 smoke test를 통과해야 확인된다. 새 Open Platform 문서가 이 조사 환경에서 열리지 않아 최신 `/sync` 게이트웨이 호환성, 신규 가입 승인 조건과 제한량은 확인하지 못했다. API 키가 특정 IOP 앱만 지원한다면 계정 콘솔의 최신 공식 명세를 확인하고 공급자 어댑터를 갱신해야 한다.
+## 프로토콜과 권한 확인
 
-## 가격 및 매칭 규칙
+공개된 개별 API 문서의 TOP 프로토콜을 사용한다. HTTPS 게이트웨이는 CN `eco.taobao.com/router/rest`, US `api.taobao.com/router/rest`로 고정한다. 비어 있지 않은 파라미터의 키를 정렬해 키·값을 연결하고 UTF-8 HMAC-MD5 대문자 16진수로 서명한다. timestamp는 GMT+8이다. IOP의 다른 서명 방식과 섞지 않는다.
 
-- 상품 대표가격은 표시할 수 있지만 `optionVerified=false`이므로 확정 견적에 사용하지 않는다. `optionVerified`는 선택한 판매 SKU의 모델·숫자 규격·가격 출처 확인이고, 원래 부품과의 호환성 보증은 아니다. 요청 모델까지 확인되면 `exact`로 분류한다. 실제 상품 근거로 식별한 다른 모델은 `alternative`를 유지하며 자동 선택하지 않는다. 동일 부품 종류이고 필요한 숫자 규격과 선택 옵션이 모두 확인된 대체 후보는 사용자가 직접 선택하면 상품 소계를 계산할 수 있다. 옵션이 모호하거나 규격이 빠진 후보는 계산하지 않는다.
-- 모터 KV, 프로펠러 지름/피치, 배터리 셀 수/용량이 명시적으로 다르면 후보에서 제외한다. AI의 대체 부품 판단은 항상 검토 대상으로 남는다. 규격 문자열 일치는 기계적/전기적 호환성 보증이 아니다.
-- 구매 묶음 수량은 옵션/제목에 명시된 `pcs`, `pieces`, `pack`, `pair`, `single` 표현만 해석한다. 충돌하거나 없으면 `null`이다. 재고는 판매 SKU 묶음 수량이다.
-- 배송 가능 여부, 배송비, 세금과 사용자별 할인·쿠폰의 최종 결제액은 미확인이다. 국가 필터가 특정 SKU 배송을 보증한다고 가정하지 않는다. 원화를 요청해도 응답 통화가 다르면 원래 통화를 유지한다. UI에서 미확인 비용을 0원으로 계산하면 안 된다.
-- 모델 출력은 제공된 상품 ID에만 연결하고 같은 상품의 원문에 있는 근거 문장만 허용한다. 임의 ID·링크·가격·스펙은 모델 결과에서 읽지 않는다. HTML 설명은 제거하여 전달한다.
+- [Affiliate 검색 API](https://developer.alibaba.com/docs/api.htm?apiId=45803)
+- [Affiliate 상세 API](https://developer.alibaba.com/docs/api.htm?apiId=48595)
+- [Affiliate 링크 생성 API](https://developer.alibaba.com/docs/api.htm?apiId=45804)
 
-## 범위와 운영
+위 API는 사용자 승인이 필요하지 않은 API로 문서화되어 있다. 이 기능만을 위해 DS 판매자 OAuth를 요구하지 않는다. 다만 계정에 발급된 앱의 API 권한과 게이트웨이 지원은 실제 계정에서 검증해야 한다. 새 플랫폼의 프로토콜이나 권한을 자동으로 가정하지 않는다.
 
-요청은 알려진 부품 종류, 240자 이하 모델명, 1~1000의 정수 수량 또는 null, KR/KRW만 허용한다. 요청 본문은 16KB 이하이며 URL은 입력으로 받지 않는다. 검색은 최대 2개, 검색당 8개, 상세 6개, DS 상세 4개, 반환 3개로 제한한다. 외부 요청당 12초, 일시 오류 재시도 1회, 작업 전체 55초로 제한한다. 일부 검색/AI/DS 실패 시 확인된 범위만 결과에 남긴다.
+## 구매 정리와 저장
 
-경로는 같은 origin 요청만 허용하고 프로세스당 동시 3개·분당 30개 한도를 둔다. 이는 로컬 개발의 비용 제어이며 인증이나 분산 제한을 대신하지 않는다. 공개 다중 인스턴스 서비스로 배포하기 전에는 사용자 인증, 사용자별 예산, 공유 저장소 기반 rate limit을 추가해야 한다. 원시 외부 응답·키·토큰은 오류 메시지나 로그로 반환하지 않는다. 자동 구매/장바구니/결제는 포함하지 않는다.
+기존 `drawn.parts-quote.v1` 및 `aerotwin.parts-quote.v1` 견적은 복원 가능하다. 새 메타데이터가 없는 견적은 기존 검증 상태를 보존하며, 옵션 ID를 기준으로 가격 표시 이름만 결정한다. 새 응답의 잘못된 제휴 링크나 상품 ID 불일치는 저장 복원 단계에서도 거부한다.
+
+UI와 CSV는 같은 선택·수량·소계 계산을 사용한다. CSV에는 일반 상품 URL과 구매 링크, 제휴 링크, 가격 기준, 조회 범위를 함께 저장한다. 확인하지 못한 가격·배송비는 0원이 아닌 미확인으로 남는다. 제휴 링크를 통한 구매 시 수수료가 발생할 수 있음을 표시한다.
+
+`PartsAgentView`는 `onRequestSearch`가 있으면 공통 Agent로 검색을 전달하고 개별 직접 재검색 버튼을 숨긴다. `agentQuote`의 검증된 BOM과 결과를 받아 표시하며, 설계가 바뀌면 이전 설계 결과임을 표시한다. `onSaveQuote`는 해당 Agent 결과와 같은 BOM·생성 시각인 견적에 대해서만 활성화된다. 선택 저장 중에는 선택 변경을 막고 성공·실패를 표시한다. 서버는 별도로 실행 ID와 프로젝트 소유권을 검증해야 한다.
+
+## 검증
+
+`node --test tests/parts-*.test.mjs`로 서명, 제휴 URL 검증, 상세 재조회, 링크 생성의 상품 연결, DS 명시적 활성화, 가격 구분, 호출 예산과 재시도 차단, v1 복원, CSV 일치를 검증한다.
+
+실제 발급 키를 사용하는 읽기 전용 연결 확인은 `scripts/check-parts-api.mjs`로 수행한다. 비밀값을 출력하지 않으며 키가 없거나 공급자가 거부하면 성공으로 보고하지 않는다. 모의 응답 테스트 통과는 실제 계정의 연결 성공을 뜻하지 않는다.

@@ -7,9 +7,10 @@ const columns = 'id, title, author, purpose, description, created_at AS createdA
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f-]{36}$/.test(value);
 
 async function database() {
-  const db = (env as unknown as { GALLERY_DB?: D1Database }).GALLERY_DB;
+  const databases = env as unknown as { GALLERY_DB?: D1Database; AGENT_DB?: D1Database };
+  const db = databases.GALLERY_DB ?? databases.AGENT_DB;
   if (!db) throw new Error('갤러리 저장소가 연결되지 않았습니다.');
-  await db.prepare(`CREATE TABLE IF NOT EXISTS gallery_posts (
+  if (databases.GALLERY_DB) await db.prepare(`CREATE TABLE IF NOT EXISTS gallery_posts (
     id TEXT PRIMARY KEY, title TEXT NOT NULL, author TEXT NOT NULL,
     purpose TEXT NOT NULL, description TEXT NOT NULL, created_at TEXT NOT NULL,
     parent_id TEXT, baseline_id INTEGER NOT NULL, num_propellers INTEGER NOT NULL,

@@ -8,6 +8,7 @@ import {
   ChevronRight,
   CircleGauge,
   GitCompareArrows,
+  Info,
   Layers3,
   MousePointer2,
   Plane,
@@ -15,6 +16,7 @@ import {
   Ruler,
   Search,
   SlidersHorizontal,
+  ShoppingBag,
   Weight,
   Wind,
   Zap,
@@ -22,6 +24,8 @@ import {
 
 import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
 import { StlViewer } from '@/components/stl-viewer';
+import { cloneDraft } from '@/lib/design-draft';
+import type { DesignWorkspace } from '@/hooks/use-design-workspace';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,10 +35,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
-  ComponentCatalogs,
   DesignDraft,
-  DesignSegment,
   DesignSummary,
   DraftGeometryMode,
   ParameterDefinition,
@@ -42,7 +45,7 @@ import type {
   ShowcaseDesign,
   WingParameters,
 } from '@/lib/drawn-types';
-import { formatComponent, formatMetric, isAvailableMetric, percentChange } from '@/lib/drawn-types';
+import { formatBatteryLabel, formatComponent, formatEnergyConfiguration, formatMetric, formatMotorLabel, formatPropellerLabel, isAvailableMetric, percentChange } from '@/lib/drawn-types';
 import { DataDisclaimer, DesignSelector, SectionHeading, SourceBadge } from '@/components/views/shared';
 
 type DraftEstimate = {
@@ -68,14 +71,18 @@ const GROUP_LABELS: Record<ParameterGroup, string> = {
   layout: '내부 배치',
 };
 
-const EMPTY_CATALOGS: ComponentCatalogs = {
-  motors: [],
-  propellers: [],
-  batteries: [],
-  servos: [],
-  nacaProfiles: [],
-  nodeTypes: [],
+/** 그룹별 물음표 툴팁 설명. GuideView의 초심자용 설명과 같은 톤으로 씁니다. */
+const GROUP_HINTS: Record<ParameterGroup, string> = {
+  structure: '허브에 연결된 팔(Arm)의 길이·각도예요. 팔이 길면 프로펠러끼리 간섭이 줄어 안정적이지만, 무게와 항력이 늘어 속도·비행거리엔 불리할 수 있어요.',
+  fuselage: '몸통(동체)의 길이와 지름이에요. 크면 부품을 더 튼튼하게 담을 수 있지만, 무게와 항력이 늘어 비행거리·속도엔 불리해요.',
+  propulsion: '추력을 만드는 모터와 프로펠러예요. 크고 강력할수록 무거운 짐을 들거나 빠르게 날 수 있지만, 무게와 소비전력도 함께 늘어나요. (KV=모터가 1V당 도는 회전수로 낮으면 힘·높으면 속도 위주, 프로펠러는 지름×피치를 인치로 표기)',
+  energy: '배터리 용량·구성이에요. 크면 더 오래 날 수 있지만, 배터리 자체 무게 때문에 어느 지점을 넘으면 오히려 비행시간이 늘지 않을 수 있어요. (S=직렬로 연결된 셀 수로 전압을 결정, C=순간적으로 낼 수 있는 최대 방전 속도)',
+  payload: '드론이 실어 나르는 화물의 무게예요. 늘리면 실을 수 있는 짐은 많아지지만, 그만큼 비행거리·체공시간이 줄어들어요.',
+  wing: '날개는 프로펠러 힘 없이도 양력을 얻게 해줘서 같은 배터리로 더 멀리·오래 날 수 있게 해줘요. 대신 제자리 비행(호버링)은 어려워져요.',
+  layout: '센서·배터리 같은 내부 부품의 배치 위치예요. 무게중심에 영향을 줄 수 있지만, 데이터셋 성능 점수 계산에는 반영되지 않는 참조용 값이에요.',
 };
+
+const EXPERT_MODE_STORAGE_KEY = 'aerotwin:design-lab-expert-mode';
 
 export function DesignLabView({
   designs,
@@ -84,8 +91,8 @@ export function DesignLabView({
   datasetDesigns = [],
   onSelect,
   onOpenDatasetCompare,
-  initialDraft = null,
-  onDraftChange,
+  onOpenParts,
+  workspace,
 }: {
   designs: Array<Pick<DesignSummary, 'id' | 'numPropellers' | 'numWings'>>;
   selected: DesignSummary;
@@ -93,23 +100,15 @@ export function DesignLabView({
   datasetDesigns?: DesignSummary[];
   onSelect: (id: number) => void;
   onOpenDatasetCompare: () => void;
-  initialDraft?: DesignDraft | null;
-  onDraftChange?: (draft: DesignDraft) => void;
+  onOpenParts: () => void;
+  workspace: DesignWorkspace;
 }) {
-  const [baseline, setBaseline] = useState<DesignDraft | null>(null);
-  const [draft, setDraft] = useState<DesignDraft | null>(null);
-  // The parent keeps this snapshot across workflow steps. Do not reload on each edit.
-  const initialDraftRef = useRef(initialDraft);
-  useEffect(() => {
-    if (draft) onDraftChange?.(draft);
-  }, [draft, onDraftChange]);
-  const [catalogs, setCatalogs] = useState<ComponentCatalogs>(EMPTY_CATALOGS);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { baseline, draft, setDraft, catalogs, loading, loadError } = workspace;
   const [mode, setMode] = useState<DraftGeometryMode>('parametric-preview');
   const [showGhost, setShowGhost] = useState(false);
   const [changedGroup, setChangedGroup] = useState<ParameterGroup | null>(null);
   const [search, setSearch] = useState('');
+  const [expertMode, setExpertMode] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('preview');
   const [compareOpen, setCompareOpen] = useState(false);
   const [estimateState, setEstimateState] = useState<'ready' | 'calculating'>('ready');
@@ -119,50 +118,23 @@ export function DesignLabView({
   const packagedReference = referenceDesign ?? ('modelPath' in selected ? selected as ShowcaseDesign : null);
 
   useEffect(() => {
-    let active = true;
     window.queueMicrotask(() => {
-      if (!active) return;
-      setLoading(true);
-      setLoadError(null);
-      setBaseline(null);
-      setDraft(null);
+      try {
+        setExpertMode(localStorage.getItem(EXPERT_MODE_STORAGE_KEY) === '1');
+      } catch {
+        // Storage unavailable — default to easy mode.
+      }
     });
-    const shard = String(Math.floor(selected.id / 1000)).padStart(3, '0');
-    Promise.all([
-      fetch(`/data/design-trees/shard-${shard}.json`).then((response) => {
-        if (!response.ok) throw new Error('설계 트리 shard를 불러오지 못했습니다.');
-        return response.json() as Promise<Record<string, DesignDraft>>;
-      }),
-      fetch('/data/component-catalogs.json').then((response) => {
-        if (!response.ok) throw new Error('부품 카탈로그를 불러오지 못했습니다.');
-        return response.json() as Promise<ComponentCatalogs>;
-      }),
-    ])
-      .then(([shardData, nextCatalogs]) => {
-        if (!active) return;
-        const loaded = shardData[String(selected.id)];
-        if (!loaded) throw new Error(`Design #${selected.id}의 설계 트리가 없습니다.`);
-        const nextDraft = hydrateDraft(loaded);
-        setBaseline(nextDraft);
-        setDraft(initialDraftRef.current?.baselineId === selected.id ? hydrateDraft(initialDraftRef.current) : cloneDraft(nextDraft));
-        setCatalogs(nextCatalogs);
-        setMode('parametric-preview');
-      })
-      .catch((reason: unknown) => {
-        if (!active) return;
-        const fallback = draftFromDesign(selected, packagedReference);
-        setBaseline(fallback);
-        setDraft(initialDraftRef.current?.baselineId === selected.id ? hydrateDraft(initialDraftRef.current) : cloneDraft(fallback));
-        setCatalogs(packagedReference ? catalogsFromShowcases([packagedReference]) : EMPTY_CATALOGS);
-        setLoadError(reason instanceof Error ? reason.message : '설계 트리 로딩 오류');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [packagedReference, selected]);
+  }, []);
+
+  const toggleExpertMode = (next: boolean) => {
+    setExpertMode(next);
+    try {
+      localStorage.setItem(EXPERT_MODE_STORAGE_KEY, next ? '1' : '0');
+    } catch {
+      // Storage unavailable — the toggle still works for this session only.
+    }
+  };
 
   useEffect(() => () => {
     if (highlightTimeoutRef.current != null) window.clearTimeout(highlightTimeoutRef.current);
@@ -219,8 +191,9 @@ export function DesignLabView({
         title="설계 파라미터와 3D를 한 화면에서 조정하세요"
         description="치수·부품·날개 조건은 즉시 개념 형상에 반영되고, 성능은 AircraftVerse 범위 안에서 데이터 유사도 기반으로 갱신됩니다."
         actions={(
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="border-[#b8dfe4] bg-[#eef8fa] text-[#0f6475]">원본 {parameterCount} · 편집 가능 {editableParameterCount}</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={onOpenParts} disabled={loading || !draft} className="bg-[#147d91] text-white hover:bg-[#106c7d]"><ShoppingBag className="size-4" />부품 agent에서 정리</Button>
+            {expertMode && <Badge variant="outline" className="border-[#b8dfe4] bg-[#eef8fa] text-[#0f6475]">원본 {parameterCount} · 편집 가능 {editableParameterCount}</Badge>}
             <DesignSelector designs={designs} value={selected.id} onChange={onSelect} />
           </div>
         )}
@@ -252,6 +225,13 @@ export function DesignLabView({
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#82919c]" />
               <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="파라미터 검색" className="h-9 border-[#dbe4ea] bg-[#f8fafb] pl-8 text-xs" />
             </div>
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-[#e2e9ee] bg-[#f8fafb] px-3 py-2">
+              <div>
+                <p className="text-xs font-medium text-[#526675]">전문가 모드</p>
+                <p className="mt-0.5 text-[10px] leading-4 text-[#8a99a4]">데이터셋 원본 변수 {parameterCount}개를 그대로 편집합니다</p>
+              </div>
+              <Switch checked={expertMode} onCheckedChange={toggleExpertMode} size="sm" aria-label="전문가 모드" />
+            </div>
           </div>
 
           <ScrollArea className="h-[500px] lg:h-[calc(100%-116px)]">
@@ -260,53 +240,53 @@ export function DesignLabView({
             ) : (
               <Accordion multiple defaultValue={['structure', 'fuselage', 'propulsion']} className="px-3 pb-5">
                 {groupVisible('structure', ['topology', 'hub', 'arm', 'angle', 'offset', '구조', '길이']) && (
-                  <ParameterSection value="structure" icon={<Layers3 />} title="기체 구조" count={1 + draft.segments.length * 3}>
-                    <ReadOnlyValue label="Hub topology" value={formatComponent(draft.topology)} note="Topology 변경은 기준 설계 선택에서 수행" />
+                  <ParameterSection value="structure" icon={<Layers3 />} title="기체 구조" count={1 + draft.segments.length * 3} hint={GROUP_HINTS.structure}>
+                    <ReadOnlyValue label="허브 형태" value={formatComponent(draft.topology)} note="허브(몸통 중심) 형태 변경은 1단계 설계 선택에서 다른 설계를 고르면 됩니다." />
                     {draft.segments.map((segment, index) => (
                       <div key={segment.id} className="rounded-xl border border-[#e2e9ee] bg-[#f8fafb] p-3">
                         <p className="mb-3 flex items-center justify-between text-xs font-semibold text-[#294353]">
-                          Segment {index + 1}<span className="font-normal text-[#7b8c98]">{formatComponent(segment.nodeType)}</span>
+                          팔 {index + 1}<span className="font-normal text-[#7b8c98]">{formatComponent(segment.nodeType)}</span>
                         </p>
-                        <NumberSlider label="Arm length" unit="mm" min={50} max={520} step={1} value={segment.length} baseline={baseline.segments[index]?.length ?? segment.length} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].length = value; })} />
-                        <NumberSlider label="Angle" unit="°" min={-135} max={360} step={1} value={segment.angle} baseline={baseline.segments[index]?.angle ?? segment.angle} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].angle = value; })} />
-                        <NumberSlider label="Flange offset" unit="mm" min={-50} max={50} step={1} value={segment.offset} baseline={baseline.segments[index]?.offset ?? segment.offset} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].offset = value; })} />
+                        <NumberSlider label="팔 길이" unit="mm" min={50} max={520} step={1} value={segment.length} baseline={baseline.segments[index]?.length ?? segment.length} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].length = value; })} />
+                        <NumberSlider label="장착 각도" unit="°" min={-135} max={360} step={1} value={segment.angle} baseline={baseline.segments[index]?.angle ?? segment.angle} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].angle = value; })} />
+                        <NumberSlider label="결합 위치 오프셋" unit="mm" min={-50} max={50} step={1} value={segment.offset} baseline={baseline.segments[index]?.offset ?? segment.offset} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].offset = value; })} />
                       </div>
                     ))}
                   </ParameterSection>
                 )}
 
                 {groupVisible('fuselage', ['동체', 'length', 'diameter', 'floor', '길이', '직경']) && (
-                  <ParameterSection value="fuselage" icon={<Box />} title="동체" count={4}>
-                    <NumberSlider label="Length" unit="mm" min={84} max={559} step={1} value={draft.fuselage.length} baseline={baseline.fuselage.length} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.length = value; })} />
-                    <NumberSlider label="Horizontal diameter" unit="mm" min={120} max={805} step={1} value={draft.fuselage.horizontalDiameter} baseline={baseline.fuselage.horizontalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.horizontalDiameter = value; })} />
-                    <NumberSlider label="Vertical diameter" unit="mm" min={51} max={354} step={1} value={draft.fuselage.verticalDiameter} baseline={baseline.fuselage.verticalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.verticalDiameter = value; })} />
-                    <NumberSlider label="Floor height" unit="mm" min={8} max={60} step={0.5} value={draft.fuselage.floorHeight} baseline={baseline.fuselage.floorHeight} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.floorHeight = value; })} />
+                  <ParameterSection value="fuselage" icon={<Box />} title="동체" count={4} hint={GROUP_HINTS.fuselage}>
+                    <NumberSlider label="길이" unit="mm" min={84} max={559} step={1} value={draft.fuselage.length} baseline={baseline.fuselage.length} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.length = value; })} />
+                    <NumberSlider label="가로 지름" unit="mm" min={120} max={805} step={1} value={draft.fuselage.horizontalDiameter} baseline={baseline.fuselage.horizontalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.horizontalDiameter = value; })} />
+                    <NumberSlider label="세로 지름" unit="mm" min={51} max={354} step={1} value={draft.fuselage.verticalDiameter} baseline={baseline.fuselage.verticalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.verticalDiameter = value; })} />
+                    <NumberSlider label="바닥 높이" unit="mm" min={8} max={60} step={0.5} value={draft.fuselage.floorHeight} baseline={baseline.fuselage.floorHeight} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.floorHeight = value; })} />
                   </ParameterSection>
                 )}
 
                 {groupVisible('propulsion', ['motor', 'propeller', '추진', '모터', '프로펠러']) && (
-                  <ParameterSection value="propulsion" icon={<CircleGauge />} title="추진 시스템" count={draft.propulsionGroups.length * 2}>
+                  <ParameterSection value="propulsion" icon={<CircleGauge />} title="추진 시스템" count={draft.propulsionGroups.length * 2} hint={GROUP_HINTS.propulsion}>
                     {draft.propulsionGroups.map((propulsion, index) => (
                       <div key={propulsion.id} className="rounded-xl border border-[#e2e9ee] bg-[#f8fafb] p-3">
-                        <p className="mb-2 text-xs font-semibold text-[#294353]">Propulsion Group {index + 1}</p>
-                        <ControlSelect label="Motor" value={propulsion.motorType} options={catalogs.motors} baseline={baseline.propulsionGroups[index]?.motorType} onChange={(value) => mutateDraft('propulsion', (next) => { next.propulsionGroups[index].motorType = value; syncSegmentComponent(next, propulsion.segmentId, 'motorType', value); })} />
-                        <ControlSelect label="Propeller" value={propulsion.propellerType} options={catalogs.propellers} baseline={baseline.propulsionGroups[index]?.propellerType} onChange={(value) => mutateDraft('propulsion', (next) => { next.propulsionGroups[index].propellerType = value; syncSegmentComponent(next, propulsion.segmentId, 'propellerType', value); })} />
+                        <p className="mb-2 text-xs font-semibold text-[#294353]">모터·프로펠러 세트 {index + 1}</p>
+                        <ControlSelect label="모터" value={propulsion.motorType} options={catalogs.motors} baseline={baseline.propulsionGroups[index]?.motorType} format={formatMotorLabel} onChange={(value) => mutateDraft('propulsion', (next) => { next.propulsionGroups[index].motorType = value; syncSegmentComponent(next, propulsion.segmentId, 'motorType', value); })} />
+                        <ControlSelect label="프로펠러" value={propulsion.propellerType} options={catalogs.propellers} baseline={baseline.propulsionGroups[index]?.propellerType} format={formatPropellerLabel} onChange={(value) => mutateDraft('propulsion', (next) => { next.propulsionGroups[index].propellerType = value; syncSegmentComponent(next, propulsion.segmentId, 'propellerType', value); })} />
                       </div>
                     ))}
                   </ParameterSection>
                 )}
 
                 {groupVisible('energy', ['battery', '배터리', '전력', 'energy']) && (
-                  <ParameterSection value="energy" icon={<BatteryCharging />} title="전력 시스템" count={draft.energy.batteryTypes.length}>
+                  <ParameterSection value="energy" icon={<BatteryCharging />} title="전력 시스템" count={draft.energy.batteryTypes.length} hint={GROUP_HINTS.energy}>
                     {draft.energy.batteryTypes.map((battery, index) => (
-                      <ControlSelect key={`${index}-${battery}`} label={`Battery ${index + 1}`} value={battery} options={catalogs.batteries} baseline={baseline.energy.batteryTypes[index]} onChange={(value) => mutateDraft('energy', (next) => { next.energy.batteryTypes[index] = value; })} />
+                      <ControlSelect key={`${index}-${battery}`} label={`배터리 ${index + 1}`} value={battery} options={catalogs.batteries} baseline={baseline.energy.batteryTypes[index]} format={formatBatteryLabel} onChange={(value) => mutateDraft('energy', (next) => { next.energy.batteryTypes[index] = value; })} />
                     ))}
-                    <ReadOnlyValue label="Configuration" value={formatComponent(draft.energy.configuration)} />
+                    <ReadOnlyValue label="배터리 구성" value={formatEnergyConfiguration(draft.energy.configuration)} />
                   </ParameterSection>
                 )}
 
                 {draft.wings.length > 0 && groupVisible('wing', ['wing', 'naca', 'span', 'chord', '날개']) && (
-                  <ParameterSection value="wing" icon={<Plane />} title="날개" count={draft.wings.length * 9}>
+                  <ParameterSection value="wing" icon={<Plane />} title="날개" count={draft.wings.length * 9} hint={GROUP_HINTS.wing}>
                     {draft.wings.map((wing, index) => (
                       <WingControls key={wing.id} wing={wing} baseline={baseline.wings[index] ?? wing} nacaOptions={catalogs.nacaProfiles} onChange={(mutator) => mutateDraft('wing', (next) => mutator(next.wings[index]))} />
                     ))}
@@ -314,26 +294,27 @@ export function DesignLabView({
                 )}
 
                 {groupVisible('payload', ['payload', 'cargo', '탑재', '중량']) && (
-                  <ParameterSection value="payload" icon={<Weight />} title="탑재 중량" count={1} advanced>
-                    <NumberSlider label="Cargo mass" unit="kg" min={0} max={20} step={0.1} value={draft.payload.mass} baseline={baseline.payload.mass} onChange={(value) => mutateDraft('payload', (next) => { next.payload.mass = value; })} />
+                  <ParameterSection value="payload" icon={<Weight />} title="탑재 중량" count={1} advanced hint={GROUP_HINTS.payload}>
+                    <NumberSlider label="탑재 화물 질량" unit="kg" min={0} max={20} step={0.1} value={draft.payload.mass} baseline={baseline.payload.mass} onChange={(value) => mutateDraft('payload', (next) => { next.payload.mass = value; })} />
                   </ParameterSection>
                 )}
 
                 {Object.keys(draft.layout).length > 0 && groupVisible('layout', ['sensor', 'battery x', 'battery y', '센서', '배치']) && (
-                  <ParameterSection value="layout" icon={<Ruler />} title="내부 배치" count={Object.keys(draft.layout).length * 2} advanced>
+                  <ParameterSection value="layout" icon={<Ruler />} title="내부 배치" count={Object.keys(draft.layout).length * 2} advanced hint={GROUP_HINTS.layout}>
                     {Object.entries(draft.layout).map(([name, position]) => (
                       <div key={name} className="rounded-xl border border-[#e2e9ee] bg-[#f8fafb] p-3">
                         <p className="mb-2 text-xs font-semibold capitalize text-[#294353]">{formatComponent(name)}</p>
-                        <NumberSlider label="X offset" unit="mm" min={-280} max={280} step={1} value={position.x} baseline={baseline.layout[name]?.x ?? position.x} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].x = value; }, false)} />
-                        <NumberSlider label="Y offset" unit="mm" min={-280} max={280} step={1} value={position.y} baseline={baseline.layout[name]?.y ?? position.y} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].y = value; }, false)} />
+                        <NumberSlider label="X 위치" unit="mm" min={-280} max={280} step={1} value={position.x} baseline={baseline.layout[name]?.x ?? position.x} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].x = value; }, false)} />
+                        <NumberSlider label="Y 위치" unit="mm" min={-280} max={280} step={1} value={position.y} baseline={baseline.layout[name]?.y ?? position.y} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].y = value; }, false)} />
                       </div>
                     ))}
                   </ParameterSection>
                 )}
 
-                <ParameterSection value="source-parameters" icon={<SlidersHorizontal />} title="AircraftVerse 원본 파라미터" count={parameterCount} advanced>
+                {expertMode && (
+                <ParameterSection value="source-parameters" icon={<SlidersHorizontal />} title="전문가용 원본 변수" count={parameterCount} advanced hint="AircraftVerse 데이터셋 원본 변수명을 그대로 보여줍니다. 위 친화적 그룹과 같은 값이 다시 나타날 수 있어요 — 대부분은 위에서 조정하는 것만으로 충분하고, 이 목록은 원본 그대로 세밀하게 맞추고 싶을 때만 쓰면 됩니다.">
                   <div className="rounded-xl border border-[#cfe1e5] bg-[#eef8fa] p-3 text-[10px] leading-4 text-[#45616f]">
-                    설계 원본의 {parameterCount}개 파라미터를 1:1로 보존합니다. Optimization 파라미터는 성능 근접도에, CAD 파생 파라미터는 개념 형상에만 반영됩니다.
+                    설계 원본의 {parameterCount}개 변수를 1:1로 보존합니다. 이름은 데이터셋 원본 표기라 위 그룹보다 낯설 수 있어요. 성능 계산에 쓰이는 변수는 실제로 반영되고, 나머지는 3D 형상에만 반영됩니다.
                   </div>
                   {(draft.parameterDefinitions ?? [])
                     .filter((definition) => !query || `${definition.label} ${GROUP_LABELS[definition.group]} ${definition.optimization ?? ''}`.toLocaleLowerCase('ko-KR').includes(query))
@@ -350,6 +331,7 @@ export function DesignLabView({
                       />
                     ))}
                 </ParameterSection>
+                )}
               </Accordion>
             )}
           </ScrollArea>
@@ -390,9 +372,9 @@ export function DesignLabView({
               )}
             </div>
             <div className="grid grid-cols-3 border-t border-[#dbe4ea] bg-white text-center text-xs">
-              <ViewerStat label="Arm span" value={`${formatMetric(maxArmSpan(draft), 0)} mm`} />
-              <ViewerStat label="Fuselage" value={draft ? `${formatMetric(draft.fuselage.length, 0)} mm` : '—'} />
-              <ViewerStat label="Wings" value={draft ? `${draft.numWings || draft.wings.length} physical` : '—'} />
+              <ViewerStat label="팔 전체 폭" value={`${formatMetric(maxArmSpan(draft), 0)} mm`} />
+              <ViewerStat label="동체 길이" value={draft ? `${formatMetric(draft.fuselage.length, 0)} mm` : '—'} />
+              <ViewerStat label="날개 수" value={draft ? `${draft.numWings || draft.wings.length}개` : '—'} />
             </div>
           </div>
         </div>
@@ -518,11 +500,29 @@ function CompareMetric({ label, before, after, unit, invert = false }: { label: 
   );
 }
 
-function ParameterSection({ value, icon, title, count, advanced = false, children }: { value: string; icon: React.ReactNode; title: string; count: number; advanced?: boolean; children: React.ReactNode }) {
+function ParameterSection({ value, icon, title, count, advanced = false, hint, children }: { value: string; icon: React.ReactNode; title: string; count: number; advanced?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <AccordionItem value={value} className="border-[#e2e9ee]">
       <AccordionTrigger className="px-1 py-3 hover:no-underline">
-        <span className="flex items-center gap-2 text-[#294353] [&>svg]:size-4 [&>svg]:text-[#147d91]">{icon}{title}{advanced && <Badge variant="outline" className="h-5 border-[#dbe4ea] text-[9px] text-[#738591]">Advanced</Badge>}</span>
+        <span className="flex items-center gap-2 text-[#294353] [&>svg]:size-4 [&>svg]:text-[#147d91]">
+          {icon}{title}
+          {advanced && <Badge variant="outline" className="h-5 border-[#dbe4ea] text-[9px] text-[#738591]">전문가용</Badge>}
+          {hint && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    aria-label={`${title} 설명`}
+                    className="grid size-4 shrink-0 cursor-help place-items-center rounded-full text-[#9aabb5] hover:bg-[#e9eff3] hover:text-[#147d91]"
+                  />
+                }
+              >
+                <Info className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-64 text-left leading-5 whitespace-normal">{hint}</TooltipContent>
+            </Tooltip>
+          )}
+        </span>
         <span className="mr-2 text-[10px] font-normal text-[#82919c]">{count}</span>
       </AccordionTrigger>
       <AccordionContent className="space-y-3 px-1 pb-4">{children}</AccordionContent>
@@ -614,7 +614,7 @@ function SourceParameterControl({
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="break-all font-mono text-[10px] font-semibold text-[#294353]">{definition.label}</p>
-          <p className="mt-1 text-[9px] text-[#82919c]">{GROUP_LABELS[definition.group]} · {definition.optimization ?? 'CAD derived'}</p>
+          <p className="mt-1 text-[9px] text-[#82919c]">{GROUP_LABELS[definition.group]} · {definition.optimization ?? 'CAD 파생값'}</p>
         </div>
         <Badge variant="outline" className={`h-5 shrink-0 px-1.5 text-[8px] ${definition.affectsPerformance ? 'border-[#b8dfe4] text-[#0f6475]' : 'border-[#dbe4ea] text-[#738591]'}`}>{impactLabel}</Badge>
       </div>
@@ -631,7 +631,7 @@ function SourceParameterControl({
         />
       ) : typeof value === 'boolean' ? (
         <div className="flex items-center justify-between py-1 text-[11px] text-[#607383]">
-          <span>{value ? 'Enabled' : 'Disabled'}</span>
+          <span>{value ? '켜짐' : '꺼짐'}</span>
           <div className="flex items-center gap-2">
             {value !== baseline && (
               <button onClick={() => onChange(Boolean(baseline))} aria-label={`${definition.label} 초기화`} className="rounded p-1 text-[#82919c] hover:bg-[#e9eff3]"><RotateCcw className="size-3" /></button>
@@ -640,16 +640,16 @@ function SourceParameterControl({
           </div>
         </div>
       ) : typeof value === 'string' && /NACA|PROFILE/i.test(definition.label) ? (
-        <ControlSelect label="Profile" value={value} options={nacaOptions} baseline={String(baseline ?? '')} onChange={onChange} />
+        <ControlSelect label="날개 단면 (NACA)" value={value} options={nacaOptions} baseline={String(baseline ?? '')} onChange={onChange} />
       ) : (
-        <ReadOnlyValue label="Value" value={String(value ?? '—')} note="파생 CAD 파라미터 · 읽기 전용" />
+        <ReadOnlyValue label="값" value={String(value ?? '—')} note="3D 형상에만 반영되는 파생값 · 읽기 전용" />
       )}
       {definition.compatibility && <p className="mt-2 text-[9px] text-[#82919c]">{definition.compatibility}</p>}
     </div>
   );
 }
 
-function ControlSelect({ label, value, options, baseline, onChange }: { label: string; value: string; options: string[]; baseline?: string; onChange: (value: string) => void }) {
+function ControlSelect({ label, value, options, baseline, format = formatComponent, onChange }: { label: string; value: string; options: string[]; baseline?: string; format?: (value: string) => string; onChange: (value: string) => void }) {
   const changed = Boolean(baseline && value !== baseline);
   const safeOptions = options.includes(value) ? options : [value, ...options];
   return (
@@ -661,7 +661,7 @@ function ControlSelect({ label, value, options, baseline, onChange }: { label: s
       <Select value={value} onValueChange={(next) => onChange(String(next))}>
         <SelectTrigger className={`h-9 w-full border-[#dbe4ea] bg-white text-xs ${changed ? 'text-[#0f7182]' : 'text-[#294353]'}`}><SelectValue /></SelectTrigger>
         <SelectContent className="max-h-72 max-w-[360px] border-[#dbe4ea] bg-white text-[#294353]">
-          {safeOptions.filter(Boolean).map((option) => <SelectItem key={option} value={option}>{formatComponent(option)}</SelectItem>)}
+          {safeOptions.filter(Boolean).map((option) => <SelectItem key={option} value={option}>{format(option)}</SelectItem>)}
         </SelectContent>
       </Select>
     </div>
@@ -671,15 +671,15 @@ function ControlSelect({ label, value, options, baseline, onChange }: { label: s
 function WingControls({ wing, baseline, nacaOptions, onChange }: { wing: WingParameters; baseline: WingParameters; nacaOptions: string[]; onChange: (mutator: (wing: WingParameters) => void) => void }) {
   return (
     <div className="rounded-xl border border-[#e2e9ee] bg-[#f8fafb] p-3">
-      <p className="mb-3 flex items-center justify-between text-xs font-semibold text-[#294353]">Wing group<span className="font-normal text-[#7b8c98]">{formatComponent(wing.type)}</span></p>
-      <ControlSelect label="NACA profile" value={wing.nacaProfile} options={nacaOptions} baseline={baseline.nacaProfile} onChange={(value) => onChange((next) => { next.nacaProfile = value; })} />
-      <NumberSlider label="Span" unit="mm" min={200} max={2000} step={1} value={wing.span} baseline={baseline.span} onChange={(value) => onChange((next) => { next.span = value; })} />
-      <NumberSlider label="Inner chord" unit="mm" min={100} max={500} step={1} value={wing.chordInner} baseline={baseline.chordInner} onChange={(value) => onChange((next) => { next.chordInner = value; if (next.chordOuter > value) next.chordOuter = value; })} />
-      <NumberSlider label="Outer chord" unit="mm" min={50} max={Math.max(50, wing.chordInner)} step={1} value={Math.min(wing.chordOuter, wing.chordInner)} baseline={Math.min(baseline.chordOuter, wing.chordInner)} onChange={(value) => onChange((next) => { next.chordOuter = value; })} />
-      <NumberSlider label="Rotation" unit="°" min={0} max={360} step={1} value={wing.rotation} baseline={baseline.rotation} onChange={(value) => onChange((next) => { next.rotation = value; })} />
-      <NumberSlider label="Tube offset" unit="mm" min={-100} max={160} step={1} value={wing.tubeOffset} baseline={baseline.tubeOffset} onChange={(value) => onChange((next) => { next.tubeOffset = value; })} />
-      <NumberSlider label="Aileron bias" unit="" min={0.1} max={1} step={0.01} value={wing.aileronBias} baseline={baseline.aileronBias} onChange={(value) => onChange((next) => { next.aileronBias = value; })} />
-      <NumberSlider label="Flap bias" unit="" min={0.1} max={1} step={0.01} value={wing.flapBias} baseline={baseline.flapBias} onChange={(value) => onChange((next) => { next.flapBias = value; })} />
+      <p className="mb-3 flex items-center justify-between text-xs font-semibold text-[#294353]">날개 세트<span className="font-normal text-[#7b8c98]">{formatComponent(wing.type)}</span></p>
+      <ControlSelect label="날개 단면 (NACA)" value={wing.nacaProfile} options={nacaOptions} baseline={baseline.nacaProfile} onChange={(value) => onChange((next) => { next.nacaProfile = value; })} />
+      <NumberSlider label="날개 폭 (Span)" unit="mm" min={200} max={2000} step={1} value={wing.span} baseline={baseline.span} onChange={(value) => onChange((next) => { next.span = value; })} />
+      <NumberSlider label="안쪽 날개 깊이" unit="mm" min={100} max={500} step={1} value={wing.chordInner} baseline={baseline.chordInner} onChange={(value) => onChange((next) => { next.chordInner = value; if (next.chordOuter > value) next.chordOuter = value; })} />
+      <NumberSlider label="바깥쪽 날개 깊이" unit="mm" min={50} max={Math.max(50, wing.chordInner)} step={1} value={Math.min(wing.chordOuter, wing.chordInner)} baseline={Math.min(baseline.chordOuter, wing.chordInner)} onChange={(value) => onChange((next) => { next.chordOuter = value; })} />
+      <NumberSlider label="장착 각도" unit="°" min={0} max={360} step={1} value={wing.rotation} baseline={baseline.rotation} onChange={(value) => onChange((next) => { next.rotation = value; })} />
+      <NumberSlider label="결합 튜브 오프셋" unit="mm" min={-100} max={160} step={1} value={wing.tubeOffset} baseline={baseline.tubeOffset} onChange={(value) => onChange((next) => { next.tubeOffset = value; })} />
+      <NumberSlider label="에일러론 비율" unit="" min={0.1} max={1} step={0.01} value={wing.aileronBias} baseline={baseline.aileronBias} onChange={(value) => onChange((next) => { next.aileronBias = value; })} />
+      <NumberSlider label="플랩 비율" unit="" min={0.1} max={1} step={0.01} value={wing.flapBias} baseline={baseline.flapBias} onChange={(value) => onChange((next) => { next.flapBias = value; })} />
     </div>
   );
 }
@@ -718,79 +718,6 @@ function EstimateRow({ icon, label, before, after, unit, better }: { icon: React
       </div>
     </div>
   );
-}
-
-function cloneDraft(value: DesignDraft) {
-  return JSON.parse(JSON.stringify(value)) as DesignDraft;
-}
-
-function hydrateDraft(value: DesignDraft) {
-  const draft = cloneDraft(value);
-  if (draft.parameterDefinitions?.length || !draft.sourceParameters?.length) return draft;
-  draft.parameterDefinitions = draft.sourceParameters.map(([name, parameterValue, optimization, targetCount], index) => {
-    const group = classifyParameterGroup(name, optimization);
-    const affectsGeometry = ['structure', 'fuselage', 'propulsion', 'energy', 'wing', 'layout', 'payload'].includes(group);
-    const fixedDerived = /CONTROLCHANNELAUTO|CONTROL_CHANNEL_AUTO|FIXEDROTATION/i.test(name);
-    return {
-      id: `parameter:${name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')}:${index}`,
-      path: `lowLevel.parameters.${index}`,
-      label: name,
-      group,
-      unit: sourceParameterUnit(name, optimization),
-      range: sourceParameterRange(name, optimization, parameterValue),
-      step: sourceParameterStep(name, parameterValue),
-      baseline: parameterValue,
-      value: parameterValue,
-      optimization,
-      editable: !fixedDerived && (typeof parameterValue === 'number' || typeof parameterValue === 'boolean' || /NACA|PROFILE/i.test(name)),
-      advanced: !optimization,
-      affectsGeometry,
-      affectsPerformance: Boolean(optimization) && group !== 'layout',
-      compatibility: targetCount ? `${targetCount} CAD component${targetCount === 1 ? '' : 's'} linked` : null,
-    };
-  });
-  return draft;
-}
-
-function classifyParameterGroup(name: string, optimization: string | null): ParameterGroup {
-  const token = `${name} ${optimization ?? ''}`.toLowerCase();
-  if (/cargo|payload|mass/.test(token)) return 'payload';
-  if (/wing|naca|aileron|flap|servo/.test(token)) return 'wing';
-  if (/battery.*(?:x|y)|sensor|autopilot|current.*(?:x|y)|voltage.*(?:x|y)|gps|vario|rpm.*(?:x|y)/.test(token)) return 'layout';
-  if (/fuselage|diameter|floor|body_(?!rot)/.test(token)) return 'fuselage';
-  if (/motor|propeller|prop_|rpm/.test(token)) return 'propulsion';
-  if (/battery|capacity|voltage|current/.test(token)) return 'energy';
-  return 'structure';
-}
-
-function sourceParameterUnit(name: string, optimization: string | null) {
-  const token = `${name} ${optimization ?? ''}`.toLowerCase();
-  if (/angle|rotation|_rot|clock/.test(token)) return '°';
-  if (/mass|cargo|payload|load/.test(token)) return /wing.*load/.test(token) ? 'g' : 'kg';
-  if (/length|span|chord|offset|diameter|height|(?:^|_)[xy](?:_|$)/.test(token)) return 'mm';
-  return null;
-}
-
-function sourceParameterRange(name: string, optimization: string | null, value: number | string | boolean | null) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  const token = `${name} ${optimization ?? ''}`.toLowerCase();
-  if (/bias|ratio|taper.*offset/.test(token)) return { min: 0, max: 1 };
-  if (/angle|rotation|_rot|clock/.test(token)) return { min: Math.min(-180, Math.floor(value)), max: Math.max(360, Math.ceil(value)) };
-  if (/length|span|chord|diameter|height/.test(token)) return { min: 0, max: Math.max(Math.ceil(value * 2), Math.ceil(value), 10) };
-  if (/offset|(?:^|_)[xy](?:_|$)/.test(token)) {
-    const extent = Math.max(Math.ceil(Math.abs(value) * 2), 300);
-    return { min: -extent, max: extent };
-  }
-  if (/mass|cargo|payload|load/.test(token)) return { min: 0, max: Math.max(Math.ceil(value * 2), 20) };
-  const extent = Math.max(Math.abs(value), 1);
-  return { min: Math.floor(value - extent), max: Math.ceil(value + extent) };
-}
-
-function sourceParameterStep(name: string, value: number | string | boolean | null) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  if (/bias|ratio/i.test(name)) return 0.01;
-  if (/mass/i.test(name)) return 0.1;
-  return Math.abs(value) < 10 && !Number.isInteger(value) ? 0.1 : 1;
 }
 
 function applySourceParameter(
@@ -1050,35 +977,4 @@ function average(values: number[], fallback: number) {
 
 function batteryCapacity(value?: string) {
   return Number(value?.match(/(\d{3,6})mAh/i)?.[1] ?? 5000);
-}
-
-function draftFromDesign(design: DesignSummary, reference?: ShowcaseDesign | null): DesignDraft {
-  const segment: DesignSegment = {
-    id: 'segment-0', path: 'hub.mainSegment', nodeType: 'PropArm', slot: 'mainSegment', length: design.armLength || 300,
-    parentPath: null, depth: 1, multiplicity: Math.max(design.numPropellers, 1),
-    angle: 0, offset: 0, parameters: {}, motorType: reference?.motor ?? '', propellerType: reference?.propeller ?? '',
-  };
-  const wings: WingParameters[] = design.numWings ? [{
-    id: 'wing-0', path: 'hub.wing', type: reference?.wingType ?? 'Wing', nacaProfile: reference?.nacaProfile ?? '0012', span: reference?.wingSpan || 800,
-    chordInner: reference?.wingChord || 220, chordOuter: (reference?.wingChord || 220) * 0.62, taperOffset: true, rotation: 0, aileronBias: 0.5, flapBias: 0.5, load: 400, tubeOffset: 0,
-  }] : [];
-  return {
-    baselineId: design.id, name: reference?.sourceName ?? `design-${design.id}`, topology: design.hub,
-    numPropellers: design.numPropellers, numWings: design.numWings, nodes: [], segments: [segment],
-    propulsionGroups: [{ id: 'propulsion-0', path: segment.path, segmentId: segment.id, motorType: reference?.motor ?? '', propellerType: reference?.propeller ?? '' }],
-    parameterDefinitions: [],
-    sourceParameters: [],
-    physicalComponents: { motors: [], propellers: [], batteries: [], wings: [], servos: [] },
-    energy: { batteryTypes: [reference?.battery ?? ''], configuration: 'SingleBattery' },
-    fuselage: { length: 220, horizontalDiameter: 360, verticalDiameter: 135, floorHeight: 24 },
-    wings, payload: { mass: 0.5 }, layout: {},
-  };
-}
-
-function catalogsFromShowcases(designs: ShowcaseDesign[]): ComponentCatalogs {
-  const unique = (values: Array<string | null>) => [...new Set(values.filter(Boolean) as string[])].sort();
-  return {
-    motors: unique(designs.map((item) => item.motor)), propellers: unique(designs.map((item) => item.propeller)), batteries: unique(designs.map((item) => item.battery)),
-    servos: [], nacaProfiles: unique(designs.map((item) => item.nacaProfile)), nodeTypes: unique(designs.map((item) => item.hub)),
-  };
 }

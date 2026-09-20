@@ -19,8 +19,11 @@ import {
 } from '@/components/ui/tooltip';
 import {
   type DesignSummary,
+  formatBatteryLabel,
   formatComponent,
   formatHub,
+  formatMotorLabel,
+  formatPropellerLabel,
   type ShowcaseDesign,
 } from '@/lib/drawn-types';
 
@@ -265,9 +268,9 @@ export function ModelStage({
 export function ConfigurationList({ design }: { design: ShowcaseDesign }) {
   const rows = [
     ['허브', formatHub(design.hub)],
-    ['모터', formatComponent(design.motor)],
-    ['프로펠러', formatComponent(design.propeller)],
-    ['배터리', formatComponent(design.battery)],
+    ['모터', formatMotorLabel(design.motor)],
+    ['프로펠러', formatPropellerLabel(design.propeller)],
+    ['배터리', formatBatteryLabel(design.battery)],
     [
       '암 길이',
       design.armLength ? `${design.armLength.toFixed(1)} mm` : '—',

@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/og.png',
+        url: '/og.png?v=drawn',
         width: 1536,
         height: 1024,
         alt: 'Drawn UAV AI Design Intelligence',
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     title: 'Drawn · UAV AI Design Intelligence',
     description:
       'AircraftVerse 기반 UAV 성능 예측·설계 비교·AI 최적화 플랫폼',
-    images: ['/og.png'],
+    images: ['/og.png?v=drawn'],
   },
 };
 

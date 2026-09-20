@@ -227,7 +227,7 @@ export function DrawnApp() {
         <header className="sticky top-0 z-50 border-b border-[#dbe4ea] bg-white/95 backdrop-blur-xl">
           <div className="mx-auto flex h-14 max-w-[1720px] items-center gap-4 px-4 lg:px-6">
             <button
-              onClick={() => setView('explore')}
+              onClick={() => setView('home')}
               className="flex min-w-0 items-center gap-2.5 text-left"
             >
               <div className="grid size-8 place-items-center rounded-lg bg-[#147d91] shadow-sm">
@@ -235,7 +235,7 @@ export function DrawnApp() {
               </div>
               <div>
                 <p className="text-sm font-semibold tracking-[-0.02em] text-[#172b3a]">
-                  drawn
+                  Drawn
                 </p>
                 <p className="hidden text-[10px] font-medium tracking-[0.08em] text-[#6b7d8b] sm:block">
                   UAV 설계 워크벤치

@@ -43,7 +43,6 @@ import {
   DataDisclaimer,
   DesignSelector,
   ModelStage,
-  SectionHeading,
   SourceBadge,
 } from '@/components/views/shared';
 
@@ -103,14 +102,7 @@ export function CompareView({
   const hasAnyTrim = Boolean(aDetail || bDetail);
 
   return (
-    <section className="px-4 py-4 lg:px-6">
-      <SectionHeading
-        eyebrow="4단계 · 설계 비교"
-        title="무엇이 바뀌고, 성능이 어떻게 달라졌나요?"
-        description="설계 구성의 차이를 먼저 확인한 뒤 AircraftVerse 성능 결과를 같은 단위로 비교합니다."
-        actions={<SourceBadge />}
-      />
-
+    <div>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(390px,0.85fr)]">
         <div>
           <div className="mb-3 grid grid-cols-2 gap-3">
@@ -223,7 +215,7 @@ export function CompareView({
           <div className="mt-4"><DataDisclaimer compact /></div>
         </aside>
       </div>
-    </section>
+    </div>
   );
 }
 

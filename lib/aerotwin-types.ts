@@ -23,6 +23,9 @@ export type DesignSummary = {
   primaryBattery: string | null;
   dragAt20: number;
   powerAt20: number;
+  powerAt0: number;
+  thrustAt0: number;
+  currentAt0: number;
   feasible: boolean;
   viewerReady: boolean;
   paretoOptimal: boolean;
@@ -274,8 +277,6 @@ export type WorkspaceView =
   | 'explore'
   | 'simulator'
   | 'lab'
-  | 'compare'
-  | 'optimizer'
   | 'gallery';
 
 export function formatMetric(value: number, digits = 1) {

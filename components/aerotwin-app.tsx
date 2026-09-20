@@ -7,10 +7,9 @@ import {
   Beaker,
   Boxes,
   CheckCircle2,
-  GitCompareArrows,
   HelpCircle,
   Hexagon,
-  Sparkles,
+  MapPin,
   Share2,
 } from 'lucide-react';
 
@@ -19,13 +18,25 @@ import { DesignLabView } from '@/components/views/design-lab-view';
 import { ExplorerView } from '@/components/views/explorer-view';
 import { GuideView } from '@/components/views/guide-view';
 import { LandingView } from '@/components/views/landing-view';
-import { OptimizerView } from '@/components/views/optimizer-view';
 import { SimulatorView } from '@/components/views/simulator-view';
 import { GalleryView } from '@/components/views/gallery-view';
+import { NearbyFlightSites } from '@/components/views/nearby-flight-sites';
 import { isDesignDraft, workspaceStorageKey } from '@/lib/design-gallery';
 import type { GalleryDetail, WorkspaceSnapshot } from '@/lib/design-gallery';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type {
   DatasetIndex,
@@ -39,9 +50,7 @@ const navItems = [
   { id: 'explore' as const, step: 1, label: '설계 선택', short: '탐색', icon: Boxes },
   { id: 'lab' as const, step: 2, label: '파라미터 편집', short: '편집', icon: Beaker },
   { id: 'simulator' as const, step: 3, label: '성능 확인', short: '성능', icon: Activity },
-  { id: 'compare' as const, step: 4, label: '설계 비교', short: '비교', icon: GitCompareArrows },
-  { id: 'optimizer' as const, step: 5, label: '후보 탐색', short: '후보', icon: Sparkles },
-  { id: 'gallery' as const, step: 6, label: '공유 갤러리', short: '공유', icon: Share2 },
+  { id: 'gallery' as const, step: 4, label: '공유 갤러리', short: '공유', icon: Share2 },
 ];
 
 export function AeroTwinApp() {
@@ -53,6 +62,7 @@ export function AeroTwinApp() {
     aId: number;
     bId: number;
   } | null>(null);
+  const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceSnapshot | null>(null);
   const [workspaceNotice, setWorkspaceNotice] = useState('');
@@ -169,15 +179,17 @@ export function AeroTwinApp() {
   const openCompare = (aId: number, bId: number) => {
     if (!designById.has(aId) || !designById.has(bId)) return;
     setComparePair({ aId, bId });
-    setView('compare');
+    setCompareDialogOpen(true);
   };
 
-  const openCompareFromExplorer = (aId: number) => {
+  const openCompareFromExplorer = (aId: number, preferredBId?: number) => {
     const existingB = comparePair?.bId;
     const bId =
-      existingB && existingB !== aId && designById.has(existingB)
-        ? existingB
-        : dataset?.summary.showcaseIds.find((id) => id !== aId);
+      preferredBId != null && preferredBId !== aId && designById.has(preferredBId)
+        ? preferredBId
+        : existingB && existingB !== aId && designById.has(existingB)
+          ? existingB
+          : dataset?.summary.showcaseIds.find((id) => id !== aId);
     if (bId != null) openCompare(aId, bId);
   };
 
@@ -223,6 +235,15 @@ export function AeroTwinApp() {
               >
                 <HelpCircle className="size-3.5" /> <span className="hidden sm:inline">가이드</span>
               </button>
+              <Popover>
+                <PopoverTrigger className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ccd8df] bg-white px-3 py-2 text-xs font-medium text-[#3c5362] transition hover:bg-[#f4f7f9]">
+                  <MapPin className="size-3.5 text-[#147d91]" />
+                  <span className="hidden sm:inline">주변 비행지</span>
+                </PopoverTrigger>
+                <PopoverContent align="end" sideOffset={8} className="w-[min(22rem,calc(100vw-32px))] bg-white p-4 text-[#172b3a] shadow-xl">
+                  <NearbyFlightSites />
+                </PopoverContent>
+              </Popover>
               <Link href="/packages" className="shrink-0 rounded-lg bg-[#147d91] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#0f6475]">
                 패키지 상품!
               </Link>
@@ -281,7 +302,6 @@ export function AeroTwinApp() {
                     selectShowcaseAndOpen(id, 'simulator')
                   }
                   onOpenCompare={openCompareFromExplorer}
-                  onOpenOptimizer={() => setView('optimizer')}
                   onOpenGuide={() => setView('guide')}
                 />
               )}
@@ -314,26 +334,6 @@ export function AeroTwinApp() {
                   onDraftChange={onDraftChange}
                 />
               )}
-              {view === 'compare' && comparePair && (
-                <CompareView
-                  dataset={dataset}
-                  showcases={showcases}
-                  pair={comparePair}
-                  onPairChange={setComparePair}
-                />
-              )}
-              {view === 'optimizer' && (
-                <OptimizerView
-                  dataset={dataset}
-                  current={
-                    selectedSummary ??
-                    designById.get(dataset.summary.defaultShowcaseId)!
-                  }
-                  onCompare={openCompare}
-                  onApplyDraft={(id) => selectShowcaseAndOpen(id, 'lab')}
-                  onOpenGallery={() => setView('gallery')}
-                />
-              )}
               {view === 'gallery' && (
                 <GalleryView
                   current={selectedSummary ?? designById.get(dataset.summary.defaultShowcaseId)!}
@@ -352,6 +352,23 @@ export function AeroTwinApp() {
             </>
           )}
         </div>
+
+        <Dialog open={compareDialogOpen && Boolean(dataset && comparePair)} onOpenChange={setCompareDialogOpen}>
+          <DialogContent className="max-h-[92vh] overflow-y-auto border-[#dbe4ea] bg-[#f7f9fb] p-5 text-[#172b3a] sm:max-w-[1180px]">
+            <DialogHeader>
+              <DialogTitle className="text-xl">설계 비교</DialogTitle>
+              <DialogDescription>설계 구성의 차이를 먼저 확인한 뒤 AircraftVerse 성능 결과를 같은 단위로 비교합니다.</DialogDescription>
+            </DialogHeader>
+            {dataset && comparePair && (
+              <CompareView
+                dataset={dataset}
+                showcases={showcases}
+                pair={comparePair}
+                onPairChange={setComparePair}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
     </TooltipProvider>
   );

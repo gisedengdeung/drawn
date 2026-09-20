@@ -380,9 +380,9 @@ export function DesignLabView({
               ) : (
                 <div className="absolute inset-0 grid place-items-center text-sm text-[#607383]">이 설계에는 배포된 원본 STL이 없습니다.</div>
               )}
-              <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-[#cfdae0] bg-white/90 px-3 py-2 text-[11px] text-[#607383] shadow-sm backdrop-blur">
+              {mode === 'parametric-preview' && <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-[#cfdae0] bg-white/90 px-3 py-2 text-[11px] text-[#607383] shadow-sm backdrop-blur">
                 <MousePointer2 className="size-3" /> 드래그 회전 · 스크롤 확대
-              </div>
+              </div>}
               {changedGroup && (
                 <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-lg bg-[#147d91] px-3 py-2 text-xs font-semibold text-white shadow-sm">
                   {GROUP_LABELS[changedGroup]} 반영됨

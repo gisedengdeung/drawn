@@ -1,0 +1,691 @@
+{
+  "source": "국토교통부_항공레저_초경량비행장치공역",
+  "sourceUrl": "https://www.data.go.kr/data/15061946/fileData.do",
+  "generatedAt": "2026-09-20",
+  "zones": [
+    {
+      "id": "UA2",
+      "code": "UA 2",
+      "name": "구성산",
+      "lat": 35.739167,
+      "lng": 127.0075,
+      "radiusKm": 1.8,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA3",
+      "code": "UA 3",
+      "name": "약산",
+      "lat": 35.739167,
+      "lng": 128.417222,
+      "radiusKm": 0.7,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA4",
+      "code": "UA 4",
+      "name": "봉화산",
+      "lat": 35.625278,
+      "lng": 129.092222,
+      "radiusKm": 4,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA5",
+      "code": "UA 5",
+      "name": "덕두산",
+      "lat": 35.411389,
+      "lng": 127.5325,
+      "radiusKm": 4.5,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA6",
+      "code": "UA 6",
+      "name": "금산",
+      "lat": 34.736389,
+      "lng": 127.981111,
+      "radiusKm": 2.1,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA7",
+      "code": "UA 7",
+      "name": "홍산",
+      "lat": 35.828056,
+      "lng": 127.081111,
+      "radiusKm": 1.2,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA9",
+      "code": "UA 9",
+      "name": "양평",
+      "lat": 37.476389,
+      "lng": 127.458333,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 37.502778,
+          "lng": 127.383333
+        },
+        {
+          "lat": 37.502778,
+          "lng": 127.533333
+        },
+        {
+          "lat": 37.45,
+          "lng": 127.533333
+        },
+        {
+          "lat": 37.45,
+          "lng": 127.383333
+        }
+      ],
+      "remark": null
+    },
+    {
+      "id": "UA10",
+      "code": "UA 10",
+      "name": "고창",
+      "lat": 35.386389,
+      "lng": 126.731389,
+      "radiusKm": 4,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA14",
+      "code": "UA 14",
+      "name": "공주",
+      "lat": 36.497315,
+      "lng": 126.988426,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 36.540278,
+          "lng": 126.937222
+        },
+        {
+          "lat": 36.5125,
+          "lng": 126.962778
+        },
+        {
+          "lat": 36.500556,
+          "lng": 127.120278
+        },
+        {
+          "lat": 36.434444,
+          "lng": 127.098056
+        },
+        {
+          "lat": 36.468056,
+          "lng": 126.9075
+        },
+        {
+          "lat": 36.528056,
+          "lng": 126.904722
+        }
+      ],
+      "remark": null
+    },
+    {
+      "id": "UA19",
+      "code": "UA 19",
+      "name": "시화",
+      "lat": 37.244563,
+      "lng": 126.705278,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 37.2975,
+          "lng": 126.704167
+        },
+        {
+          "lat": 37.29,
+          "lng": 126.833333
+        },
+        {
+          "lat": 37.241667,
+          "lng": 126.833333
+        },
+        {
+          "lat": 37.220833,
+          "lng": 126.774444
+        },
+        {
+          "lat": 37.2125,
+          "lng": 126.674722
+        },
+        {
+          "lat": 37.212222,
+          "lng": 126.561667
+        },
+        {
+          "lat": 37.237222,
+          "lng": 126.555278
+        }
+      ],
+      "remark": null
+    },
+    {
+      "id": "UA20",
+      "code": "UA 20",
+      "name": "성화대",
+      "lat": 34.699167,
+      "lng": 126.516944,
+      "radiusKm": 5.4,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA21",
+      "code": "UA 21",
+      "name": "방장산",
+      "lat": 35.449444,
+      "lng": 126.738056,
+      "radiusKm": 3,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA22",
+      "code": "UA 22",
+      "name": "고흥",
+      "lat": 34.611111,
+      "lng": 127.205833,
+      "radiusKm": 5.6,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA23",
+      "code": "UA 23",
+      "name": "담양",
+      "lat": 35.341667,
+      "lng": 127.03,
+      "radiusKm": 5.6,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA24",
+      "code": "UA 24",
+      "name": "구좌",
+      "lat": 33.478056,
+      "lng": 126.822778,
+      "radiusKm": 2.8,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA25",
+      "code": "UA 25",
+      "name": "하동",
+      "lat": 35.008542,
+      "lng": 127.758958,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 35.029722,
+          "lng": 127.723611
+        },
+        {
+          "lat": 35.029167,
+          "lng": 127.794722
+        },
+        {
+          "lat": 34.9875,
+          "lng": 127.794167
+        },
+        {
+          "lat": 34.987778,
+          "lng": 127.723333
+        }
+      ],
+      "remark": null
+    },
+    {
+      "id": "UA26",
+      "code": "UA 26",
+      "name": "장암산",
+      "lat": 37.382778,
+      "lng": 128.425694,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 37.393889,
+          "lng": 128.405278
+        },
+        {
+          "lat": 37.402778,
+          "lng": 128.469444
+        },
+        {
+          "lat": 37.364722,
+          "lng": 128.436111
+        },
+        {
+          "lat": 37.369722,
+          "lng": 128.391944
+        }
+      ],
+      "remark": null
+    },
+    {
+      "id": "UA27",
+      "code": "UA 27",
+      "name": "마악산",
+      "lat": 33.3,
+      "lng": 126.554444,
+      "radiusKm": 1.2,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA28",
+      "code": "UA 28",
+      "name": "서운산",
+      "lat": 36.930556,
+      "lng": 127.283056,
+      "radiusKm": 2,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA29",
+      "code": "UA 29",
+      "name": "오촌",
+      "lat": 36.953056,
+      "lng": 127.287778,
+      "radiusKm": 2,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA30",
+      "code": "UA 30",
+      "name": "북좌",
+      "lat": 37.045,
+      "lng": 127.327778,
+      "radiusKm": 2,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": null
+    },
+    {
+      "id": "UA31",
+      "code": "UA 31",
+      "name": "청라",
+      "lat": 37.564583,
+      "lng": 126.627778,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 37.565,
+          "lng": 126.625
+        },
+        {
+          "lat": 37.566667,
+          "lng": 126.628889
+        },
+        {
+          "lat": 37.564167,
+          "lng": 126.630556
+        },
+        {
+          "lat": 37.5625,
+          "lng": 126.626667
+        }
+      ],
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA32",
+      "code": "UA 32",
+      "name": "퇴촌",
+      "lat": 37.466667,
+      "lng": 127.3025,
+      "radiusKm": 0.3,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA33",
+      "code": "UA 33",
+      "name": "병천천",
+      "lat": 36.649167,
+      "lng": 127.351319,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 36.651111,
+          "lng": 127.350833
+        },
+        {
+          "lat": 36.650556,
+          "lng": 127.353056
+        },
+        {
+          "lat": 36.647222,
+          "lng": 127.351667
+        },
+        {
+          "lat": 36.647778,
+          "lng": 127.349722
+        }
+      ],
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA34",
+      "code": "UA 34",
+      "name": "미호천",
+      "lat": 36.615347,
+      "lng": 127.346875,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 36.619444,
+          "lng": 127.346667
+        },
+        {
+          "lat": 36.618056,
+          "lng": 127.351389
+        },
+        {
+          "lat": 36.61,
+          "lng": 127.346944
+        },
+        {
+          "lat": 36.613889,
+          "lng": 127.3425
+        }
+      ],
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA35",
+      "code": "UA 35",
+      "name": "김해",
+      "lat": 35.347778,
+      "lng": 128.806667,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 35.349167,
+          "lng": 128.804167
+        },
+        {
+          "lat": 35.350278,
+          "lng": 128.806944
+        },
+        {
+          "lat": 35.346389,
+          "lng": 128.809167
+        },
+        {
+          "lat": 35.345278,
+          "lng": 128.806389
+        }
+      ],
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA36",
+      "code": "UA 36",
+      "name": "밀양",
+      "lat": 35.460903,
+      "lng": 128.780694,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 35.466944,
+          "lng": 128.778333
+        },
+        {
+          "lat": 35.458056,
+          "lng": 128.787222
+        },
+        {
+          "lat": 35.454722,
+          "lng": 128.783056
+        },
+        {
+          "lat": 35.463889,
+          "lng": 128.774167
+        }
+      ],
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA37",
+      "code": "UA 37",
+      "name": "창원",
+      "lat": 35.373222,
+      "lng": 128.654167,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 35.377222,
+          "lng": 128.648889
+        },
+        {
+          "lat": 35.377222,
+          "lng": 128.658611
+        },
+        {
+          "lat": 35.371111,
+          "lng": 128.658611
+        },
+        {
+          "lat": 35.370278,
+          "lng": 128.655833
+        },
+        {
+          "lat": 35.370278,
+          "lng": 128.648889
+        }
+      ],
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA38",
+      "code": "UA 38",
+      "name": "울주",
+      "lat": 35.524167,
+      "lng": 129.165509,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 35.524722,
+          "lng": 129.163056
+        },
+        {
+          "lat": 35.524444,
+          "lng": 129.165833
+        },
+        {
+          "lat": 35.525,
+          "lng": 129.166944
+        },
+        {
+          "lat": 35.523889,
+          "lng": 129.1675
+        },
+        {
+          "lat": 35.523333,
+          "lng": 129.166944
+        },
+        {
+          "lat": 35.523611,
+          "lng": 129.162778
+        }
+      ],
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA39",
+      "code": "UA 39",
+      "name": "김제",
+      "lat": 35.91125,
+      "lng": 126.893472,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 35.909722,
+          "lng": 126.884444
+        },
+        {
+          "lat": 35.915,
+          "lng": 126.8825
+        },
+        {
+          "lat": 35.916111,
+          "lng": 126.894167
+        },
+        {
+          "lat": 35.910278,
+          "lng": 126.905556
+        },
+        {
+          "lat": 35.905556,
+          "lng": 126.902222
+        },
+        {
+          "lat": 35.910833,
+          "lng": 126.891944
+        }
+      ],
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA40",
+      "code": "UA 40",
+      "name": "고령",
+      "lat": 35.842778,
+      "lng": 128.444167,
+      "radiusKm": 0.08,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA41",
+      "code": "UA 41",
+      "name": "대전",
+      "lat": 36.458889,
+      "lng": 127.398472,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 36.465,
+          "lng": 127.390556
+        },
+        {
+          "lat": 36.465833,
+          "lng": 127.4075
+        },
+        {
+          "lat": 36.452778,
+          "lng": 127.410833
+        },
+        {
+          "lat": 36.451944,
+          "lng": 127.385
+        }
+      ],
+      "remark": "무인비행장치 전용구역"
+    },
+    {
+      "id": "UA42",
+      "code": "UA 42",
+      "name": "광주",
+      "lat": 35.221667,
+      "lng": 128.861667,
+      "radiusKm": 0.05,
+      "ceilingFt": 500,
+      "shape": "circle",
+      "remark": "실기시험 전용구역"
+    },
+    {
+      "id": "UA43",
+      "code": "UA 43",
+      "name": "영월",
+      "lat": 37.175694,
+      "lng": 128.461389,
+      "radiusKm": null,
+      "ceilingFt": 500,
+      "shape": "polygon",
+      "vertices": [
+        {
+          "lat": 37.176667,
+          "lng": 128.460833
+        },
+        {
+          "lat": 37.175278,
+          "lng": 128.4625
+        },
+        {
+          "lat": 37.174722,
+          "lng": 128.461944
+        },
+        {
+          "lat": 37.176111,
+          "lng": 128.460278
+        }
+      ],
+      "remark": "실기시험 전용구역"
+    }
+  ]
+}

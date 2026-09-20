@@ -25,7 +25,7 @@ import {
   formatMotorLabel,
   formatPropellerLabel,
   type ShowcaseDesign,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 
 type DataSource =
   | 'DATASET'

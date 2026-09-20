@@ -2,6 +2,7 @@ import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
 import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url';
 import hostingConfig from './.openai/hosting.json';
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
@@ -11,6 +12,9 @@ const { d1, r2 } = hostingConfig;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
+const localDataDirectory = fileURLToPath(new URL('./data', import.meta.url))
+  .replaceAll('\\', '/')
+  .replace(/\/$/, '');
 
 const localBindingConfig = {
   main: 'vinext/server/fetch-handler',
@@ -50,9 +54,21 @@ export default defineConfig(async () => {
 
   return {
     css: { postcss: { plugins: [tailwindcss()] } },
-    server: isCodexSeatbeltSandbox
-      ? { watch: { useFsEvents: false, usePolling: true } }
-      : undefined,
+    server: {
+      watch: {
+        // Raw datasets and local caches must not enter the development watcher.
+        ignored: (filePath: string) => {
+          const normalized = filePath.replaceAll('\\', '/');
+          return (
+            normalized === localDataDirectory ||
+            normalized.startsWith(`${localDataDirectory}/`)
+          );
+        },
+        ...(isCodexSeatbeltSandbox
+          ? { useFsEvents: false, usePolling: true }
+          : {}),
+      },
+    },
     plugins: [
       vinext(),
       sites(),

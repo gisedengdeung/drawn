@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, '..');
 const workspaceRoot = path.resolve(projectRoot, '..');
+const localDataRoot = path.join(projectRoot, 'data', 'raw');
 const publicDataDir = path.join(projectRoot, 'public', 'data');
 const publicModelsDir = path.join(projectRoot, 'public', 'models');
 const designTreesDir = path.join(publicDataDir, 'design-trees');
@@ -90,23 +91,30 @@ function resolveDesignRoot(candidate) {
   throw new Error(`AircraftVerse design directory not found: ${absolute}`);
 }
 
+function findDataParts(root) {
+  if (!fs.existsSync(root)) return [];
+  return fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isDirectory() && /^AircraftVerse_\d+$/.test(entry.name),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+    .map((entry) => path.join(root, entry.name));
+}
+
 function discoverDataRoots() {
   const explicitRoots = parseArgs(process.argv.slice(2));
+  // Select one location so legacy and project-local copies cannot be combined.
+  const localParts = explicitRoots.length ? [] : findDataParts(localDataRoot);
   const candidates = explicitRoots.length
     ? explicitRoots
-    : fs
-        .readdirSync(workspaceRoot, { withFileTypes: true })
-        .filter(
-          (entry) =>
-            entry.isDirectory() && /^AircraftVerse_\d+$/.test(entry.name),
-        )
-        .sort((a, b) =>
-          a.name.localeCompare(b.name, undefined, { numeric: true }),
-        )
-        .map((entry) => path.join(workspaceRoot, entry.name));
+    : localParts.length
+      ? localParts
+      : findDataParts(workspaceRoot);
   if (!candidates.length) {
     throw new Error(
-      `No AircraftVerse_* directories found under ${workspaceRoot}`,
+      `No AircraftVerse_* directories found under ${localDataRoot} or ${workspaceRoot}. Use --data-root <part-directory> for each of the three parts.`,
     );
   }
   return candidates.map(resolveDesignRoot);

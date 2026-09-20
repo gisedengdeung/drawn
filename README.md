@@ -21,6 +21,21 @@ npm run dev
 
 원본 84.34GiB 데이터는 복사하거나 변경하지 않으며 Git 추적에서도 제외합니다.
 
+### 내 주변 비행 장소 (국토부 UL 공역)
+
+헤더의 "주변 비행지" 위젯은 국토교통부 초경량비행장치 비행공역(UA, data.go.kr
+dataset 15061946) 34곳을 사용합니다. 원본 CSV는 저장소에 포함하지 않으며,
+아래 명령으로 직접 내려받아 갱신합니다.
+
+```bash
+# https://www.data.go.kr/data/15061946/fileData.do 에서 로그인 없이 CSV 다운로드 후
+# 혹은 drive에 "국토교통부_항공레저_초경량비행장치공역_20251231.csv" 파일을 다운로드 후
+npm run data:prepare-drone-zones -- --csv <다운로드한 CSV 경로>
+```
+
+연 1회 갱신되는 스냅샷이라 실시간 NOTAM·임시 공역 변경은 반영하지 않습니다.
+실제 비행 전에는 [드론 원스톱](https://drone.onestop.go.kr)에서 최종 확인이 필요합니다.
+
 ## 구현된 사용자 흐름
 
 1. **Design Explorer** — 27,714개 ID/topology 검색과 대표 12개 원본 STL 또는 전체 파라메트릭 프리뷰 진입

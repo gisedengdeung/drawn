@@ -23,6 +23,9 @@ export type DesignSummary = {
   primaryBattery: string | null;
   dragAt20: number;
   powerAt20: number;
+  powerAt0: number;
+  thrustAt0: number;
+  currentAt0: number;
   feasible: boolean;
   viewerReady: boolean;
   paretoOptimal: boolean;
@@ -275,8 +278,7 @@ export type WorkspaceView =
   | 'simulator'
   | 'lab'
   | 'compare'
-  | 'optimizer'
-  | 'gallery';
+  | 'optimizer';
 
 export function formatMetric(value: number, digits = 1) {
   return new Intl.NumberFormat('ko-KR', {

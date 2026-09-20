@@ -231,8 +231,8 @@ export function ExplorerView({
 
             <div className="mt-4 rounded-lg border border-[#dbe4ea] bg-[#f7f9fb] p-3">
               <div className="flex items-center justify-between gap-3 text-xs text-[#526675]">
-                유효 비행성능만
-                <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="유효 비행성능만" />
+                비행거리 계산 가능한 설계도
+                <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="비행거리 계산 가능한 설계도" />
               </div>
             </div>
           </div>
@@ -295,13 +295,13 @@ export function ExplorerView({
               visibleResults.map((design) => {
                 const isFavorite = favorites.includes(design.id);
                 return (
-                  <div key={design.id} className="relative mb-1">
+                  <div key={design.id} className="relative mb-2 last:mb-0">
                     <button
                       onClick={() => onSelect(design.id)}
                       className={`w-full rounded-xl border p-3 pr-9 text-left transition ${
                         current.id === design.id
                           ? 'border-[#9ccdd6] bg-[#eef8fa] shadow-sm'
-                          : 'border-transparent hover:border-[#dbe4ea] hover:bg-[#f7f9fb]'
+                          : 'border-[#cfdbe2] bg-white hover:border-[#9ccdd6] hover:bg-[#f7f9fb]'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Box, Info, MousePointer2 } from 'lucide-react';
+import { Box, Info } from 'lucide-react';
 
 import { StlViewer } from '@/components/stl-viewer';
 import { Badge } from '@/components/ui/badge';
@@ -219,9 +219,6 @@ export function ModelStage({
               </Badge>
             </div>
           )}
-          <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 rounded-lg border border-[#cfdae0] bg-white/85 px-3 py-2 text-[11px] text-[#607383] shadow-sm backdrop-blur">
-            <MousePointer2 className="size-3" /> 드래그 회전 · 스크롤 확대
-          </div>
           {showForceVectors && (
             <div className="absolute right-4 top-4 z-20 flex flex-wrap justify-end gap-2 text-[10px] font-medium">
               <span className="rounded-full border border-[#b9dce2] bg-white/90 px-2 py-1 text-[#147d91]">

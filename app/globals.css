@@ -46,68 +46,57 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* 애플 스타일 참고: 기본 Tailwind 그림자보다 훨씬 부드럽고 넓게 퍼지는 그림자로 교체 */
+  --shadow-2xs: 0 1px 1px 0 rgb(0 0 0 / 0.02);
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --shadow-sm: 0 1px 1px 0 rgb(0 0 0 / 0.02), 0 4px 12px -2px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 2px 4px 0 rgb(0 0 0 / 0.03), 0 8px 20px -4px rgb(0 0 0 / 0.08);
+  --shadow-lg: 0 4px 8px 0 rgb(0 0 0 / 0.03), 0 16px 32px -8px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 8px 16px 0 rgb(0 0 0 / 0.04), 0 24px 48px -12px rgb(0 0 0 / 0.14);
+  --shadow-2xl: 0 16px 32px 0 rgb(0 0 0 / 0.06), 0 32px 64px -16px rgb(0 0 0 / 0.18);
 }
 
 body {
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, var(--font-geist-sans), Arial, Helvetica, sans-serif;
   min-width: 320px;
 }
 
 :root {
   color-scheme: light;
-  --background: oklch(0.982 0.006 230);
+  /* 토스 스타일 참고: 배경은 항상 순백으로 고정, 포인트 컬러는 토스 블루 계열 */
+  --background: #ffffff;
   --foreground: oklch(0.25 0.03 238);
-  --card: oklch(1 0 0);
+  --card: #ffffff;
   --card-foreground: oklch(0.25 0.03 238);
-  --popover: oklch(1 0 0);
+  --popover: #ffffff;
   --popover-foreground: oklch(0.25 0.03 238);
-  --primary: oklch(0.52 0.105 212);
-  --primary-foreground: oklch(1 0 0);
+  --primary: #3182f6;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.955 0.012 225);
   --secondary-foreground: oklch(0.31 0.04 235);
   --muted: oklch(0.96 0.009 230);
   --muted-foreground: oklch(0.52 0.025 235);
-  --accent: oklch(0.94 0.025 211);
-  --accent-foreground: oklch(0.36 0.08 215);
+  --accent: #eff6ff;
+  --accent-foreground: #1b64da;
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.89 0.014 230);
   --input: oklch(0.86 0.018 230);
-  --ring: oklch(0.57 0.105 212);
+  --ring: #3182f6;
   --chart-1: oklch(0.55 0.12 210);
   --chart-2: oklch(0.58 0.16 292);
   --chart-3: oklch(0.58 0.13 155);
   --chart-4: oklch(0.68 0.14 75);
   --chart-5: oklch(0.62 0.18 28);
   --radius: 0.75rem;
-  --sidebar: oklch(0.975 0.008 230);
+  --sidebar: #ffffff;
   --sidebar-foreground: oklch(0.32 0.035 235);
-  --sidebar-primary: oklch(0.52 0.105 212);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.935 0.025 212);
-  --sidebar-accent-foreground: oklch(0.36 0.08 215);
+  --sidebar-primary: #3182f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eff6ff;
+  --sidebar-accent-foreground: #1b64da;
   --sidebar-border: oklch(0.89 0.014 230);
-  --sidebar-ring: oklch(0.57 0.105 212);
-}
-
-.dark {
-  --background: oklch(0.982 0.006 230);
-  --foreground: oklch(0.25 0.03 238);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.25 0.03 238);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.25 0.03 238);
-  --primary: oklch(0.52 0.105 212);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.955 0.012 225);
-  --secondary-foreground: oklch(0.31 0.04 235);
-  --muted: oklch(0.96 0.009 230);
-  --muted-foreground: oklch(0.52 0.025 235);
-  --accent: oklch(0.94 0.025 211);
-  --accent-foreground: oklch(0.36 0.08 215);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.89 0.014 230);
-  --input: oklch(0.86 0.018 230);
-  --ring: oklch(0.57 0.105 212);
+  --sidebar-ring: #3182f6;
 }
 
 @layer base {
@@ -116,7 +105,6 @@ body {
   }
   body {
     @apply bg-background text-foreground;
-    background-image: linear-gradient(180deg, #ffffff 0, #f7f9fb 240px);
   }
   html {
     @apply font-sans;
@@ -126,11 +114,11 @@ body {
 @layer components {
   .workspace-light {
     --workbench-surface: #ffffff;
-    --workbench-subtle: #f4f7f9;
-    --workbench-border: #dbe4ea;
-    --workbench-ink: #172b3a;
-    --workbench-muted: #607383;
-    --workbench-primary: #147d91;
+    --workbench-subtle: #f5f5f7;
+    --workbench-border: #e5e5ea;
+    --workbench-ink: #1d1d1f;
+    --workbench-muted: #6e6e73;
+    --workbench-primary: #3182f6;
   }
 
   /* Legacy dark utility classes inside shared viewer/metric components. */
@@ -158,9 +146,12 @@ body {
     color: var(--workbench-muted) !important;
   }
 
+  .workspace-light a.text-white,
+  .workspace-light a .text-white,
   .workspace-light button.text-white,
   .workspace-light button .text-white,
-  .workspace-light [class*='bg-[#147d91]'].text-white,
+  .workspace-light [class*='bg-[#3182f6]'].text-white,
+  .workspace-light [class*='bg-[#1b64da]'].text-white,
   .workspace-light [class*='bg-violet-7'].text-white {
     color: #ffffff !important;
   }

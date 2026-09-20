@@ -42,24 +42,24 @@ export function FlightMapPage() {
   }, [zones, position]);
 
   return (
-    <main className="workspace-light min-h-screen bg-[#f7f9fb] text-[#172b3a]">
-      <header className="sticky top-0 z-40 border-b border-[#dbe4ea] bg-white/95 px-4 py-3 backdrop-blur-xl lg:px-6">
+    <main className="workspace-light min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
+      <header className="sticky top-0 z-40 border-b border-[#e5e5ea] bg-white/95 px-4 py-3 backdrop-blur-xl lg:px-6">
         <div className="mx-auto flex max-w-[1720px] flex-wrap items-center justify-between gap-3">
           <div>
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#607383] hover:text-[#294353]"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6e6e73] hover:text-[#3c3c43]"
             >
               <ArrowLeft className="size-3.5" /> 워크벤치로 돌아가기
             </Link>
-            <h1 className="mt-1.5 text-lg font-semibold text-[#172b3a]">
+            <h1 className="mt-1.5 text-lg font-semibold text-[#1d1d1f]">
               드론 비행 공역 지도
             </h1>
           </div>
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
-              className="border-[#b8dfe4] bg-[#eef8fa] text-[10px] text-[#0f6475]"
+              className="border-[#bfdbfe] bg-[#eff6ff] text-[10px] text-[#1b64da]"
             >
               국토부 UL 공역 전체 {zones.length || 34}곳
             </Badge>
@@ -67,7 +67,7 @@ export function FlightMapPage() {
               onClick={locate}
               size="sm"
               disabled={!dataset || status === 'loading'}
-              className="bg-[#147d91] text-white hover:bg-[#0f6878]"
+              className="bg-[#3182f6] text-white hover:bg-[#1b64da]"
             >
               {status === 'loading' ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -102,15 +102,15 @@ export function FlightMapPage() {
             userPosition={position}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            className="h-[calc(100vh-190px)] min-h-[420px] overflow-hidden rounded-2xl border border-[#dbe4ea] shadow-sm"
+            className="h-[calc(100vh-190px)] min-h-[420px] overflow-hidden rounded-2xl border border-[#e5e5ea] shadow-sm"
           />
 
           <aside className="workspace-panel flex h-[calc(100vh-190px)] min-h-[420px] flex-col overflow-hidden rounded-2xl">
-            <div className="border-b border-[#dbe4ea] p-3.5">
-              <p className="text-xs font-medium text-[#294353]">
+            <div className="border-b border-[#e5e5ea] p-3.5">
+              <p className="text-xs font-medium text-[#3c3c43]">
                 {position ? '가까운 순 정렬' : '전체 목록 (위치 미확인)'}
               </p>
-              <p className="mt-1 text-[10px] leading-4 text-[#82919c]">
+              <p className="mt-1 text-[10px] leading-4 text-[#86868b]">
                 연 1회 갱신되는 국토부 스냅샷입니다. 실시간 공역 변경은 반영하지
                 않으니 비행 전 드론 원스톱에서 최종 확인하세요.
               </p>
@@ -127,22 +127,22 @@ export function FlightMapPage() {
                     onClick={() => setSelectedId(zone.id)}
                     className={`mb-1 w-full rounded-xl border p-3 text-left transition ${
                       isSelected
-                        ? 'border-[#9ccdd6] bg-[#eef8fa] shadow-sm'
-                        : 'border-transparent hover:border-[#dbe4ea] hover:bg-[#f7f9fb]'
+                        ? 'border-[#93c5fd] bg-[#eff6ff] shadow-sm'
+                        : 'border-transparent hover:border-[#e5e5ea] hover:bg-[#f5f5f7]'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-medium text-[#294353]">
+                        <p className="truncate text-xs font-medium text-[#3c3c43]">
                           {position && index < 3 && (
-                            <span className="mr-1 rounded bg-[#147d91] px-1 py-0.5 text-[9px] font-semibold text-white">
+                            <span className="mr-1 rounded bg-[#3182f6] px-1 py-0.5 text-[9px] font-semibold text-white">
                               {index + 1}
                             </span>
                           )}
                           {zone.name}{' '}
-                          <span className="font-mono text-[10px] text-[#9aabb5]">{zone.code}</span>
+                          <span className="font-mono text-[10px] text-[#86868b]">{zone.code}</span>
                         </p>
-                        <p className="mt-1 truncate text-[10px] text-[#82919c]">
+                        <p className="mt-1 truncate text-[10px] text-[#86868b]">
                           {zone.shape === 'polygon'
                             ? '다각형 구역'
                             : zone.radiusKm != null
@@ -152,7 +152,7 @@ export function FlightMapPage() {
                         </p>
                       </div>
                       {distanceKm != null && (
-                        <span className="shrink-0 font-mono text-[11px] font-semibold text-[#0f6475]">
+                        <span className="shrink-0 font-mono text-[11px] font-semibold text-[#1b64da]">
                           {distanceKm.toFixed(0)}km
                         </span>
                       )}
@@ -161,13 +161,13 @@ export function FlightMapPage() {
                 );
               })}
               {sortedZones.length === 0 && !datasetError && (
-                <div className="grid h-full place-items-center p-6 text-center text-xs text-[#607383]">
+                <div className="grid h-full place-items-center p-6 text-center text-xs text-[#6e6e73]">
                   <Loader2 className="mx-auto mb-2 size-4 animate-spin" /> 공역 데이터
                   불러오는 중…
                 </div>
               )}
             </div>
-            <div className="border-t border-[#dbe4ea] p-3 space-y-2">
+            <div className="border-t border-[#e5e5ea] p-3 space-y-2">
               {selectedId && (
                 <a
                   href={kakaoMapSearchUrl(
@@ -175,7 +175,7 @@ export function FlightMapPage() {
                   )}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-1.5 rounded-lg border border-[#dbe4ea] bg-white px-2.5 py-2 text-[10px] text-[#607383] hover:bg-[#f4f7f9]"
+                  className="flex items-center gap-1.5 rounded-lg border border-[#e5e5ea] bg-white px-2.5 py-2 text-[10px] text-[#6e6e73] hover:bg-[#f5f5f7]"
                 >
                   카카오맵에서 보기 <ExternalLink className="ml-auto size-3 shrink-0" />
                 </a>
@@ -184,7 +184,7 @@ export function FlightMapPage() {
                 href={DRONE_ONESTOP_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1.5 rounded-lg border border-dashed border-[#cfdbe2] px-2.5 py-2 text-[10px] text-[#607383] hover:bg-[#f4f7f9]"
+                className="flex items-center gap-1.5 rounded-lg border border-dashed border-[#e5e5ea] px-2.5 py-2 text-[10px] text-[#6e6e73] hover:bg-[#f5f5f7]"
               >
                 <Info className="size-3 shrink-0" /> 드론 원스톱에서 최종 확인
                 <ExternalLink className="ml-auto size-3 shrink-0" />

@@ -41,19 +41,19 @@ import {
 } from '@/components/views/shared';
 
 const overviewConfig = {
-  drag: { label: '항력 (N)', color: '#147d91' },
+  drag: { label: '항력 (N)', color: '#3182f6' },
   power: { label: '전력 (W)', color: '#6750a4' },
 } satisfies ChartConfig;
 
 const aeroConfig = {
-  drag: { label: '항력 (N)', color: '#147d91' },
+  drag: { label: '항력 (N)', color: '#3182f6' },
   thrust: { label: '추력 (N)', color: '#178653' },
   lift: { label: '양력 (N)', color: '#c47a13' },
 } satisfies ChartConfig;
 
 const electricConfig = {
   power: { label: '전력 (W)', color: '#6750a4' },
-  current: { label: '전류 (A)', color: '#147d91' },
+  current: { label: '전류 (A)', color: '#3182f6' },
 } satisfies ChartConfig;
 
 type CurveMode = 'overview' | 'aero' | 'electric';
@@ -84,7 +84,7 @@ export function SimulatorView({
         actions={
           <>
             <DesignSelector designs={designs} value={selected.id} onChange={onSelect} />
-            <Button onClick={onOpenLab} className="bg-[#147d91] text-white hover:bg-[#0f6878]">
+            <Button onClick={onOpenLab} className="bg-[#3182f6] text-white hover:bg-[#1b64da]">
               <ArrowLeft /> 파라미터 편집
             </Button>
           </>
@@ -100,11 +100,11 @@ export function SimulatorView({
           showForceVectors={Boolean(trim?.valid)}
         />
         <aside className="workspace-panel rounded-xl p-4">
-          <div className="flex items-start justify-between gap-3 border-b border-[#dbe4ea] pb-3">
+          <div className="flex items-start justify-between gap-3 border-b border-[#e5e5ea] pb-3">
             <div>
-              <p className="text-xs font-medium text-[#607383]">현재 설계</p>
-              <p className="mt-1 font-mono text-base font-semibold text-[#172b3a]">Design #{selected.id}</p>
-              <p className="mt-1 text-[11px] text-[#718391]">{formatHub(selected.hub)} · {selected.numPropellers}P / {selected.numWings}W</p>
+              <p className="text-xs font-medium text-[#6e6e73]">현재 설계</p>
+              <p className="mt-1 font-mono text-base font-semibold text-[#1d1d1f]">Design #{selected.id}</p>
+              <p className="mt-1 text-[11px] text-[#6e6e73]">{formatHub(selected.hub)} · {selected.numPropellers}P / {selected.numWings}W</p>
             </div>
             <SourceBadge />
           </div>
@@ -112,11 +112,11 @@ export function SimulatorView({
           <div className="mt-4">
             <div className="flex items-end justify-between">
               <div>
-                <p className="text-xs font-medium text-[#526675]">비행 속도</p>
-                <p className="mt-1 text-[11px] text-[#718391]">0–50 m/s · 1 m/s 간격</p>
+                <p className="text-xs font-medium text-[#6e6e73]">비행 속도</p>
+                <p className="mt-1 text-[11px] text-[#6e6e73]">0–50 m/s · 1 m/s 간격</p>
               </div>
-              <p className="font-mono text-3xl font-semibold tracking-[-0.05em] text-[#0f6475]">
-                {speed}<span className="ml-1 text-xs font-normal text-[#607383]">m/s</span>
+              <p className="font-mono text-3xl font-semibold tracking-[-0.05em] text-[#1b64da]">
+                {speed}<span className="ml-1 text-xs font-normal text-[#6e6e73]">m/s</span>
               </p>
             </div>
             <Slider
@@ -125,12 +125,12 @@ export function SimulatorView({
               max={50}
               step={1}
               onValueChange={(value) => setSpeed(Number(Array.isArray(value) ? value[0] : value))}
-              className="mt-5 [&_[data-slot=slider-range]]:bg-[#147d91] [&_[data-slot=slider-thumb]]:size-4 [&_[data-slot=slider-thumb]]:border-[#147d91]"
+              className="mt-5 [&_[data-slot=slider-range]]:bg-[#3182f6] [&_[data-slot=slider-thumb]]:size-4 [&_[data-slot=slider-thumb]]:border-[#3182f6]"
               aria-label="비행 속도"
             />
-            <div className="mt-2 flex justify-between font-mono text-[10px] text-[#718391]"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span></div>
-            <div className="mt-3 flex items-center justify-between rounded-lg bg-[#f4f7f9] px-3 py-2 text-[11px]">
-              <span className="text-[#607383]">유효 trim 범위</span>
+            <div className="mt-2 flex justify-between font-mono text-[10px] text-[#6e6e73]"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span></div>
+            <div className="mt-3 flex items-center justify-between rounded-lg bg-[#f5f5f7] px-3 py-2 text-[11px]">
+              <span className="text-[#6e6e73]">유효 trim 범위</span>
               <span className="font-mono font-medium text-emerald-700">0–{validRows.at(-1)?.speed ?? 0} m/s</span>
             </div>
           </div>
@@ -163,16 +163,16 @@ export function SimulatorView({
       <section className="workspace-panel mt-4 rounded-xl p-4 lg:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2"><h2 className="font-semibold text-[#172b3a]">속도별 성능 곡선</h2><SourceBadge /></div>
-            <p className="mt-1 text-xs text-[#607383]">유효한 AircraftVerse trim 행만 연결하며 세로선은 현재 속도입니다.</p>
+            <div className="flex items-center gap-2"><h2 className="font-semibold text-[#1d1d1f]">속도별 성능 곡선</h2><SourceBadge /></div>
+            <p className="mt-1 text-xs text-[#6e6e73]">유효한 AircraftVerse trim 행만 연결하며 세로선은 현재 속도입니다.</p>
           </div>
-          <div className="flex rounded-lg border border-[#dbe4ea] bg-[#f4f7f9] p-1">
+          <div className="flex rounded-lg bg-[#f5f5f7] p-1">
             {([
               ['overview', '요약'],
               ['aero', '공력'],
               ['electric', '전력'],
             ] as const).map(([id, label]) => (
-              <Button key={id} size="sm" variant="ghost" onClick={() => setCurveMode(id)} className={curveMode === id ? 'bg-white text-[#0f6475] shadow-sm' : 'text-[#607383]'}>{label}</Button>
+              <Button key={id} size="sm" variant="ghost" onClick={() => setCurveMode(id)} className={curveMode === id ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73]'}>{label}</Button>
             ))}
           </div>
         </div>
@@ -215,20 +215,20 @@ export function SimulatorView({
 function LiveMetric({ icon, label, value, unit, tone }: { icon: React.ReactNode; label: string; value: number | null; unit: string; tone: 'cyan' | 'violet' | 'green' | 'amber' }) {
   const available = value != null && Number.isFinite(value) && value !== 0;
   const toneClass = {
-    cyan: 'bg-[#e8f5f7] text-[#0f6475]',
+    cyan: 'bg-[#eff6ff] text-[#1b64da]',
     violet: 'bg-violet-50 text-violet-700',
     green: 'bg-emerald-50 text-emerald-700',
     amber: 'bg-amber-50 text-amber-700',
   }[tone];
   return (
-    <div className="rounded-lg border border-[#dbe4ea] bg-white p-2.5">
+    <div className="rounded-lg border border-[#e5e5ea] bg-white p-2.5">
       <div className="flex items-center gap-2">
         <span className={`grid size-6 place-items-center rounded-md [&>svg]:size-3.5 ${toneClass}`}>{icon}</span>
-        <span className="text-[11px] text-[#607383]">{label}</span>
+        <span className="text-[11px] text-[#6e6e73]">{label}</span>
       </div>
-      <p className="mt-2 font-mono text-base font-semibold text-[#172b3a]">
+      <p className="mt-2 font-mono text-base font-semibold text-[#1d1d1f]">
         {available ? formatMetric(value, unit === 'W' || unit === 'sec' ? 0 : 1) : '—'}
-        {available && <span className="ml-1 text-[10px] font-normal text-[#718391]">{unit}</span>}
+        {available && <span className="ml-1 text-[10px] font-normal text-[#6e6e73]">{unit}</span>}
       </p>
     </div>
   );

@@ -38,8 +38,8 @@ import type {
   DatasetIndex,
   DesignSummary,
   ShowcaseMap,
-} from '@/lib/aerotwin-types';
-import { formatDistance, formatHub, formatMetric } from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
+import { formatDistance, formatHub, formatMetric } from '@/lib/drawn-types';
 import {
   CANDIDATE_OBJECTIVES,
   CANDIDATE_PRESETS,

@@ -30,8 +30,8 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 import { Slider } from '@/components/ui/slider';
-import type { ShowcaseDesign } from '@/lib/aerotwin-types';
-import { formatHub, formatMetric } from '@/lib/aerotwin-types';
+import type { ShowcaseDesign } from '@/lib/drawn-types';
+import { formatHub, formatMetric } from '@/lib/drawn-types';
 import {
   DataDisclaimer,
   DesignSelector,

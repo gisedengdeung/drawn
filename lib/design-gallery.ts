@@ -1,4 +1,4 @@
-import type { DesignDraft } from '@/lib/aerotwin-types';
+import type { DesignDraft } from '@/lib/drawn-types';
 
 export const galleryPurposes = ['취미·입문', '촬영·관측', '장거리 비행', '레이싱', '운송·탑재', '연구·실험'] as const;
 export type GalleryPost = {

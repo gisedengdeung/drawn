@@ -15,6 +15,7 @@ import {
   Ruler,
   Search,
   SlidersHorizontal,
+  ShoppingBag,
   Weight,
   Wind,
   Zap,
@@ -22,6 +23,8 @@ import {
 
 import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
 import { StlViewer } from '@/components/stl-viewer';
+import { cloneDraft } from '@/lib/design-draft';
+import type { DesignWorkspace } from '@/hooks/use-design-workspace';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,17 +35,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import type {
-  ComponentCatalogs,
   DesignDraft,
-  DesignSegment,
   DesignSummary,
   DraftGeometryMode,
   ParameterDefinition,
   ParameterGroup,
   ShowcaseDesign,
   WingParameters,
-} from '@/lib/aerotwin-types';
-import { formatComponent, formatMetric, isAvailableMetric, percentChange } from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
+import { formatComponent, formatMetric, isAvailableMetric, percentChange } from '@/lib/drawn-types';
 import { DataDisclaimer, DesignSelector, SectionHeading, SourceBadge } from '@/components/views/shared';
 
 type DraftEstimate = {
@@ -68,15 +69,6 @@ const GROUP_LABELS: Record<ParameterGroup, string> = {
   layout: '내부 배치',
 };
 
-const EMPTY_CATALOGS: ComponentCatalogs = {
-  motors: [],
-  propellers: [],
-  batteries: [],
-  servos: [],
-  nacaProfiles: [],
-  nodeTypes: [],
-};
-
 export function DesignLabView({
   designs,
   selected,
@@ -84,8 +76,8 @@ export function DesignLabView({
   datasetDesigns = [],
   onSelect,
   onOpenDatasetCompare,
-  initialDraft = null,
-  onDraftChange,
+  onOpenParts,
+  workspace,
 }: {
   designs: Array<Pick<DesignSummary, 'id' | 'numPropellers' | 'numWings'>>;
   selected: DesignSummary;
@@ -93,19 +85,10 @@ export function DesignLabView({
   datasetDesigns?: DesignSummary[];
   onSelect: (id: number) => void;
   onOpenDatasetCompare: () => void;
-  initialDraft?: DesignDraft | null;
-  onDraftChange?: (draft: DesignDraft) => void;
+  onOpenParts: () => void;
+  workspace: DesignWorkspace;
 }) {
-  const [baseline, setBaseline] = useState<DesignDraft | null>(null);
-  const [draft, setDraft] = useState<DesignDraft | null>(null);
-  // The parent keeps this snapshot across workflow steps. Do not reload on each edit.
-  const initialDraftRef = useRef(initialDraft);
-  useEffect(() => {
-    if (draft) onDraftChange?.(draft);
-  }, [draft, onDraftChange]);
-  const [catalogs, setCatalogs] = useState<ComponentCatalogs>(EMPTY_CATALOGS);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { baseline, draft, setDraft, catalogs, loading, loadError } = workspace;
   const [mode, setMode] = useState<DraftGeometryMode>('parametric-preview');
   const [showGhost, setShowGhost] = useState(false);
   const [changedGroup, setChangedGroup] = useState<ParameterGroup | null>(null);
@@ -117,52 +100,6 @@ export function DesignLabView({
   const highlightTimeoutRef = useRef<number | null>(null);
   const estimateTimeoutRef = useRef<number | null>(null);
   const packagedReference = referenceDesign ?? ('modelPath' in selected ? selected as ShowcaseDesign : null);
-
-  useEffect(() => {
-    let active = true;
-    window.queueMicrotask(() => {
-      if (!active) return;
-      setLoading(true);
-      setLoadError(null);
-      setBaseline(null);
-      setDraft(null);
-    });
-    const shard = String(Math.floor(selected.id / 1000)).padStart(3, '0');
-    Promise.all([
-      fetch(`/data/design-trees/shard-${shard}.json`).then((response) => {
-        if (!response.ok) throw new Error('설계 트리 shard를 불러오지 못했습니다.');
-        return response.json() as Promise<Record<string, DesignDraft>>;
-      }),
-      fetch('/data/component-catalogs.json').then((response) => {
-        if (!response.ok) throw new Error('부품 카탈로그를 불러오지 못했습니다.');
-        return response.json() as Promise<ComponentCatalogs>;
-      }),
-    ])
-      .then(([shardData, nextCatalogs]) => {
-        if (!active) return;
-        const loaded = shardData[String(selected.id)];
-        if (!loaded) throw new Error(`Design #${selected.id}의 설계 트리가 없습니다.`);
-        const nextDraft = hydrateDraft(loaded);
-        setBaseline(nextDraft);
-        setDraft(initialDraftRef.current?.baselineId === selected.id ? hydrateDraft(initialDraftRef.current) : cloneDraft(nextDraft));
-        setCatalogs(nextCatalogs);
-        setMode('parametric-preview');
-      })
-      .catch((reason: unknown) => {
-        if (!active) return;
-        const fallback = draftFromDesign(selected, packagedReference);
-        setBaseline(fallback);
-        setDraft(initialDraftRef.current?.baselineId === selected.id ? hydrateDraft(initialDraftRef.current) : cloneDraft(fallback));
-        setCatalogs(packagedReference ? catalogsFromShowcases([packagedReference]) : EMPTY_CATALOGS);
-        setLoadError(reason instanceof Error ? reason.message : '설계 트리 로딩 오류');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [packagedReference, selected]);
 
   useEffect(() => () => {
     if (highlightTimeoutRef.current != null) window.clearTimeout(highlightTimeoutRef.current);
@@ -219,7 +156,8 @@ export function DesignLabView({
         title="설계 파라미터와 3D를 한 화면에서 조정하세요"
         description="치수·부품·날개 조건은 즉시 개념 형상에 반영되고, 성능은 AircraftVerse 범위 안에서 데이터 유사도 기반으로 갱신됩니다."
         actions={(
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={onOpenParts} disabled={loading || !draft} className="bg-[#147d91] text-white hover:bg-[#106c7d]"><ShoppingBag className="size-4" />부품 agent에서 정리</Button>
             <Badge variant="outline" className="border-[#b8dfe4] bg-[#eef8fa] text-[#0f6475]">원본 {parameterCount} · 편집 가능 {editableParameterCount}</Badge>
             <DesignSelector designs={designs} value={selected.id} onChange={onSelect} />
           </div>
@@ -720,79 +658,6 @@ function EstimateRow({ icon, label, before, after, unit, better }: { icon: React
   );
 }
 
-function cloneDraft(value: DesignDraft) {
-  return JSON.parse(JSON.stringify(value)) as DesignDraft;
-}
-
-function hydrateDraft(value: DesignDraft) {
-  const draft = cloneDraft(value);
-  if (draft.parameterDefinitions?.length || !draft.sourceParameters?.length) return draft;
-  draft.parameterDefinitions = draft.sourceParameters.map(([name, parameterValue, optimization, targetCount], index) => {
-    const group = classifyParameterGroup(name, optimization);
-    const affectsGeometry = ['structure', 'fuselage', 'propulsion', 'energy', 'wing', 'layout', 'payload'].includes(group);
-    const fixedDerived = /CONTROLCHANNELAUTO|CONTROL_CHANNEL_AUTO|FIXEDROTATION/i.test(name);
-    return {
-      id: `parameter:${name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')}:${index}`,
-      path: `lowLevel.parameters.${index}`,
-      label: name,
-      group,
-      unit: sourceParameterUnit(name, optimization),
-      range: sourceParameterRange(name, optimization, parameterValue),
-      step: sourceParameterStep(name, parameterValue),
-      baseline: parameterValue,
-      value: parameterValue,
-      optimization,
-      editable: !fixedDerived && (typeof parameterValue === 'number' || typeof parameterValue === 'boolean' || /NACA|PROFILE/i.test(name)),
-      advanced: !optimization,
-      affectsGeometry,
-      affectsPerformance: Boolean(optimization) && group !== 'layout',
-      compatibility: targetCount ? `${targetCount} CAD component${targetCount === 1 ? '' : 's'} linked` : null,
-    };
-  });
-  return draft;
-}
-
-function classifyParameterGroup(name: string, optimization: string | null): ParameterGroup {
-  const token = `${name} ${optimization ?? ''}`.toLowerCase();
-  if (/cargo|payload|mass/.test(token)) return 'payload';
-  if (/wing|naca|aileron|flap|servo/.test(token)) return 'wing';
-  if (/battery.*(?:x|y)|sensor|autopilot|current.*(?:x|y)|voltage.*(?:x|y)|gps|vario|rpm.*(?:x|y)/.test(token)) return 'layout';
-  if (/fuselage|diameter|floor|body_(?!rot)/.test(token)) return 'fuselage';
-  if (/motor|propeller|prop_|rpm/.test(token)) return 'propulsion';
-  if (/battery|capacity|voltage|current/.test(token)) return 'energy';
-  return 'structure';
-}
-
-function sourceParameterUnit(name: string, optimization: string | null) {
-  const token = `${name} ${optimization ?? ''}`.toLowerCase();
-  if (/angle|rotation|_rot|clock/.test(token)) return '°';
-  if (/mass|cargo|payload|load/.test(token)) return /wing.*load/.test(token) ? 'g' : 'kg';
-  if (/length|span|chord|offset|diameter|height|(?:^|_)[xy](?:_|$)/.test(token)) return 'mm';
-  return null;
-}
-
-function sourceParameterRange(name: string, optimization: string | null, value: number | string | boolean | null) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  const token = `${name} ${optimization ?? ''}`.toLowerCase();
-  if (/bias|ratio|taper.*offset/.test(token)) return { min: 0, max: 1 };
-  if (/angle|rotation|_rot|clock/.test(token)) return { min: Math.min(-180, Math.floor(value)), max: Math.max(360, Math.ceil(value)) };
-  if (/length|span|chord|diameter|height/.test(token)) return { min: 0, max: Math.max(Math.ceil(value * 2), Math.ceil(value), 10) };
-  if (/offset|(?:^|_)[xy](?:_|$)/.test(token)) {
-    const extent = Math.max(Math.ceil(Math.abs(value) * 2), 300);
-    return { min: -extent, max: extent };
-  }
-  if (/mass|cargo|payload|load/.test(token)) return { min: 0, max: Math.max(Math.ceil(value * 2), 20) };
-  const extent = Math.max(Math.abs(value), 1);
-  return { min: Math.floor(value - extent), max: Math.ceil(value + extent) };
-}
-
-function sourceParameterStep(name: string, value: number | string | boolean | null) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  if (/bias|ratio/i.test(name)) return 0.01;
-  if (/mass/i.test(name)) return 0.1;
-  return Math.abs(value) < 10 && !Number.isInteger(value) ? 0.1 : 1;
-}
-
 function applySourceParameter(
   draft: DesignDraft,
   parameterId: string,
@@ -1050,35 +915,4 @@ function average(values: number[], fallback: number) {
 
 function batteryCapacity(value?: string) {
   return Number(value?.match(/(\d{3,6})mAh/i)?.[1] ?? 5000);
-}
-
-function draftFromDesign(design: DesignSummary, reference?: ShowcaseDesign | null): DesignDraft {
-  const segment: DesignSegment = {
-    id: 'segment-0', path: 'hub.mainSegment', nodeType: 'PropArm', slot: 'mainSegment', length: design.armLength || 300,
-    parentPath: null, depth: 1, multiplicity: Math.max(design.numPropellers, 1),
-    angle: 0, offset: 0, parameters: {}, motorType: reference?.motor ?? '', propellerType: reference?.propeller ?? '',
-  };
-  const wings: WingParameters[] = design.numWings ? [{
-    id: 'wing-0', path: 'hub.wing', type: reference?.wingType ?? 'Wing', nacaProfile: reference?.nacaProfile ?? '0012', span: reference?.wingSpan || 800,
-    chordInner: reference?.wingChord || 220, chordOuter: (reference?.wingChord || 220) * 0.62, taperOffset: true, rotation: 0, aileronBias: 0.5, flapBias: 0.5, load: 400, tubeOffset: 0,
-  }] : [];
-  return {
-    baselineId: design.id, name: reference?.sourceName ?? `design-${design.id}`, topology: design.hub,
-    numPropellers: design.numPropellers, numWings: design.numWings, nodes: [], segments: [segment],
-    propulsionGroups: [{ id: 'propulsion-0', path: segment.path, segmentId: segment.id, motorType: reference?.motor ?? '', propellerType: reference?.propeller ?? '' }],
-    parameterDefinitions: [],
-    sourceParameters: [],
-    physicalComponents: { motors: [], propellers: [], batteries: [], wings: [], servos: [] },
-    energy: { batteryTypes: [reference?.battery ?? ''], configuration: 'SingleBattery' },
-    fuselage: { length: 220, horizontalDiameter: 360, verticalDiameter: 135, floorHeight: 24 },
-    wings, payload: { mass: 0.5 }, layout: {},
-  };
-}
-
-function catalogsFromShowcases(designs: ShowcaseDesign[]): ComponentCatalogs {
-  const unique = (values: Array<string | null>) => [...new Set(values.filter(Boolean) as string[])].sort();
-  return {
-    motors: unique(designs.map((item) => item.motor)), propellers: unique(designs.map((item) => item.propeller)), batteries: unique(designs.map((item) => item.battery)),
-    servos: [], nacaProfiles: unique(designs.map((item) => item.nacaProfile)), nodeTypes: unique(designs.map((item) => item.hub)),
-  };
 }

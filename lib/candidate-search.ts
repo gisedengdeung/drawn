@@ -1,4 +1,4 @@
-import type { DesignSummary } from './aerotwin-types';
+import type { DesignSummary } from './drawn-types';
 
 export type Objective = 'range' | 'hover' | 'power' | 'drag' | 'speed' | 'balanced';
 

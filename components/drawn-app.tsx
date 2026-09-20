@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import Link from 'next/link';
 import {
   Activity,
@@ -11,6 +12,7 @@ import {
   Hexagon,
   MapPin,
   Share2,
+  ShoppingBag,
 } from 'lucide-react';
 
 import { CompareView } from '@/components/views/compare-view';
@@ -19,9 +21,12 @@ import { ExplorerView } from '@/components/views/explorer-view';
 import { GuideView } from '@/components/views/guide-view';
 import { LandingView } from '@/components/views/landing-view';
 import { SimulatorView } from '@/components/views/simulator-view';
+import { PartsAgentView } from '@/components/views/parts-agent-view';
+import { useDesignWorkspace } from '@/hooks/use-design-workspace';
 import { GalleryView } from '@/components/views/gallery-view';
 import { NearbyFlightSites } from '@/components/views/nearby-flight-sites';
 import { isDesignDraft, workspaceStorageKey } from '@/lib/design-gallery';
+import { hydrateDraft } from '@/lib/design-draft';
 import type { GalleryDetail, WorkspaceSnapshot } from '@/lib/design-gallery';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -44,16 +49,17 @@ import type {
   DesignSummary,
   ShowcaseMap,
   WorkspaceView,
-} from '@/lib/aerotwin-types';
+} from '@/lib/drawn-types';
 
 const navItems = [
   { id: 'explore' as const, step: 1, label: '설계 선택', short: '탐색', icon: Boxes },
   { id: 'lab' as const, step: 2, label: '파라미터 편집', short: '편집', icon: Beaker },
   { id: 'simulator' as const, step: 3, label: '성능 확인', short: '성능', icon: Activity },
   { id: 'gallery' as const, step: 4, label: '공유 갤러리', short: '공유', icon: Share2 },
+  { id: 'parts' as const, step: 5, label: '부품 agent', short: '부품 agent', icon: ShoppingBag },
 ];
 
-export function AeroTwinApp() {
+export function DrawnApp() {
   const [view, setView] = useState<WorkspaceView>('home');
   const [dataset, setDataset] = useState<DatasetIndex | null>(null);
   const [showcases, setShowcases] = useState<ShowcaseMap>({});
@@ -74,17 +80,19 @@ export function AeroTwinApp() {
     try { localStorage.setItem(workspaceStorageKey, JSON.stringify(snapshot)); }
     catch { setWorkspaceNotice('브라우저 저장 공간이 부족해 새로고침하면 편집 내용이 사라질 수 있습니다. 갤러리에 게시해 보관해 주세요.'); }
   }, []);
-  const sourceBaselineId = workspace?.draft.baselineId;
-  const sourceId = workspace?.sourceId ?? null;
-  const onDraftChange = useCallback((draft: DesignDraft) => {
-    saveWorkspace({ draft, sourceId: sourceBaselineId === draft.baselineId ? sourceId : null });
-  }, [saveWorkspace, sourceBaselineId, sourceId]);
+  const onDraftChange = useCallback<Dispatch<SetStateAction<DesignDraft | null>>>((update) => {
+    setWorkspace((current) => {
+      const draft = typeof update === 'function' ? update(current?.draft ?? null) : update;
+      if (!draft) return null;
+      return { draft, sourceId: current?.draft.baselineId === draft.baselineId ? current.sourceId : null };
+    });
+  }, []);
 
   const reuseDesign = (post: GalleryDetail) => {
     if (!isDesignDraft(post.draft) || !dataset?.designs.some((design) => design.id === post.baselineId)) {
       throw new Error('현재 데이터셋에서 이 설계의 기준 데이터를 찾을 수 없습니다.');
     }
-    saveWorkspace({ draft: structuredClone(post.draft), sourceId: post.id });
+    saveWorkspace({ draft: hydrateDraft(post.draft), sourceId: post.id });
     setSelectedId(post.baselineId);
     setImportVersion((value) => value + 1);
     setView('lab');
@@ -124,7 +132,7 @@ export function AeroTwinApp() {
           const stored = localStorage.getItem(workspaceStorageKey);
           const restored = stored ? JSON.parse(stored) as WorkspaceSnapshot : null;
           if (restored && isDesignDraft(restored.draft) && index.designs.some((design) => design.id === restored.draft.baselineId)) {
-            setWorkspace({ draft: restored.draft, sourceId: typeof restored.sourceId === 'string' ? restored.sourceId : null });
+            setWorkspace({ draft: hydrateDraft(restored.draft), sourceId: typeof restored.sourceId === 'string' ? restored.sourceId : null });
             setSelectedId(restored.draft.baselineId);
           }
         } catch { setWorkspaceNotice('이전에 저장한 편집 내용을 읽지 못해 기본 설계로 열었습니다.'); }
@@ -155,6 +163,26 @@ export function AeroTwinApp() {
   );
   const selectedDetail =
     selectedId == null ? null : (showcases[String(selectedId)] ?? null);
+  const designWorkspace = useDesignWorkspace(
+    selectedSummary, selectedDetail, workspace?.draft ?? null, importVersion, onDraftChange,
+  );
+  const currentDraft = designWorkspace.draft;
+  const activeWorkspace = useMemo<WorkspaceSnapshot | null>(() => currentDraft ? {
+    draft: currentDraft,
+    sourceId: workspace?.draft.baselineId === currentDraft.baselineId ? workspace.sourceId : null,
+  } : workspace, [currentDraft, workspace]);
+
+  useEffect(() => {
+    if (!activeWorkspace) return;
+    let active = true;
+    // Schedule serialization outside the render/interaction path; only failures update UI state.
+    void Promise.resolve().then(() => {
+      if (active) localStorage.setItem(workspaceStorageKey, JSON.stringify(activeWorkspace));
+    }).catch(() => {
+      if (active) setWorkspaceNotice('브라우저 저장 공간이 부족해 새로고침하면 편집 내용이 사라질 수 있습니다. 갤러리에 게시해 보관해 주세요.');
+    });
+    return () => { active = false; };
+  }, [activeWorkspace]);
   const showcaseList = useMemo(
     () =>
       dataset?.summary.showcaseIds
@@ -207,7 +235,7 @@ export function AeroTwinApp() {
               </div>
               <div>
                 <p className="text-sm font-semibold tracking-[-0.02em] text-[#172b3a]">
-                  AeroTwin
+                  drawn
                 </p>
                 <p className="hidden text-[10px] font-medium tracking-[0.08em] text-[#6b7d8b] sm:block">
                   UAV 설계 워크벤치
@@ -330,18 +358,27 @@ export function AeroTwinApp() {
                   datasetDesigns={dataset.designs}
                   onSelect={setSelectedId}
                   onOpenDatasetCompare={() => openCompareFromExplorer(selectedSummary.id)}
-                  initialDraft={workspace?.draft.baselineId === selectedSummary.id ? workspace.draft : null}
-                  onDraftChange={onDraftChange}
+                  workspace={designWorkspace}
+                  onOpenParts={() => setView('parts')}
                 />
               )}
               {view === 'gallery' && (
                 <GalleryView
                   current={selectedSummary ?? designById.get(dataset.summary.defaultShowcaseId)!}
-                  workspace={workspace}
+                  workspace={activeWorkspace}
                   initialPostId={initialPostId}
                   onReuse={reuseDesign}
                 />
               )}
+              <div hidden={view !== 'parts'}>
+                <PartsAgentView
+                  draft={designWorkspace.draft}
+                  disabled={designWorkspace.loading}
+                  selectedDesignId={selectedId}
+                  loadError={designWorkspace.loadError}
+                  onOpenDesign={() => setView('lab')}
+                />
+              </div>
               {view === 'guide' && <GuideView onBack={() => setView('explore')} />}
               {view === 'home' && (
                 <LandingView

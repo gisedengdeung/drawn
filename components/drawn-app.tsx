@@ -323,6 +323,8 @@ export function DrawnApp() {
                   dataset={dataset}
                   showcases={showcases}
                   selected={selectedSummary}
+                  draft={currentDraft}
+                  draftLoading={designWorkspace.loading}
                   onSelect={setSelectedId}
                   onOpenLab={(id) => selectShowcaseAndOpen(id, 'lab')}
                   onOpenSimulator={(id) =>
@@ -332,10 +334,11 @@ export function DrawnApp() {
                   onOpenGuide={() => setView('guide')}
                 />
               )}
-              {view === 'simulator' && selectedDetail && (
+              {view === 'simulator' && selectedDetail && selectedSummary && (
                 <SimulatorView
                   designs={showcaseList}
                   selected={selectedDetail}
+                  summary={selectedSummary}
                   onSelect={setSelectedId}
                   onOpenLab={() => setView('lab')}
                 />

@@ -48,3 +48,7 @@ next-env.d.ts
 /**/Geom.stp
 /**/cadfile.stl
 /corpus_dic
+
+# AI model run exports (best_model.pt, preprocessor.pkl, metrics) — versioned
+# in the training repo, not here
+/20*_*/

@@ -29,6 +29,7 @@ import { Switch } from '@/components/ui/switch';
 import type {
   AirframeKind,
   DatasetIndex,
+  DesignDraft,
   DesignSummary,
   ShowcaseMap,
 } from '@/lib/drawn-types';
@@ -99,6 +100,8 @@ export function ExplorerView({
   dataset,
   showcases,
   selected,
+  draft,
+  draftLoading = false,
   onSelect,
   onOpenLab,
   onOpenSimulator,
@@ -108,6 +111,8 @@ export function ExplorerView({
   dataset: DatasetIndex;
   showcases: ShowcaseMap;
   selected: DesignSummary | null;
+  draft?: DesignDraft | null;
+  draftLoading?: boolean;
   onSelect: (id: number) => void;
   onOpenLab: (id: number) => void;
   onOpenSimulator: (id: number) => void;
@@ -584,7 +589,13 @@ export function ExplorerView({
             </div>
           </div>
 
-          <ModelStage design={currentDetail} emptyDesignId={current.id} className="min-h-[430px] flex-1 lg:min-h-[470px]" />
+          <ModelStage
+            design={currentDetail}
+            draft={currentDetail ? null : (draft?.baselineId === current.id ? draft : null)}
+            draftLoading={!currentDetail && draftLoading}
+            emptyDesignId={current.id}
+            className="min-h-[430px] flex-1 lg:min-h-[470px]"
+          />
           <div className="mt-3"><DataDisclaimer compact /></div>
         </div>
 

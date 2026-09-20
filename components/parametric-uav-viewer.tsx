@@ -453,17 +453,18 @@ function buildAircraft(
     });
   };
 
+  // Real AircraftVerse frames stack flat plates into a boxy shell, not a
+  // smooth ellipsoid — a box silhouette reads much closer to the source STL.
   const fuselage = draft.fuselage;
   const body = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 36, 22),
+    new THREE.BoxGeometry(
+      Math.max(fuselage.length * SCALE, 1.3),
+      Math.max(fuselage.verticalDiameter * SCALE, 0.68),
+      Math.max(fuselage.horizontalDiameter * SCALE, 1.56),
+    ),
     material('fuselage', 0.22),
   );
   body.name = 'fuselage';
-  body.scale.set(
-    Math.max(fuselage.length * SCALE * 0.5, 0.65),
-    Math.max(fuselage.verticalDiameter * SCALE * 0.5, 0.34),
-    Math.max(fuselage.horizontalDiameter * SCALE * 0.5, 0.78),
-  );
   body.position.y = 0.42;
   group.add(body);
 
@@ -515,16 +516,22 @@ function buildAircraft(
     draft,
     fallbackLength,
     (start, end, nodeType) => {
-      const radius = /MountBracket/i.test(nodeType)
-        ? 0.035
-        : /Wing/i.test(nodeType)
-          ? 0.055
-          : /Branch|Cross/i.test(nodeType)
-            ? 0.09
-            : 0.075;
-      group.add(
-        cylinderBetween(start, end, radius, material('structure', 0.4)),
-      );
+      const length = start.distanceTo(end);
+      // Real arm stock is a flat carbon bar (e.g. a 470mm PropArm measures
+      // ~45mm wide x 10mm thick), while hub/branch joints are stubby square
+      // connectors — round tubes were a rough stand-in that never matched
+      // the source STL silhouette.
+      if (/Branch|Cross/i.test(nodeType)) {
+        const side = THREE.MathUtils.clamp(length * 0.14, 0.09, 0.22);
+        group.add(barBetween(start, end, side, side, material('structure', 0.4)));
+      } else if (/Bend/i.test(nodeType)) {
+        const side = THREE.MathUtils.clamp(length * 0.06, 0.05, 0.14);
+        group.add(barBetween(start, end, side, side, material('structure', 0.4)));
+      } else {
+        const width = THREE.MathUtils.clamp(length * 0.1, 0.08, 0.24);
+        const thickness = THREE.MathUtils.clamp(length * 0.022, 0.035, 0.06);
+        group.add(barBetween(start, end, width, thickness, material('structure', 0.4)));
+      }
     },
   );
   const desiredPropellerCount = Math.max(
@@ -1100,6 +1107,26 @@ function cylinderBetween(
   return mesh;
 }
 
+function barBetween(
+  start: THREE.Vector3,
+  end: THREE.Vector3,
+  width: number,
+  thickness: number,
+  material: THREE.Material,
+) {
+  const direction = end.clone().sub(start);
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(direction.length(), thickness, width),
+    material,
+  );
+  mesh.position.copy(start).add(end).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(
+    new THREE.Vector3(1, 0, 0),
+    direction.clone().normalize(),
+  );
+  return mesh;
+}
+
 function propellerSize(value?: string) {
   const normalized = value?.replace(/_(\d)(?=[A-Za-z]|$)/g, '.$1') ?? '';
   const match = normalized.match(/(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)/i);
@@ -1111,9 +1138,13 @@ function propellerSize(value?: string) {
 
 function motorRadius(value?: string) {
   const match = value?.match(/(\d{2})(\d{2})/);
+  const statorDiameter = Number(match?.[1] ?? 35);
+  // The visible motor housing (bell + mount) runs noticeably wider than the
+  // bare stator size encoded in the part name — real STL motor blocks measure
+  // roughly 1.6x the stator digits across.
   return THREE.MathUtils.clamp(
-    Number(match?.[1] ?? 35) * SCALE * 0.5,
-    0.12,
+    statorDiameter * 1.6 * SCALE * 0.5,
+    0.18,
     0.32,
   );
 }

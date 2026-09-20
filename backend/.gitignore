@@ -2,4 +2,6 @@
 __pycache__/
 *.pyc
 models/*.json
+models/*.pt
+models/*.pkl
 !models/.gitkeep

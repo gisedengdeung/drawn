@@ -1,9 +1,13 @@
 """Request/response contracts for the performance-prediction API.
 
-The exact feature set is whatever the XGBoost model ends up trained on, so
-`features` stays an open dict of named numeric values rather than a fixed
-schema. Once the real training pipeline is finalized, tighten this to a
-concrete set of required fields if that's more convenient for validation.
+Two independent models are served here:
+- `/predict` — the "파라미터 편집" (Design Lab) model. Predicts a handful of
+  aggregate summary values (max distance, hover time, ...) for an edited
+  design. Not delivered yet, so this stays an open feature dict until the
+  real training pipeline (XGBoost) is finalized.
+- `/predict/trim` — the "성능 확인" (Simulator) model. A trained PyTorch MLP
+  that predicts the 8 trim values at one query speed for one design; its
+  input fields map 1:1 onto `DesignSummary` in the frontend plus `speed`.
 """
 
 from typing import Dict, Optional
@@ -41,9 +45,54 @@ class PredictionResponse(BaseModel):
     )
 
 
+class TrimPredictionRequest(BaseModel):
+    design_id: Optional[int] = Field(default=None, description="Baseline dataset design id, if any.")
+    speed: float = Field(description="Query speed in m/s — the point on the trim curve to predict.")
+    numPropellers: float
+    numWings: float
+    armLength: float
+    meanArmLength: float
+    maxArmLength: float
+    fuselageLength: float
+    fuselageHorizontalDiameter: float
+    fuselageVerticalDiameter: float
+    totalWingSpan: float
+    meanWingChord: float
+    parameterCount: float
+    hub: Optional[str] = Field(default=None, description="Topology string, e.g. ConnectedHub6_Sym.")
+    primaryMotor: Optional[str] = None
+    primaryPropeller: Optional[str] = None
+    primaryBattery: Optional[str] = None
+    dragAt20: float
+    powerAt20: float
+    powerAt0: float
+    thrustAt0: float
+    currentAt0: float
+
+
+class TrimPredictionResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    drag: float
+    lift: float
+    thrust: float
+    pitch: float
+    power: float
+    current: float
+    flightTime: float
+    distance: float
+    model_version: str
+    is_mock: bool = Field(
+        description="True while no trained model file is loaded, so callers "
+        "can tell a placeholder estimate apart from a real prediction.",
+    )
+
+
 class HealthResponse(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     status: str
-    model_loaded: bool
-    model_version: str
+    summary_model_loaded: bool
+    summary_model_version: str
+    trim_model_loaded: bool
+    trim_model_version: str

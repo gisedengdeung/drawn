@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Box, Info } from 'lucide-react';
 
 import { StlViewer } from '@/components/stl-viewer';
+import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -18,6 +19,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
+  type DesignDraft,
   type DesignSummary,
   formatBatteryLabel,
   formatComponent,
@@ -30,6 +32,7 @@ import {
 type DataSource =
   | 'DATASET'
   | 'INTERPOLATED'
+  | 'AI PREDICTED'
   | 'DEMO ESTIMATE'
   | 'DATASET RANKING';
 
@@ -37,6 +40,8 @@ const SOURCE_DESCRIPTIONS: Record<DataSource, string> = {
   DATASET: 'AircraftVerse output.json / trims.npy 실측값입니다.',
   INTERPOLATED:
     '학습된 AI 모델이 아닙니다. 같은 hub topology의 가장 가까운 설계 5개를 거리 가중 평균한 Neighbor Estimate v1 추정치입니다.',
+  'AI PREDICTED':
+    '학습된 PyTorch 트림 모델(backend/predict/trim)의 실시간 예측값입니다. 실측 AircraftVerse trim이 아니라 근사치입니다.',
   'DEMO ESTIMATE': '시연용 추정치이며 AircraftVerse 실측값이 아닙니다.',
   'DATASET RANKING':
     'AI 예측이 아닙니다. 27,714개 전체 설계의 실제 output.json 지표로 계산한 데이터셋 랭킹/Pareto 결과입니다.',
@@ -48,7 +53,9 @@ export function SourceBadge({ source = 'DATASET' }: { source?: DataSource }) {
       ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1b64da]'
       : source === 'INTERPOLATED'
         ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-        : 'border-violet-200 bg-violet-50 text-violet-700';
+        : source === 'AI PREDICTED'
+          ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+          : 'border-violet-200 bg-violet-50 text-violet-700';
   return (
     <Tooltip>
       <TooltipTrigger
@@ -181,6 +188,8 @@ export function DesignSelector({
 
 export function ModelStage({
   design,
+  draft,
+  draftLoading = false,
   className = '',
   label = true,
   emptyDesignId,
@@ -189,6 +198,8 @@ export function ModelStage({
   showForceVectors = false,
 }: {
   design: ShowcaseDesign | null;
+  draft?: DesignDraft | null;
+  draftLoading?: boolean;
   className?: string;
   label?: boolean;
   emptyDesignId?: number;
@@ -200,6 +211,20 @@ export function ModelStage({
   };
   showForceVectors?: boolean;
 }) {
+  const forceLegend = showForceVectors && (
+    <div className="absolute right-4 top-4 z-20 flex flex-wrap justify-end gap-2 text-[10px] font-medium">
+      <span className="rounded-full border border-[#bfdbfe] bg-white/90 px-2 py-1 text-[#3182f6]">
+        항력
+      </span>
+      <span className="rounded-full border border-amber-200 bg-white/90 px-2 py-1 text-amber-700">
+        양력
+      </span>
+      <span className="rounded-full border border-emerald-200 bg-white/90 px-2 py-1 text-emerald-700">
+        추력
+      </span>
+    </div>
+  );
+
   return (
     <div
       className={`relative min-h-[360px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-[#f5f5f7] shadow-sm ${className}`}
@@ -222,25 +247,40 @@ export function ModelStage({
               </Badge>
             </div>
           )}
-          {showForceVectors && (
-            <div className="absolute right-4 top-4 z-20 flex flex-wrap justify-end gap-2 text-[10px] font-medium">
-              <span className="rounded-full border border-[#bfdbfe] bg-white/90 px-2 py-1 text-[#3182f6]">
-                항력
-              </span>
-              <span className="rounded-full border border-amber-200 bg-white/90 px-2 py-1 text-amber-700">
-                양력
-              </span>
-              <span className="rounded-full border border-emerald-200 bg-white/90 px-2 py-1 text-emerald-700">
-                추력
-              </span>
-            </div>
-          )}
+          {forceLegend}
           <StlViewer
             key={design.modelPath}
             src={design.modelPath}
             pitchDegrees={pitchDegrees}
             forceVectors={forceVectors}
             showForceVectors={showForceVectors}
+          />
+        </>
+      ) : draft ? (
+        <>
+          {label && (
+            <div className="absolute left-4 top-4 z-20 flex gap-2">
+              <Badge
+                variant="outline"
+                className="border-transparent bg-white/85 text-[#1d1d1f] backdrop-blur"
+              >
+                파라메트릭 · DESIGN #{draft.baselineId}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="border-transparent bg-white/85 text-[#1d1d1f] backdrop-blur"
+              >
+                프로펠러 {draft.numPropellers}개
+              </Badge>
+            </div>
+          )}
+          {forceLegend}
+          <ParametricUavViewer
+            key={draft.baselineId}
+            draft={draft}
+            pitchDegrees={pitchDegrees ?? 0}
+            forceVectors={forceVectors}
+            showForces={showForceVectors}
           />
         </>
       ) : (
@@ -250,14 +290,18 @@ export function ModelStage({
               <Box className="size-5 text-[#86868b]" />
             </div>
             <p className="text-sm font-medium text-[#1d1d1f]">
-              {emptyDesignId
-                ? `Design #${emptyDesignId}는 metadata-only입니다`
-                : '3D asset not packaged'}
+              {draftLoading
+                ? '설계 형상을 불러오는 중입니다'
+                : emptyDesignId
+                  ? `Design #${emptyDesignId}는 metadata-only입니다`
+                  : '3D asset not packaged'}
             </p>
-            <p className="mt-2 max-w-sm text-xs leading-5 text-[#6e6e73]">
-              원본 STL이 없는 설계도 파라메트릭 Design Studio에서 개념 형상으로
-              편집할 수 있습니다.
-            </p>
+            {!draftLoading && (
+              <p className="mt-2 max-w-sm text-xs leading-5 text-[#6e6e73]">
+                이 설계의 파라메트릭 개념 형상을 불러오지 못했습니다. 잠시 후
+                다시 시도해 주세요.
+              </p>
+            )}
           </div>
         </div>
       )}

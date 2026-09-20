@@ -1,14 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   BatteryCharging,
   CircleGauge,
   Gauge,
+  Loader2,
   MoveDown,
   MoveUp,
   Plane,
+  Sparkles,
   Timer,
   Wind,
   Zap,
@@ -30,8 +32,9 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 import { Slider } from '@/components/ui/slider';
-import type { ShowcaseDesign } from '@/lib/drawn-types';
+import type { DesignSummary, ShowcaseDesign } from '@/lib/drawn-types';
 import { formatHub, formatMetric } from '@/lib/drawn-types';
+import { predictTrim, type TrimPrediction } from '@/lib/backend-api';
 import {
   DataDisclaimer,
   DesignSelector,
@@ -39,6 +42,10 @@ import {
   SectionHeading,
   SourceBadge,
 } from '@/components/views/shared';
+
+type AiTrimResult =
+  | { id: number; speed: number; status: 'ready'; data: TrimPrediction }
+  | { id: number; speed: number; status: 'error' };
 
 const overviewConfig = {
   drag: { label: '항력 (N)', color: '#3182f6' },
@@ -61,19 +68,45 @@ type CurveMode = 'overview' | 'aero' | 'electric';
 export function SimulatorView({
   designs,
   selected,
+  summary,
   onSelect,
   onOpenLab,
 }: {
   designs: ShowcaseDesign[];
   selected: ShowcaseDesign;
+  // The packaged showcase entries predate the At0 trim hints, so predictions
+  // read the dataset index summary instead — it carries the full feature set.
+  summary: DesignSummary;
   onSelect: (id: number) => void;
   onOpenLab: () => void;
 }) {
   const [speed, setSpeed] = useState(20);
   const [curveMode, setCurveMode] = useState<CurveMode>('overview');
+  const [showAiPrediction, setShowAiPrediction] = useState(false);
+  const [aiTrim, setAiTrim] = useState<AiTrimResult | null>(null);
   const trim = selected.trim[speed];
   const validRows = useMemo(() => selected.trim.filter((row) => row.valid), [selected]);
   const config = curveMode === 'overview' ? overviewConfig : curveMode === 'aero' ? aeroConfig : electricConfig;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    predictTrim(summary, speed, controller.signal)
+      .then((data) => setAiTrim({ id: summary.id, speed, status: 'ready', data }))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setAiTrim({ id: summary.id, speed, status: 'error' });
+      });
+    return () => controller.abort();
+  }, [summary, speed]);
+
+  const aiCurrent = aiTrim && aiTrim.id === selected.id && aiTrim.speed === speed ? aiTrim : null;
+  const aiLoading = aiCurrent === null;
+
+  const displayed = trim?.valid && !showAiPrediction
+    ? { source: 'DATASET' as const, drag: trim.drag, lift: trim.lift, thrust: trim.thrust, pitch: trim.pitch, power: trim.power, current: trim.current, flightTime: trim.flightTime, distance: trim.distance }
+    : aiCurrent?.status === 'ready'
+      ? { source: 'AI PREDICTED' as const, drag: aiCurrent.data.drag, lift: aiCurrent.data.lift, thrust: aiCurrent.data.thrust, pitch: aiCurrent.data.pitch, power: aiCurrent.data.power, current: aiCurrent.data.current, flightTime: aiCurrent.data.flightTime, distance: aiCurrent.data.distance }
+      : null;
 
   return (
     <section className="px-4 py-4 lg:px-6">
@@ -95,9 +128,9 @@ export function SimulatorView({
         <ModelStage
           design={selected}
           className="min-h-[500px] lg:min-h-[520px]"
-          pitchDegrees={trim?.valid ? trim.pitch : 0}
-          forceVectors={trim?.valid ? { drag: trim.drag, lift: trim.lift, thrust: trim.thrust } : undefined}
-          showForceVectors={Boolean(trim?.valid)}
+          pitchDegrees={displayed?.pitch ?? 0}
+          forceVectors={displayed ? { drag: displayed.drag, lift: displayed.lift, thrust: displayed.thrust } : undefined}
+          showForceVectors={Boolean(displayed)}
         />
         <aside className="workspace-panel rounded-xl p-4">
           <div className="flex items-start justify-between gap-3 border-b border-[#e5e5ea] pb-3">
@@ -136,23 +169,44 @@ export function SimulatorView({
           </div>
 
           <div className="mt-4 min-w-0">
-            {trim?.valid ? (
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <SourceBadge source={displayed?.source ?? 'DATASET'} />
+              {trim?.valid && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowAiPrediction((value) => !value)}
+                  disabled={aiCurrent?.status !== 'ready'}
+                  className={`h-7 gap-1.5 px-2 text-[11px] ${showAiPrediction ? 'bg-indigo-50 text-indigo-700' : 'text-[#6e6e73]'}`}
+                >
+                  {aiLoading ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                  AI 예측값 {showAiPrediction ? '끄기' : '보기'}
+                </Button>
+              )}
+            </div>
+            {displayed ? (
               <div className="grid grid-cols-2 gap-2">
-                <LiveMetric icon={<Wind />} label="항력" value={trim.drag} unit="N" tone="cyan" />
-                <LiveMetric icon={<MoveUp />} label="양력" value={trim.lift} unit="N" tone="amber" />
-                <LiveMetric icon={<Plane />} label="추력" value={trim.thrust} unit="N" tone="green" />
-                <LiveMetric icon={<Gauge />} label="피치각" value={trim.pitch} unit="deg" tone="violet" />
-                <LiveMetric icon={<Zap />} label="전력" value={trim.power} unit="W" tone="violet" />
-                <LiveMetric icon={<BatteryCharging />} label="전류" value={trim.current} unit="A" tone="cyan" />
-                <LiveMetric icon={<Timer />} label="비행 시간" value={trim.flightTime} unit="sec" tone="green" />
-                <LiveMetric icon={<CircleGauge />} label="비행거리" value={trim.distance ? trim.distance / 1000 : null} unit="km" tone="amber" />
+                <LiveMetric icon={<Wind />} label="항력" value={displayed.drag} unit="N" tone="cyan" />
+                <LiveMetric icon={<MoveUp />} label="양력" value={displayed.lift} unit="N" tone="amber" />
+                <LiveMetric icon={<Plane />} label="추력" value={displayed.thrust} unit="N" tone="green" />
+                <LiveMetric icon={<Gauge />} label="피치각" value={displayed.pitch} unit="deg" tone="violet" />
+                <LiveMetric icon={<Zap />} label="전력" value={displayed.power} unit="W" tone="violet" />
+                <LiveMetric icon={<BatteryCharging />} label="전류" value={displayed.current} unit="A" tone="cyan" />
+                <LiveMetric icon={<Timer />} label="비행 시간" value={displayed.flightTime} unit="sec" tone="green" />
+                <LiveMetric icon={<CircleGauge />} label="비행거리" value={displayed.distance ? displayed.distance / 1000 : null} unit="km" tone="amber" />
+              </div>
+            ) : aiLoading ? (
+              <div className="grid min-h-56 place-items-center rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] p-5 text-center">
+                <Loader2 className="size-5 animate-spin text-[#6e6e73]" />
               </div>
             ) : (
               <div className="grid min-h-56 place-items-center rounded-xl border border-amber-200 bg-amber-50 p-5 text-center">
                 <div>
                   <MoveDown className="mx-auto mb-3 size-6 text-amber-600" />
                   <p className="text-sm font-medium text-amber-900">이 속도에서는 해석값이 없습니다</p>
-                  <p className="mt-2 text-xs leading-5 text-amber-700">Design #{selected.id}의 {speed}m/s trim 계산이 수렴하지 않았습니다.</p>
+                  <p className="mt-2 text-xs leading-5 text-amber-700">
+                    Design #{selected.id}의 {speed}m/s trim 계산이 수렴하지 않았고, AI 예측 서버에도 연결할 수 없습니다.
+                  </p>
                 </div>
               </div>
             )}

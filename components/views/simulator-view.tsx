@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  ArrowRight,
+  ArrowLeft,
   BatteryCharging,
   CircleGauge,
   Gauge,
@@ -85,7 +85,7 @@ export function SimulatorView({
           <>
             <DesignSelector designs={designs} value={selected.id} onChange={onSelect} />
             <Button onClick={onOpenLab} className="bg-[#147d91] text-white hover:bg-[#0f6878]">
-              파라미터 편집 <ArrowRight />
+              <ArrowLeft /> 파라미터 편집
             </Button>
           </>
         }

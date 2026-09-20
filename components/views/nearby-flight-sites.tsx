@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useDroneZones } from '@/hooks/use-drone-zones';
 import { useGeolocation } from '@/hooks/use-geolocation';
-import { DRONE_ONESTOP_URL, kakaoMapSearchUrl, nearestDroneZones } from '@/lib/drone-zones';
+import { DRONE_ONESTOP_URL, nearestDroneZones } from '@/lib/drone-zones';
 
 export function NearbyFlightSites() {
   const { dataset, error: datasetError } = useDroneZones();
@@ -82,12 +82,10 @@ export function NearbyFlightSites() {
       {status === 'ready' && (
         <div className="mt-3 space-y-2">
           {zones.map((zone) => (
-            <a
+            <Link
               key={zone.id}
-              href={kakaoMapSearchUrl(zone.name)}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`${zone.name} 카카오맵에서 보기 (약 ${zone.distanceKm.toFixed(0)}km)`}
+              href={`/flight-map?zone=${zone.id}`}
+              aria-label={`${zone.name} 지도에서 보기 (약 ${zone.distanceKm.toFixed(0)}km)`}
               className="block rounded-lg border border-[#dbe4ea] bg-[#f7f9fb] p-2.5 transition hover:border-[#9ccdd6] hover:bg-[#eef8fa]"
             >
               <div className="flex items-start justify-between gap-2">
@@ -109,10 +107,10 @@ export function NearbyFlightSites() {
                 </div>
                 <div className="flex shrink-0 items-center gap-1 font-mono text-[11px] font-semibold text-[#0f6475]">
                   약 {zone.distanceKm.toFixed(0)}km
-                  <ExternalLink className="size-3 text-[#9aabb5]" />
+                  <Map className="size-3 text-[#9aabb5]" />
                 </div>
               </div>
-            </a>
+            </Link>
           ))}
           <Link
             href="/flight-map"

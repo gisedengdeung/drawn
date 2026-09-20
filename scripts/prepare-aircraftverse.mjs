@@ -196,8 +196,10 @@ function readTrimAt(metadata, speed) {
   const nullable = (value) => (valid && Number.isFinite(value) ? value : null);
   return {
     valid,
-    drag: nullable(row[6]),
-    power: nullable(row[8]),
+    drag:    nullable(row[6]),
+    power:   nullable(row[8]),
+    thrust:  nullable(row[4]),
+    current: nullable(row[7]),
   };
 }
 
@@ -775,6 +777,7 @@ for (const dataRoot of dataRoots) {
       .filter((value) => value > 0);
     const parameterCount = lowLevel.parameters?.length ?? 0;
     const trim20 = readTrimAt(trimMetadata, 20);
+    const trim0  = readTrimAt(trimMetadata, 0);
     const metadata = {
       id,
       mass: Number(output.Mass) || 0,
@@ -802,8 +805,11 @@ for (const dataRoot of dataRoots) {
       primaryMotor: draft.propulsionGroups[0]?.motorType || null,
       primaryPropeller: draft.propulsionGroups[0]?.propellerType || null,
       primaryBattery: draft.energy.batteryTypes[0] ?? null,
-      dragAt20: trim20.drag ?? 0,
-      powerAt20: trim20.power ?? 0,
+      dragAt20:   trim20.drag    ?? 0,
+      powerAt20:  trim20.power   ?? 0,
+      powerAt0:   trim0.power    ?? 0,
+      thrustAt0:  trim0.thrust   ?? 0,
+      currentAt0: trim0.current  ?? 0,
       feasible: Number(output.Max_Distance) > 0,
       viewerReady: false,
       paretoOptimal: false,

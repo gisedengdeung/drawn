@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   HelpCircle,
   Hexagon,
-  Home,
   MapPin,
   Share2,
 } from 'lucide-react';
@@ -200,7 +199,7 @@ export function DrawnApp() {
         <header className="sticky top-0 z-50 border-b border-[#dbe4ea] bg-white/95 backdrop-blur-xl">
           <div className="mx-auto flex h-14 max-w-[1720px] items-center gap-4 px-4 lg:px-6">
             <button
-              onClick={() => setView('explore')}
+              onClick={() => setView('home')}
               className="flex min-w-0 items-center gap-2.5 text-left"
             >
               <div className="grid size-8 place-items-center rounded-lg bg-[#147d91] shadow-sm">
@@ -225,17 +224,6 @@ export function DrawnApp() {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={() => setView('home')}
-                aria-current={view === 'home' ? 'page' : undefined}
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${
-                  view === 'home'
-                    ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
-                    : 'border-[#dbe4ea] bg-white text-[#607383] hover:bg-[#f4f7f9]'
-                }`}
-              >
-                <Home className="size-3.5" /> <span className="hidden sm:inline">시작 페이지</span>
-              </button>
               <button
                 onClick={() => setView('guide')}
                 aria-current={view === 'guide' ? 'page' : undefined}

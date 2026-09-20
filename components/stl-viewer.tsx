@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { MousePointer2, Pause, Play, RefreshCw } from 'lucide-react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 
 import { Button } from '@/components/ui/button';
+
+const AUTO_ROTATE_STORAGE_KEY = 'aerotwin-stl-auto-rotate';
 
 type StlViewerProps = {
   src: string;
@@ -30,6 +32,26 @@ export function StlViewer({
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  const [autoRotate, setAutoRotate] = useState(true);
+  const autoRotateRef = useRef(true);
+
+  useEffect(() => {
+    let active = true;
+    try {
+      const enabled = localStorage.getItem(AUTO_ROTATE_STORAGE_KEY) !== 'false';
+      autoRotateRef.current = enabled;
+      queueMicrotask(() => { if (active) setAutoRotate(enabled); });
+    } catch { /* Keep the default if browser storage is unavailable. */ }
+    return () => { active = false; };
+  }, []);
+
+  const toggleAutoRotate = () => {
+    const enabled = !autoRotateRef.current;
+    autoRotateRef.current = enabled;
+    setAutoRotate(enabled);
+    try { localStorage.setItem(AUTO_ROTATE_STORAGE_KEY, String(enabled)); }
+    catch { /* The toggle still works for this viewer without persistence. */ }
+  };
 
   useEffect(() => {
     dynamicsRef.current = { pitchDegrees, forceVectors, showForceVectors };
@@ -71,7 +93,7 @@ export function StlViewer({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.055;
-    controls.autoRotate = true;
+    controls.autoRotate = autoRotateRef.current;
     controls.autoRotateSpeed = 0.55;
     controls.enablePan = true;
     const handleKeyboard = (event: KeyboardEvent) => {
@@ -238,6 +260,7 @@ export function StlViewer({
 
     const animate = () => {
       updateDynamics();
+      controls.autoRotate = autoRotateRef.current;
       controls.update();
       renderer.render(scene, camera);
       frame = requestAnimationFrame(animate);
@@ -279,6 +302,28 @@ export function StlViewer({
       data-force-thrust={forceVectors?.thrust ?? ''}
       className="absolute inset-0 overflow-hidden"
     >
+      {status === 'ready' && (
+        <div className="pointer-events-none absolute bottom-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex h-9 items-center gap-2 rounded-lg border border-[#cfdae0] bg-white/90 px-3 text-[11px] text-[#607383] shadow-sm backdrop-blur">
+            <MousePointer2 className="size-3" /> 드래그 회전 · 스크롤 확대
+          </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label="3D 자동 회전"
+          aria-pressed={autoRotate}
+          onClick={toggleAutoRotate}
+          className={`pointer-events-auto h-9 gap-2 rounded-lg border-2 px-3 text-xs font-bold shadow-md transition-colors ${autoRotate
+            ? 'border-[#0f6475] bg-[#147d91] text-white hover:border-[#0b5362] hover:bg-[#0f6475] hover:text-white'
+            : 'border-[#b7791f] bg-[#fff4db] text-[#80510d] hover:border-[#965f13] hover:bg-[#ffe8b3] hover:text-[#694008]'
+          }`}
+        >
+          {autoRotate ? <Pause /> : <Play />}
+          자동 회전 {autoRotate ? '켜짐' : '꺼짐'}
+        </Button>
+        </div>
+      )}
       {status === 'loading' && (
         <div className="absolute inset-0 z-10 grid place-items-center text-xs font-semibold tracking-[0.12em] text-[#607383]">
           원본 STL 불러오는 중

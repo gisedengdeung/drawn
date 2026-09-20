@@ -144,3 +144,14 @@ test('undo restores a historical draft through a new CAS revision and rejects st
   assert.equal((await restoreRequest(alice, project.id, 3, 999)).status, 404);
   assert.equal((await store.getProject(db, alice.id, project.id)).revision, 3);
 });
+test('a history insert failure rolls back both the proposal status and project CAS update', async (t) => {
+  const { db, alice, project } = await fixture(t);
+  const id = await proposal(db, alice, project);
+  await db.prepare('INSERT INTO agent_revisions(project_id,revision,fingerprint,draft_json,created_at) VALUES(?,2,?,?,?)')
+    .bind(project.id, 'collision', JSON.stringify(project.draft), project.updatedAt).run();
+  const before = await history(db, project.id);
+  assert.equal((await applyRequest(alice, id)).status, 500);
+  assert.deepEqual(await store.getProject(db, alice.id, project.id), project);
+  assert.equal(await proposalStatus(db, id), 'proposed');
+  assert.deepEqual(await history(db, project.id), before);
+});

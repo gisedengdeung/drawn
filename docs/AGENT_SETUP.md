@@ -89,7 +89,7 @@ PARTS_OPENAI_MODEL=gpt-5-mini
 - 배포 후 `/api/agent/session`의 `configured`·`missing`과 배포 migration 결과를 확인한다. Google 로그인 뒤 사용자별 프로젝트 저장까지 성공해야 연결이 완료된다.
 - 운영 DB에는 로컬 명령의 `--local`을 `--remote`로 바꿔 임의 실행하지 않는다. 운영 migration은 Sites 배포 흐름에서 관리한다.
 
-`drizzle/`의 journal에 등록된 migration을 순서대로 적용한다. 현재 계정·프로젝트·실행 테이블, revision·한도 보호, 공유 갤러리 테이블 migration이 포함되어 있다. Sites 배포와 로컬 migration 도구가 적용 이력을 관리하므로 개별 SQL을 수동으로 재실행하지 않는다.
+`drizzle/`의 journal에 등록된 migration을 순서대로 적용한다. 현재 계정·프로젝트·실행 테이블, 공유 갤러리 테이블, 초기 로컬 트리거 제거 migration이 포함되어 있다. Sites 배포와 로컬 migration 도구가 적용 이력을 관리하므로 개별 SQL을 수동으로 재실행하지 않는다.
 
 ## 6. Windows PowerShell에서 로컬 테스트
 
@@ -159,3 +159,4 @@ npm.cmd run build
 7. 일일 한도·동시 실행·취소·실행 기록 조회를 확인한 뒤 공개 운영 상태로 전환.
 
 상품 구매·결제나 판매자 계정 권한 승인은 수행하지 않는다. 현재 원본 데이터·추정 모델의 제한과 견적 범위는 [Agent 명세](AGENT_SPEC.md), [부품 Agent](PARTS_AGENT.md)를 참고한다.
+운영 배포 호환성: revision 기록·사용량 증가는 복합 SQL 트리거 대신 하나의 D1 `batch` 안에서 조건부 SQL로 처리한다. 첫 배포에서 실패했던 복합 트리거 SQL은 교정했으며, `0003_remove_legacy_agent_triggers.sql`은 이전 로컬 DB에 남은 트리거를 제거해 중복 집계를 방지한다. 테이블과 저장 데이터는 유지한다.

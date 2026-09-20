@@ -57,20 +57,26 @@ export async function createProject(
 ) {
   const id = crypto.randomUUID(),
     now = new Date().toISOString();
-  await db
-    .prepare(
-      'INSERT INTO agent_projects(id,user_id,title,revision,fingerprint,draft_json,source_id,updated_at) VALUES(?,?,?,1,?,?,?,?)',
-    )
-    .bind(
-      id,
-      userId,
-      title,
-      draftFingerprint(draft),
-      JSON.stringify(draft),
-      sourceId,
-      now,
-    )
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        'INSERT INTO agent_projects(id,user_id,title,revision,fingerprint,draft_json,source_id,updated_at) VALUES(?,?,?,1,?,?,?,?)',
+      )
+      .bind(
+        id,
+        userId,
+        title,
+        draftFingerprint(draft),
+        JSON.stringify(draft),
+        sourceId,
+        now,
+      ),
+    db
+      .prepare(
+        'INSERT INTO agent_revisions(project_id,revision,fingerprint,draft_json,created_at) SELECT id,revision,fingerprint,draft_json,updated_at FROM agent_projects WHERE id=? AND user_id=? AND changes()=1',
+      )
+      .bind(id, userId),
+  ]);
   return getProject(db, userId, id);
 }
 export async function saveProject(
@@ -82,21 +88,27 @@ export async function saveProject(
   title?: string,
 ) {
   const old = await getProject(db, userId, id);
-  const result = await db
-    .prepare(
-      'UPDATE agent_projects SET draft_json=?,fingerprint=?,title=?,revision=revision+1,updated_at=? WHERE id=? AND user_id=? AND revision=?',
-    )
-    .bind(
-      JSON.stringify(draft),
-      draftFingerprint(draft),
-      title ?? old.title,
-      new Date().toISOString(),
-      id,
-      userId,
-      expectedRevision,
-    )
-    .run();
-  if (!result.meta.changes)
+  const outcomes = await db.batch([
+    db
+      .prepare(
+        'UPDATE agent_projects SET draft_json=?,fingerprint=?,title=?,revision=revision+1,updated_at=? WHERE id=? AND user_id=? AND revision=?',
+      )
+      .bind(
+        JSON.stringify(draft),
+        draftFingerprint(draft),
+        title ?? old.title,
+        new Date().toISOString(),
+        id,
+        userId,
+        expectedRevision,
+      ),
+    db
+      .prepare(
+        'INSERT INTO agent_revisions(project_id,revision,fingerprint,draft_json,created_at) SELECT id,revision,fingerprint,draft_json,updated_at FROM agent_projects WHERE id=? AND user_id=? AND changes()=1',
+      )
+      .bind(id, userId),
+  ]);
+  if (!outcomes[0].meta.changes)
     throw new ApiError(
       409,
       'stale_revision',
@@ -132,18 +144,34 @@ export async function startRun(
   message: string,
 ) {
   const id = crypto.randomUUID(),
-    now = new Date().toISOString(),
-    lease = Date.now() + 300000;
+    timestamp = Date.now(),
+    now = new Date(timestamp).toISOString(),
+    lease = timestamp + 300000,
+    day = dayKey(timestamp);
+  const quotaAvailable =
+    "COALESCE((SELECT count FROM agent_usage WHERE bucket=? AND day=?),0)<? AND COALESCE((SELECT count FROM agent_usage WHERE bucket='*' AND day=?),0)<?";
   try {
-    await db.batch([
+    const outcomes = await db.batch([
+      // The quota guard also prevents an unsuccessful admission from changing an expired run.
       db
         .prepare(
-          "UPDATE agent_runs SET status='cancelled',cancel_requested=1,updated_at=? WHERE user_id=? AND status='running' AND lease_until<?",
+          "UPDATE agent_runs SET status='cancelled',cancel_requested=1,updated_at=? WHERE user_id=? AND status='running' AND lease_until<=? AND " +
+            quotaAvailable,
         )
-        .bind(now, userId, Date.now()),
+        .bind(
+          now,
+          userId,
+          timestamp,
+          userId,
+          day,
+          limits.user,
+          day,
+          limits.global,
+        ),
       db
         .prepare(
-          "INSERT INTO agent_runs(id,user_id,project_id,revision,mode,status,message,created_at,updated_at,lease_until,day) VALUES(?,?,?,?,?,'running',?,?,?,?,?)",
+          "INSERT INTO agent_runs(id,user_id,project_id,revision,mode,status,message,created_at,updated_at,lease_until,day) SELECT ?,?,?,?,?,'running',?,?,?,?,? WHERE " +
+            quotaAvailable,
         )
         .bind(
           id,
@@ -155,20 +183,33 @@ export async function startRun(
           now,
           now,
           lease,
-          dayKey(),
+          day,
+          userId,
+          day,
+          limits.user,
+          day,
+          limits.global,
         ),
+      // Every increment is gated on the preceding successful write within this transaction.
+      db
+        .prepare(
+          'INSERT INTO agent_usage(bucket,day,count) SELECT user_id,day,1 FROM agent_runs WHERE id=? AND changes()=1 ON CONFLICT(bucket,day) DO UPDATE SET count=count+1',
+        )
+        .bind(id),
+      db
+        .prepare(
+          "INSERT INTO agent_usage(bucket,day,count) SELECT '*',day,1 FROM agent_runs WHERE id=? AND changes()=1 ON CONFLICT(bucket,day) DO UPDATE SET count=count+1",
+        )
+        .bind(id),
     ]);
-  } catch (error) {
-    const reason = String(error);
-    if (
-      reason.includes('user_daily_limit') ||
-      reason.includes('global_daily_limit')
-    )
+    if (!outcomes[1].meta.changes)
       throw new ApiError(
         429,
         'daily_limit',
         '오늘의 Agent 실행 한도에 도달했습니다. 내일 다시 이용해 주세요.',
       );
+  } catch (error) {
+    const reason = String(error);
     if (
       reason.includes('agent_runs.user_id') ||
       reason.includes('agent_one_running')
@@ -301,6 +342,6 @@ export async function isCancelled(db: D1Database, userId: string, id: string) {
     !row ||
     row.status !== 'running' ||
     Boolean(row.cancel_requested) ||
-    row.lease_until < Date.now()
+    row.lease_until <= Date.now()
   );
 }

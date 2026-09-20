@@ -22,6 +22,13 @@
       "when": 1789903255947,
       "tag": "0002_gallery_shared_binding",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789904967109,
+      "tag": "0003_remove_legacy_agent_triggers",
+      "breakpoints": true
     }
   ]
 }

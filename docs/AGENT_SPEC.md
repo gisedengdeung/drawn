@@ -41,7 +41,7 @@ React 19 / TypeScript / Vinext를 유지한다. Better Auth가 Google 로그인�
 - 한국 시간 자정 기준 사용자 20회/일, 전체 서비스 200회/일, 사용자당 동시 실행 1개다. 실행당 LLM 4회, 도구 20회, 공급자 호출 40회로 제한한다.
 - 실행 상태는 `running`, `completed`, `partial`, `failed`, `cancelled`다. 진행률·취소·완료 결과 조회를 제공한다. 연결 종료 후 자동 재실행하지 않는다.
 
-D1의 조건부 갱신·제약·trigger로 동시 요청에서도 소유권, revision, 실행 한도를 유지한다. 장기 Cloudflare Workflows나 작업 재개 엔진은 이번 구현에 포함하지 않는다.
+D1의 원자적 batch·조건부 갱신·고유 인덱스로 동시 요청에서도 소유권, revision, 실행 한도를 유지한다. 장기 Cloudflare Workflows나 작업 재개 엔진은 이번 구현에 포함하지 않는다.
 
 ## 4. HTTP 인터페이스
 

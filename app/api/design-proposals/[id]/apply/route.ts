@@ -110,6 +110,11 @@ export async function POST(
           "UPDATE agent_proposals SET status='applied' WHERE id=? AND user_id=? AND changes()=1",
         )
         .bind(id, user.id),
+      db
+        .prepare(
+          'INSERT INTO agent_revisions(project_id,revision,fingerprint,draft_json,created_at) SELECT id,revision,fingerprint,draft_json,updated_at FROM agent_projects WHERE id=? AND user_id=? AND changes()=1',
+        )
+        .bind(project.id, user.id),
     ]);
     if (!outcomes[0].meta.changes)
       throw new ApiError(

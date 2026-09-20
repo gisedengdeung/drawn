@@ -61,7 +61,7 @@ test('concurrent compare-and-swap saves admit one revision and preserve exact hi
   assert.equal((await db.prepare('SELECT count(*) AS n FROM agent_revisions WHERE project_id=?').bind(project.id).first()).n, 2);
 });
 
-test('revision trigger failure rolls back the project update with its metadata', async (t) => {
+test('revision history constraint failure rolls back the batched project update with its metadata', async (t) => {
   const db = database(t);
   const project = await store.createProject(db, 'alice', 'Initial', draft(), null);
   await db.prepare('INSERT INTO agent_revisions(project_id,revision,fingerprint,draft_json,created_at) VALUES(?,?,?,?,?)')
@@ -203,4 +203,91 @@ test('expired response cannot complete even before another run replaces its leas
   await store.finishRun(db, 'alice', id, 'completed', result(project, 'Expired completion'));
   assert.deepEqual(await row(db, id), before);
   assert.equal((await store.getRun(db, 'alice', id)).result, null);
+});
+
+test('fresh migrations require no triggers and a failed initial history insert rolls back project creation', async (t) => {
+  const db = database(t);
+  assert.deepEqual((await db.prepare("SELECT name FROM sqlite_master WHERE type='trigger'").all()).results, []);
+  const id = crypto.randomUUID();
+  t.mock.method(crypto, 'randomUUID', () => id);
+  await db.prepare('INSERT INTO agent_revisions(project_id,revision,fingerprint,draft_json,created_at) VALUES(?,1,?,?,?)')
+    .bind(id, 'existing-history-collision', JSON.stringify(draft()), new Date().toISOString()).run();
+  await assert.rejects(store.createProject(db, 'alice', 'Must roll back', draft(), null), /UNIQUE constraint failed/);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM agent_projects').first()).n, 0);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM agent_revisions').first()).n, 1);
+});
+
+test('failure in the final quota write rolls back the new run, user charge and expired lease cleanup', async (t) => {
+  const db = database(t);
+  const project = await store.createProject(db, 'alice', 'Design', draft(), null);
+  const expired = await store.startRun(db, 'alice', project, 'qa', 'Existing run');
+  await db.prepare('UPDATE agent_runs SET lease_until=? WHERE id=?').bind(Date.now() - 1, expired).run();
+  await seedUsage(db, 'test-sentinel', 0);
+  // A real SQLite constraint fails only on the last (global) UPSERT, after the user charge.
+  await db.exec("CREATE UNIQUE INDEX test_fail_global_charge ON agent_usage ((1)) WHERE bucket='test-sentinel' OR (bucket='*' AND count>1);");
+  const before = await row(db, expired);
+  const usageBefore = (await db.prepare('SELECT * FROM agent_usage ORDER BY bucket,day').all()).results;
+  await assert.rejects(store.startRun(db, 'alice', project, 'qa', 'Must roll back'), /UNIQUE constraint failed/);
+  assert.deepEqual(await row(db, expired), before);
+  assert.deepEqual((await db.prepare('SELECT * FROM agent_usage ORDER BY bucket,day').all()).results, usageBefore);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM agent_runs').first()).n, 1);
+});
+
+test('legacy trigger removal preserves existing rows and leaves exactly one history entry and charge per write', async (t) => {
+  const db = new SQLiteD1Database({ migrations: [new URL('../drizzle/0000_agent_public_service.sql', import.meta.url)] });
+  t.after(() => db.close());
+  // Simulate a local database that already applied the original trigger migration.
+  await db.exec(`
+    CREATE TRIGGER agent_project_initial_revision AFTER INSERT ON agent_projects BEGIN
+      INSERT INTO agent_revisions(project_id,revision,fingerprint,draft_json,created_at) VALUES(NEW.id,NEW.revision,NEW.fingerprint,NEW.draft_json,NEW.updated_at);
+    END;
+    CREATE TRIGGER agent_project_revision AFTER UPDATE OF revision ON agent_projects WHEN NEW.revision<>OLD.revision BEGIN
+      INSERT INTO agent_revisions(project_id,revision,fingerprint,draft_json,created_at) VALUES(NEW.id,NEW.revision,NEW.fingerprint,NEW.draft_json,NEW.updated_at);
+    END;
+    CREATE TRIGGER agent_run_quota BEFORE INSERT ON agent_runs BEGIN
+      SELECT CASE WHEN COALESCE((SELECT count FROM agent_usage WHERE bucket=NEW.user_id AND day=NEW.day),0)>=20 THEN RAISE(ABORT,'user_daily_limit') END;
+      SELECT CASE WHEN COALESCE((SELECT count FROM agent_usage WHERE bucket='*' AND day=NEW.day),0)>=200 THEN RAISE(ABORT,'global_daily_limit') END;
+    END;
+    CREATE TRIGGER agent_run_charge AFTER INSERT ON agent_runs BEGIN
+      INSERT INTO agent_usage(bucket,day,count) VALUES(NEW.user_id,NEW.day,1) ON CONFLICT(bucket,day) DO UPDATE SET count=count+1;
+      INSERT INTO agent_usage(bucket,day,count) VALUES('*',NEW.day,1) ON CONFLICT(bucket,day) DO UPDATE SET count=count+1;
+    END;
+  `);
+  const id = crypto.randomUUID(), runId = crypto.randomUUID(), now = new Date().toISOString();
+  await db.prepare('INSERT INTO agent_projects(id,user_id,title,revision,fingerprint,draft_json,source_id,updated_at) VALUES(?,?,?,1,?,?,?,?)')
+    .bind(id, 'alice', 'Legacy project', 'legacy-fingerprint', JSON.stringify(draft()), 'legacy-source', now).run();
+  await db.prepare("INSERT INTO agent_runs(id,user_id,project_id,revision,mode,status,message,created_at,updated_at,lease_until,day) VALUES(?,?,?,1,'qa','running','Legacy run',?,?,?,?)")
+    .bind(runId, 'alice', id, now, now, Date.now() + 300000, store.dayKey()).run();
+  const before = await store.getProject(db, 'alice', id), runBefore = await row(db, runId);
+  await db.exec(readFileSync(new URL('../drizzle/0003_remove_legacy_agent_triggers.sql', import.meta.url), 'utf8'));
+  assert.deepEqual((await db.prepare("SELECT name FROM sqlite_master WHERE type='trigger'").all()).results, []);
+  assert.deepEqual(await store.getProject(db, 'alice', id), before);
+  assert.deepEqual(await row(db, runId), runBefore);
+  assert.equal((await store.usage(db, 'alice')).used, 1);
+  const changed = draft(); changed.fuselage.length += 1;
+  const saved = await store.saveProject(db, 'alice', id, 1, changed);
+  assert.equal(saved.revision, 2);
+  assert.deepEqual((await db.prepare('SELECT revision FROM agent_revisions WHERE project_id=? ORDER BY revision').bind(id).all()).results.map((entry) => entry.revision), [1, 2]);
+  await store.cancelRun(db, 'alice', runId);
+  await store.startRun(db, 'alice', saved, 'qa', 'After migration');
+  assert.equal((await store.usage(db, 'alice')).used, 2);
+  assert.equal((await store.usage(db, 'alice')).globalRemaining, store.limits.global - 2);
+  const created = await store.createProject(db, 'bob', 'New project', draft(), null);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM agent_revisions WHERE project_id=?').bind(created.id).first()).n, 1);
+});
+test('at the exact lease deadline a run is cancelled, cannot finish and can be replaced', async (t) => {
+  const db = database(t);
+  const timestamp = Date.now();
+  t.mock.method(Date, 'now', () => timestamp);
+  const project = await store.createProject(db, 'alice', 'Design', draft(), null);
+  const expired = await store.startRun(db, 'alice', project, 'qa', 'Deadline');
+  await db.prepare('UPDATE agent_runs SET lease_until=? WHERE id=?').bind(timestamp, expired).run();
+  assert.equal(await store.isCancelled(db, 'alice', expired), true);
+  assert.equal((await store.getRun(db, 'alice', expired)).status, 'cancelled');
+  assert.equal(await store.finishRun(db, 'alice', expired, 'completed', result(project)), false);
+  await assert.rejects(store.consumeBudget(db, 'alice', expired, 'tool'), errorCode('budget_or_cancelled'));
+  const replacement = await store.startRun(db, 'alice', project, 'qa', 'After deadline');
+  assert.equal((await row(db, expired)).cancel_requested, 1);
+  assert.equal((await store.getRun(db, 'alice', replacement)).status, 'running');
+  assert.equal((await store.usage(db, 'alice')).used, 2);
 });

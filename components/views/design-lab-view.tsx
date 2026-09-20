@@ -47,7 +47,7 @@ import type {
   WingParameters,
 } from '@/lib/drawn-types';
 import { formatBatteryLabel, formatComponent, formatEnergyConfiguration, formatMetric, formatMotorLabel, formatPropellerLabel, isAvailableMetric, percentChange } from '@/lib/drawn-types';
-import { DataDisclaimer, DesignSelector, SectionHeading, SourceBadge } from '@/components/views/shared';
+import { DataDisclaimer, DesignSelector, SectionHeading } from '@/components/views/shared';
 
 type MobilePanel = 'parameters' | 'preview' | 'performance';
 
@@ -400,14 +400,21 @@ export function DesignLabView({
                   <p className="text-sm font-semibold text-[#172b3a]">실시간 성능 변화</p>
                   <p className="mt-1 text-xs text-[#607383]">Baseline 대비 현재 Draft</p>
                 </div>
-                <SourceBadge source="INTERPOLATED" />
+                {estimate && <Tooltip>
+                  <TooltipTrigger render={<Badge variant="outline" className={`cursor-help text-[10px] underline decoration-dotted underline-offset-2 ${estimate.source === 'dataset' ? 'border-[#b8dfe4] bg-[#eef8fa] text-[#0f6475]' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`} />}>
+                    {estimate.source === 'dataset' ? '원본 시뮬레이션' : '편집 설계 추정'}
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-64 text-left leading-5 whitespace-normal">
+                    {estimate.source === 'dataset' ? '편집하지 않은 설계의 AircraftVerse 원본 시뮬레이션 KPI입니다. 실물 측정값이나 새로 계산한 해석 결과가 아닙니다.' : 'Neighbor Estimate v1: 인접 설계의 거리 가중 평균과 편집 보정을 사용한 추정값입니다. 학습 모델이나 물리 해석 결과가 아닙니다.'}
+                  </TooltipContent>
+                </Tooltip>}
               </div>
               <div className="mt-3 rounded-xl border border-[#dbe4ea] bg-[#f8fafb] p-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-1.5 font-medium text-[#294353]"><span className={`size-2 rounded-full ${estimateState === 'calculating' ? 'animate-pulse bg-amber-500' : estimateImpact === 'geometry-only' ? 'bg-[#147d91]' : 'bg-emerald-600'}`} />{estimateState === 'calculating' ? '성능 계산 중' : estimateImpact === 'geometry-only' ? '3D만 반영됨' : '업데이트됨'}</span>
-                  <span className="font-mono text-[#607383]">{estimateImpact === 'geometry-only' ? '추정 입력 제외' : `${estimate?.similarity ?? 100}% 유사`}</span>
+                  <span className="font-mono text-[#607383]">{estimate?.source === 'dataset' ? '원본 KPI' : estimateImpact === 'geometry-only' ? '추정 입력 제외' : `${estimate?.similarity ?? 100}% 유사`}</span>
                 </div>
-                <p className="mt-2 text-[11px] text-[#738591]">{estimateImpact === 'geometry-only' ? '이 CAD 파생 파라미터는 데이터셋 KPI 거리 계산에 사용하지 않습니다.' : <>가장 가까운 AircraftVerse 설계 <strong className="text-[#294353]">#{estimate?.closestId ?? selected.id}</strong></>}</p>
+                <p className="mt-2 text-[11px] text-[#738591]">{estimate?.source === 'dataset' ? <>AircraftVerse 기준 설계 <strong className="text-[#294353]">#{selected.id}</strong>의 저장된 원본 시뮬레이션 값입니다.</> : estimateImpact === 'geometry-only' ? '이 CAD 파생 파라미터는 데이터셋 KPI 거리 계산에 사용하지 않습니다.' : <>Neighbor Estimate v1 · 가장 가까운 설계 <strong className="text-[#294353]">#{estimate?.closestId ?? selected.id}</strong></>}</p>
               </div>
 
               {estimate && (

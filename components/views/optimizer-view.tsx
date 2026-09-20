@@ -75,11 +75,13 @@ export function OptimizerView({
   current,
   onCompare,
   onApplyDraft,
+  onOpenGallery,
 }: {
   dataset: DatasetIndex;
   current: DesignSummary;
   onCompare: (aId: number, bId: number) => void;
   onApplyDraft: (id: number) => void;
+  onOpenGallery: () => void;
 }) {
   const [objective, setObjective] = useState<Objective>('range');
   const [massLimit, setMassLimit] = useState(10);
@@ -188,7 +190,7 @@ export function OptimizerView({
         eyebrow="5단계 · 조건에 맞는 후보 탐색"
         title="데이터셋 후보 탐색"
         description="27,714개 실제 output.json 메트릭을 조건으로 필터링하고, 선택한 목적 점수로 순위를 계산합니다."
-        actions={<><SourceBadge source="DATASET RANKING" /><Badge variant="outline" className="border-[#d8cfee] bg-violet-50 text-violet-700">학습 AI가 아닌 데이터셋 랭킹</Badge></>}
+        actions={<><SourceBadge source="DATASET RANKING" /><Badge variant="outline" className="border-[#d8cfee] bg-violet-50 text-violet-700">학습 AI가 아닌 데이터셋 랭킹</Badge><Button onClick={onOpenGallery} className="bg-[#147d91] text-white hover:bg-[#0f6475]">6단계 · 공유 갤러리 →</Button></>}
       />
 
       <div className="grid gap-4 lg:grid-cols-[310px_minmax(0,1fr)]">

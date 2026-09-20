@@ -84,6 +84,8 @@ export function DesignLabView({
   datasetDesigns = [],
   onSelect,
   onOpenDatasetCompare,
+  initialDraft = null,
+  onDraftChange,
 }: {
   designs: Array<Pick<DesignSummary, 'id' | 'numPropellers' | 'numWings'>>;
   selected: DesignSummary;
@@ -91,9 +93,16 @@ export function DesignLabView({
   datasetDesigns?: DesignSummary[];
   onSelect: (id: number) => void;
   onOpenDatasetCompare: () => void;
+  initialDraft?: DesignDraft | null;
+  onDraftChange?: (draft: DesignDraft) => void;
 }) {
   const [baseline, setBaseline] = useState<DesignDraft | null>(null);
   const [draft, setDraft] = useState<DesignDraft | null>(null);
+  // The parent keeps this snapshot across workflow steps. Do not reload on each edit.
+  const initialDraftRef = useRef(initialDraft);
+  useEffect(() => {
+    if (draft) onDraftChange?.(draft);
+  }, [draft, onDraftChange]);
   const [catalogs, setCatalogs] = useState<ComponentCatalogs>(EMPTY_CATALOGS);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -135,7 +144,7 @@ export function DesignLabView({
         if (!loaded) throw new Error(`Design #${selected.id}의 설계 트리가 없습니다.`);
         const nextDraft = hydrateDraft(loaded);
         setBaseline(nextDraft);
-        setDraft(cloneDraft(nextDraft));
+        setDraft(initialDraftRef.current?.baselineId === selected.id ? hydrateDraft(initialDraftRef.current) : cloneDraft(nextDraft));
         setCatalogs(nextCatalogs);
         setMode('parametric-preview');
       })
@@ -143,7 +152,7 @@ export function DesignLabView({
         if (!active) return;
         const fallback = draftFromDesign(selected, packagedReference);
         setBaseline(fallback);
-        setDraft(cloneDraft(fallback));
+        setDraft(initialDraftRef.current?.baselineId === selected.id ? hydrateDraft(initialDraftRef.current) : cloneDraft(fallback));
         setCatalogs(packagedReference ? catalogsFromShowcases([packagedReference]) : EMPTY_CATALOGS);
         setLoadError(reason instanceof Error ? reason.message : '설계 트리 로딩 오류');
       })

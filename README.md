@@ -29,8 +29,8 @@ dataset 15061946) 34곳을 사용합니다. 원본 CSV는 저장소에 포함하
 
 ```bash
 # https://www.data.go.kr/data/15061946/fileData.do 에서 로그인 없이 CSV 다운로드 후
+# 혹은 drive에 "국토교통부_항공레저_초경량비행장치공역_20251231.csv" 파일을 다운로드 후
 npm run data:prepare-drone-zones -- --csv <다운로드한 CSV 경로>
-# (data/sources/ul-airspace.csv에 두면 --csv 생략 가능)
 ```
 
 연 1회 갱신되는 스냅샷이라 실시간 NOTAM·임시 공역 변경은 반영하지 않습니다.

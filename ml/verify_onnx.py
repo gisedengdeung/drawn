@@ -5,7 +5,7 @@ anything. The preprocessing is baked into the graph, but the *input convention*
 is not: get the axis order or the unit wrong and the model answers with
 plausible numbers rather than an error. That is what this script catches.
 
-Only numpy and onnxruntime are needed — not PyTorch, not the training data.
+Only numpy and onnxruntime are needed - not PyTorch, not the training data.
 
     pip install numpy onnxruntime
     python ml/verify_onnx.py
@@ -29,7 +29,7 @@ DEFAULT_VECTORS = REPO_ROOT / "ml" / "reports" / "onnx_test_vectors.json"
 DEFAULT_EXPORT_REPORT = REPO_ROOT / "ml" / "reports" / "onnx_export.json"
 
 MISSING_MODEL_HELP = """
-The model file is not in the repository — ml/runs/ is gitignored, and a 5 MB
+The model file is not in the repository - ml/runs/ is gitignored, and a 5 MB
 binary does not belong in git. Get pointnet-geometry-v1.onnx from the team
 drive and put it at:
 
@@ -59,7 +59,7 @@ def main(argv: list[str]) -> int:
         print(MISSING_MODEL_HELP.format(path=args.model))
         return 2
     if not args.vectors.is_file():
-        print(f"test vectors not found at {args.vectors} — pull the branch again.")
+        print(f"test vectors not found at {args.vectors} - pull the branch again.")
         return 2
 
     try:
@@ -78,7 +78,7 @@ def main(argv: list[str]) -> int:
 
     results = []
 
-    # 1 — the file survived the download ---------------------------------
+    # 1 - the file survived the download ---------------------------------
     digest = hashlib.sha256(args.model.read_bytes()).hexdigest()[:32]
     expected_digest = None
     if args.export_report.is_file():
@@ -97,7 +97,7 @@ def main(argv: list[str]) -> int:
 
     session = onnxruntime.InferenceSession(str(args.model), providers=["CPUExecutionProvider"])
 
-    # 2 — the interface is what the docs promise --------------------------
+    # 2 - the interface is what the docs promise --------------------------
     model_input = session.get_inputs()[0]
     model_output = session.get_outputs()[0]
     signature_ok = (
@@ -114,7 +114,7 @@ def main(argv: list[str]) -> int:
     print(f"         output order is {target_order}")
     print()
 
-    # 3 — the numbers match ----------------------------------------------
+    # 3 - the numbers match ----------------------------------------------
     print("  test vectors")
     vector_ok = True
     first_points = None
@@ -139,7 +139,7 @@ def main(argv: list[str]) -> int:
     results.append(vector_ok)
     print()
 
-    # 4 — a cloud has no point order --------------------------------------
+    # 4 - a cloud has no point order --------------------------------------
     shuffled = first_points.copy()
     np.random.default_rng(0).shuffle(shuffled[0])
     permuted = session.run(None, {vectors["input_name"]: shuffled})[0][0]
@@ -151,7 +151,7 @@ def main(argv: list[str]) -> int:
         f"max rel diff {permutation_delta:.2g}",
     ))
 
-    # 5 — the failure this script exists for ------------------------------
+    # 5 - the failure this script exists for ------------------------------
     # Axes swapped: 3 "points" of 1024 coordinates. Shape-legal, meaningless.
     swapped = np.ascontiguousarray(first_points.transpose(0, 2, 1)[:, :, :3])
     try:
@@ -165,7 +165,7 @@ def main(argv: list[str]) -> int:
             "  ".join(f"{n} {wrong[i]:.1f}" for i, n in enumerate(target_order)),
         ))
         print("         Those are the numbers you get from (batch, 3, num_points).")
-        print("         No exception, just wrong answers — which is why you pass")
+        print("         No exception, just wrong answers - which is why you pass")
         print("         (batch, num_points, 3) and why this script exists.")
     except Exception:
         results.append(check("wrong axis order is detectable", True, "rejected outright"))
@@ -175,7 +175,7 @@ def main(argv: list[str]) -> int:
     print()
     print("=" * 70)
     if passed:
-        print("VERIFIED — the model runs correctly here.")
+        print("VERIFIED - the model runs correctly here.")
         print()
         print("Next: sample 1,024 points area-weighted over the STL surface, in")
         print("millimetres, and feed them as (1, 1024, 3) float32. That sampling is")
@@ -186,7 +186,7 @@ def main(argv: list[str]) -> int:
         print("shrunk toward the mean and never exceeds ~19,800 m, so it must not")
         print("be used to rank or search designs.")
     else:
-        print("NOT VERIFIED — do not use the model until the failures above are fixed.")
+        print("NOT VERIFIED - do not use the model until the failures above are fixed.")
     print("=" * 70)
     return 0 if passed else 1
 

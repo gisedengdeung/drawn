@@ -323,8 +323,8 @@ export function ExplorerView({
 
                 <div className="mt-4 rounded-lg border border-[#dbe4ea] bg-[#f7f9fb] p-3">
                   <div className="flex items-center justify-between gap-3 text-xs text-[#526675]">
-                    유효 비행성능만
-                    <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="유효 비행성능만" />
+                    비행거리 계산 가능한 설계도
+                    <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="비행거리 계산 가능한 설계도" />
                   </div>
                 </div>
               </>
@@ -369,12 +369,6 @@ export function ExplorerView({
                   </div>
                 </div>
 
-            <div className="mt-4 rounded-lg border border-[#dbe4ea] bg-[#f7f9fb] p-3">
-              <div className="flex items-center justify-between gap-3 text-xs text-[#526675]">
-                비행거리 계산 가능한 설계도
-                <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="비행거리 계산 가능한 설계도" />
-              </div>
-            </div>
                 <div className="mt-2 flex items-center justify-between rounded-lg border border-[#dbe4ea] bg-[#f4f7f9] px-3 py-2 text-xs">
                   <span className="text-[#607383]">조건 통과 후보</span>
                   <span className="font-mono font-semibold text-[#0f6475]">{candidatePool.length.toLocaleString()}개</span>
@@ -436,16 +430,6 @@ export function ExplorerView({
             </div>
           )}
 
-          <div className="flex items-center justify-between border-b border-[#dbe4ea] px-3.5 py-2.5 text-xs">
-            <span className="text-[#607383]">검색 결과 <small className="ml-1 text-[10px]">(최대 60개 표시)</small></span>
-            <span className="font-mono font-medium text-[#294353]">{filtered.length.toLocaleString()}</span>
-          </div>
-          <div className="max-h-[430px] overflow-y-auto p-2">
-            {visibleResults.length ? (
-              visibleResults.map((design) => {
-                const isFavorite = favorites.includes(design.id);
-                return (
-                  <div key={design.id} className="relative mb-2 last:mb-0">
           {mode === 'filter' ? (
             <>
               <div className="flex items-center justify-between border-b border-[#dbe4ea] px-3.5 py-2.5 text-xs">
@@ -457,13 +441,13 @@ export function ExplorerView({
                   visibleResults.map((design) => {
                     const isFavorite = favorites.includes(design.id);
                     return (
-                      <div key={design.id} className="relative mb-1">
+                      <div key={design.id} className="relative mb-2 last:mb-0">
                         <button
                           onClick={() => onSelect(design.id)}
                           className={`w-full rounded-xl border p-3 pr-9 text-left transition ${
                             current.id === design.id
                               ? 'border-[#9ccdd6] bg-[#eef8fa] shadow-sm'
-                              : 'border-transparent hover:border-[#dbe4ea] hover:bg-[#f7f9fb]'
+                              : 'border-[#cfdbe2] bg-white hover:border-[#9ccdd6] hover:bg-[#f7f9fb]'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -519,7 +503,7 @@ export function ExplorerView({
                       className={`mb-1 w-full rounded-xl border p-3 text-left transition ${
                         current.id === design.id
                           ? 'border-[#9ccdd6] bg-[#eef8fa] shadow-sm'
-                          : 'border-[#cfdbe2] bg-white hover:border-[#9ccdd6] hover:bg-[#f7f9fb]'
+                          : 'border-transparent hover:border-[#dbe4ea] hover:bg-[#f7f9fb]'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">

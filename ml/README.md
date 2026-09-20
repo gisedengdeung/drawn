@@ -12,9 +12,15 @@
 | 3 | `dataset.py`, `model.py`, `train.py` | 완료 — PointNet |
 | 4 | `evaluate.py` | 완료 — test 채점, prediction interval, model version |
 | 5 | `export_onnx.py` | 완료 — 자기완결 ONNX. FastAPI 연결은 미착수 |
+| — | `verify_onnx.py` | 완료 — 받는 쪽 검증. PyTorch·학습 데이터 불필요 |
+| — | `predict_stl.py` | 완료 — STL 하나로 예측. `--repeat N`으로 재샘플링 분산 확인 |
+| **6** | **속도 조건부 trim 모델** | **미착수 — 설계서 [../docs/TRIM_MODEL_PLAN.md](../docs/TRIM_MODEL_PLAN.md)** |
 
 **모델 설명은 [../docs/POINTNET_MODEL.md](../docs/POINTNET_MODEL.md)에 있습니다** —
 입력 변수, 구조, 왜 그 결과가 나왔는지.
+
+**다음 작업을 맡았다면 [../docs/TRIM_MODEL_PLAN.md](../docs/TRIM_MODEL_PLAN.md)부터 읽으세요.**
+형상 + 속도로 Performance Simulator의 비행 상태 값을 예측하는 모델의 작업 설계서입니다.
 
 최종 결과는 test split 기준 `Mass` R² **0.879**, `Max_Distance` R² **0.623**입니다.
 

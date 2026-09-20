@@ -8,6 +8,7 @@ import {
   Gauge,
   GitCompareArrows,
   History,
+  Info,
   PackageCheck,
   Radar,
   Route,
@@ -17,6 +18,7 @@ import {
   Star,
   Trophy,
   Weight,
+  X,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -57,6 +59,7 @@ import {
 
 const FAVORITES_STORAGE_KEY = 'aerotwin:favorite-designs';
 const RECENT_STORAGE_KEY = 'aerotwin:recent-designs';
+const ONBOARDING_STORAGE_KEY = 'aerotwin:onboarding-dismissed';
 const RECENT_LIMIT = 8;
 
 const PRESET_ICONS: Record<string, typeof PackageCheck> = {
@@ -93,6 +96,7 @@ export function ExplorerView({
   onOpenLab,
   onOpenSimulator,
   onOpenCompare,
+  onOpenGuide,
 }: {
   dataset: DatasetIndex;
   showcases: ShowcaseMap;
@@ -101,6 +105,7 @@ export function ExplorerView({
   onOpenLab: (id: number) => void;
   onOpenSimulator: (id: number) => void;
   onOpenCompare: (aId: number, preferredBId?: number) => void;
+  onOpenGuide: () => void;
 }) {
   const [mode, setMode] = useState<SearchMode>('filter');
   const [query, setQuery] = useState('');
@@ -111,6 +116,7 @@ export function ExplorerView({
   const [viewerOnly, setViewerOnly] = useState(true);
   const [favorites, setFavorites] = useState<number[]>([]);
   const [recent, setRecent] = useState<number[]>([]);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const [preset, setPreset] = useState('Delivery');
   const [objective, setObjective] = useState<Objective>('range');
@@ -129,8 +135,22 @@ export function ExplorerView({
     window.queueMicrotask(() => {
       setFavorites(readStoredIds(FAVORITES_STORAGE_KEY));
       setRecent(readStoredIds(RECENT_STORAGE_KEY));
+      try {
+        setShowOnboarding(localStorage.getItem(ONBOARDING_STORAGE_KEY) !== '1');
+      } catch {
+        setShowOnboarding(true);
+      }
     });
   }, []);
+
+  const dismissOnboarding = () => {
+    setShowOnboarding(false);
+    try {
+      localStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
+    } catch {
+      // Storage unavailable — dismissal just won't persist across reloads.
+    }
+  };
 
   const toggleFavorite = (id: number) => {
     setFavorites((previous) => {
@@ -238,6 +258,28 @@ export function ExplorerView({
         }
       />
 
+      {showOnboarding && (
+        <div className="workspace-panel relative mb-4 flex items-center gap-3 overflow-hidden rounded-xl border border-[#b9dce3] bg-[#eef8fa] px-4 py-3">
+          <Info className="size-4 shrink-0 text-[#0f6475]" />
+          <p className="flex-1 text-xs text-[#3d6873]">
+            드론을 잘 몰라도 괜찮아요. 화면 용어와 사용 흐름을 3분 안에 정리해드려요.
+          </p>
+          <button
+            onClick={onOpenGuide}
+            className="shrink-0 rounded-lg bg-[#147d91] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0f6878]"
+          >
+            처음이신가요? 가이드 보기 →
+          </button>
+          <button
+            onClick={dismissOnboarding}
+            aria-label="안내 닫기"
+            className="shrink-0 rounded p-1 text-[#5f8a94] hover:bg-white/60 hover:text-[#0f6475]"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[290px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(500px,1fr)_300px]">
         <aside className="workspace-panel overflow-hidden rounded-xl">
           <div className="border-b border-[#dbe4ea] p-3.5">
@@ -288,9 +330,9 @@ export function ExplorerView({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="border-[#ccd8df] bg-white text-[#304958]">
-                      <SelectItem value="all">전체 Prop 수</SelectItem>
+                      <SelectItem value="all">전체 프로펠러 수</SelectItem>
                       {[2, 4, 6, 8, 12, 16].map((count) => (
-                        <SelectItem key={count} value={String(count)}>{count} Propellers</SelectItem>
+                        <SelectItem key={count} value={String(count)}>프로펠러 {count}개</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -299,9 +341,9 @@ export function ExplorerView({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="border-[#ccd8df] bg-white text-[#304958]">
-                      <SelectItem value="all">전체 Wing</SelectItem>
-                      <SelectItem value="wingless">Wingless</SelectItem>
-                      <SelectItem value="winged">Winged</SelectItem>
+                      <SelectItem value="all">전체 날개 형태</SelectItem>
+                      <SelectItem value="wingless">날개 없음</SelectItem>
+                      <SelectItem value="winged">날개 있음</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -574,7 +616,7 @@ export function ExplorerView({
                 </Button>
               )}
               <Button onClick={() => onOpenLab(current.id)} className="bg-[#147d91] text-white hover:bg-[#0f6878]">
-                3D 편집 <ArrowUpRight />
+                파라미터 편집 <ArrowUpRight />
               </Button>
             </div>
           </div>
@@ -594,10 +636,10 @@ export function ExplorerView({
             ) : (
               <div className="divide-y divide-[#e5ebef]">
                 {[
-                  ['Hub', formatHub(current.hub)],
-                  ['Propellers', String(current.numPropellers)],
-                  ['Wings', String(current.numWings)],
-                  ['Arm Length', current.armLength ? `${current.armLength.toFixed(1)} mm` : '—'],
+                  ['허브', formatHub(current.hub)],
+                  ['프로펠러', String(current.numPropellers)],
+                  ['날개', String(current.numWings)],
+                  ['암 길이', current.armLength ? `${current.armLength.toFixed(1)} mm` : '—'],
                 ].map(([label, value]) => (
                   <div key={label} className="flex justify-between gap-3 py-3 text-xs"><span className="text-[#718391]">{label}</span><span className="text-[#294353]">{value}</span></div>
                 ))}
@@ -606,10 +648,10 @@ export function ExplorerView({
           </div>
 
           <div className="contents">
-            <MetricTile icon={<Route className="size-4" />} label="Maximum Distance" value={current.maxDistance ? formatMetric(current.maxDistance / 1000, 2) : '—'} unit={current.maxDistance ? 'km' : undefined} note={current.speedMfd ? `at ${current.speedMfd} m/s` : '성능 데이터 없음'} tone="cyan" />
-            <MetricTile icon={<CircleGauge className="size-4" />} label="Hover Time" value={current.hoverTime ? formatMetric(current.hoverTime, 0) : '—'} unit={current.hoverTime ? 'sec' : undefined} note={current.hoverTime ? `${formatMetric(current.hoverTime / 60, 1)} minutes` : '성능 데이터 없음'} tone="violet" />
-            <MetricTile icon={<Gauge className="size-4" />} label="Max Speed" value={current.maxSpeed ? formatMetric(current.maxSpeed, 1) : '—'} unit={current.maxSpeed ? 'm/s' : undefined} tone="green" />
-            <MetricTile icon={<Weight className="size-4" />} label="Mass" value={formatMetric(current.mass, 2)} unit="kg" note={`Local rank · ${formatDistance(current.maxDistance)}`} />
+            <MetricTile icon={<Route className="size-4" />} label="최대 비행거리" value={current.maxDistance ? formatMetric(current.maxDistance / 1000, 2) : '—'} unit={current.maxDistance ? 'km' : undefined} note={current.speedMfd ? `${current.speedMfd} m/s 기준` : '성능 데이터 없음'} tone="cyan" />
+            <MetricTile icon={<CircleGauge className="size-4" />} label="체공 시간" value={current.hoverTime ? formatMetric(current.hoverTime, 0) : '—'} unit={current.hoverTime ? 'sec' : undefined} note={current.hoverTime ? `${formatMetric(current.hoverTime / 60, 1)}분` : '성능 데이터 없음'} tone="violet" />
+            <MetricTile icon={<Gauge className="size-4" />} label="최고 속도" value={current.maxSpeed ? formatMetric(current.maxSpeed, 1) : '—'} unit={current.maxSpeed ? 'm/s' : undefined} tone="green" />
+            <MetricTile icon={<Weight className="size-4" />} label="질량" value={formatMetric(current.mass, 2)} unit="kg" note={`데이터셋 내 순위 · ${formatDistance(current.maxDistance)}`} />
           </div>
         </aside>
       </div>

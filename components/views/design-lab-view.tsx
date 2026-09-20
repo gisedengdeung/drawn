@@ -216,7 +216,7 @@ export function DesignLabView({
     <section className="px-3 py-4 lg:px-5">
       <SectionHeading
         eyebrow={`파라메트릭 Design Studio / Baseline #${selected.id}`}
-        title="설계 변수와 3D를 한 화면에서 조정하세요"
+        title="설계 파라미터와 3D를 한 화면에서 조정하세요"
         description="치수·부품·날개 조건은 즉시 개념 형상에 반영되고, 성능은 AircraftVerse 범위 안에서 데이터 유사도 기반으로 갱신됩니다."
         actions={(
           <div className="flex items-center gap-2">
@@ -243,7 +243,7 @@ export function DesignLabView({
           <div className="border-b border-[#e2e9ee] p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-[#172b3a]">Design Parameters</p>
+                <p className="text-sm font-semibold text-[#172b3a]">설계 파라미터</p>
                 <p className="mt-1 text-xs text-[#607383]">{changedCount ? `${changedCount}개 변경됨` : 'Baseline과 동일'}</p>
               </div>
               <Button size="icon-sm" variant="ghost" onClick={resetAll} disabled={!changedCount} aria-label="전체 초기화" className="text-[#607383]"><RotateCcw /></Button>
@@ -256,7 +256,7 @@ export function DesignLabView({
 
           <ScrollArea className="h-[500px] lg:h-[calc(100%-116px)]">
             {loading || !draft || !baseline ? (
-              <div className="grid h-80 place-items-center text-xs text-[#607383]">설계 변수를 준비하고 있습니다…</div>
+              <div className="grid h-80 place-items-center text-xs text-[#607383]">설계 파라미터를 준비하고 있습니다…</div>
             ) : (
               <Accordion multiple defaultValue={['structure', 'fuselage', 'propulsion']} className="px-3 pb-5">
                 {groupVisible('structure', ['topology', 'hub', 'arm', 'angle', 'offset', '구조', '길이']) && (
@@ -331,9 +331,9 @@ export function DesignLabView({
                   </ParameterSection>
                 )}
 
-                <ParameterSection value="source-parameters" icon={<SlidersHorizontal />} title="AircraftVerse 원본 변수" count={parameterCount} advanced>
+                <ParameterSection value="source-parameters" icon={<SlidersHorizontal />} title="AircraftVerse 원본 파라미터" count={parameterCount} advanced>
                   <div className="rounded-xl border border-[#cfe1e5] bg-[#eef8fa] p-3 text-[10px] leading-4 text-[#45616f]">
-                    설계 원본의 {parameterCount}개 변수를 1:1로 보존합니다. Optimization 변수는 성능 근접도에, CAD 파생 변수는 개념 형상에만 반영됩니다.
+                    설계 원본의 {parameterCount}개 파라미터를 1:1로 보존합니다. Optimization 파라미터는 성능 근접도에, CAD 파생 파라미터는 개념 형상에만 반영됩니다.
                   </div>
                   {(draft.parameterDefinitions ?? [])
                     .filter((definition) => !query || `${definition.label} ${GROUP_LABELS[definition.group]} ${definition.optimization ?? ''}`.toLocaleLowerCase('ko-KR').includes(query))
@@ -367,7 +367,7 @@ export function DesignLabView({
               </Badge>
               <div className="ml-auto flex items-center gap-2 text-xs text-[#607383]">
                 <Switch aria-label="기준 설계 Ghost 표시" checked={showGhost} onCheckedChange={setShowGhost} size="sm" disabled={mode === 'exact-stl'} />
-                <span>원본 Ghost</span>
+                <span>기준 Ghost</span>
               </div>
             </div>
             <div className="relative min-h-0 flex-1">
@@ -412,23 +412,23 @@ export function DesignLabView({
                   <span className="flex items-center gap-1.5 font-medium text-[#294353]"><span className={`size-2 rounded-full ${estimateState === 'calculating' ? 'animate-pulse bg-amber-500' : estimateImpact === 'geometry-only' ? 'bg-[#147d91]' : 'bg-emerald-600'}`} />{estimateState === 'calculating' ? '성능 계산 중' : estimateImpact === 'geometry-only' ? '3D만 반영됨' : '업데이트됨'}</span>
                   <span className="font-mono text-[#607383]">{estimateImpact === 'geometry-only' ? '추정 입력 제외' : `${estimate?.similarity ?? 100}% 유사`}</span>
                 </div>
-                <p className="mt-2 text-[11px] text-[#738591]">{estimateImpact === 'geometry-only' ? '이 CAD 파생 변수는 데이터셋 KPI 거리 계산에 사용하지 않습니다.' : <>Closest AircraftVerse design <strong className="text-[#294353]">#{estimate?.closestId ?? selected.id}</strong></>}</p>
+                <p className="mt-2 text-[11px] text-[#738591]">{estimateImpact === 'geometry-only' ? '이 CAD 파생 파라미터는 데이터셋 KPI 거리 계산에 사용하지 않습니다.' : <>가장 가까운 AircraftVerse 설계 <strong className="text-[#294353]">#{estimate?.closestId ?? selected.id}</strong></>}</p>
               </div>
 
               {estimate && (
                 <div className="mt-3 divide-y divide-[#e7edf1]">
-                  <EstimateRow icon={<Ruler />} label="Max Distance" before={selected.maxDistance / 1000} after={estimate.range / 1000} unit="km" better="up" />
-                  <EstimateRow icon={<CircleGauge />} label="Max Speed" before={selected.maxSpeed} after={estimate.maxSpeed} unit="m/s" better="up" />
-                  <EstimateRow icon={<Activity />} label="Hover Time" before={selected.hoverTime} after={estimate.hover} unit="sec" better="up" />
-                  <EstimateRow icon={<Zap />} label="Power" before={selected.power} after={estimate.power} unit="W" better="down" />
-                  <EstimateRow icon={<Wind />} label="Drag @ 20m/s" before={selected.dragAt20} after={estimate.drag} unit="N" better="down" />
-                  <EstimateRow icon={<Weight />} label="Mass" before={selected.mass} after={estimate.mass} unit="kg" better="down" />
+                  <EstimateRow icon={<Ruler />} label="최대 비행거리" before={selected.maxDistance / 1000} after={estimate.range / 1000} unit="km" better="up" />
+                  <EstimateRow icon={<CircleGauge />} label="최고 속도" before={selected.maxSpeed} after={estimate.maxSpeed} unit="m/s" better="up" />
+                  <EstimateRow icon={<Activity />} label="체공 시간" before={selected.hoverTime} after={estimate.hover} unit="sec" better="up" />
+                  <EstimateRow icon={<Zap />} label="소비전력" before={selected.power} after={estimate.power} unit="W" better="down" />
+                  <EstimateRow icon={<Wind />} label="항력 (20m/s)" before={selected.dragAt20} after={estimate.drag} unit="N" better="down" />
+                  <EstimateRow icon={<Weight />} label="질량" before={selected.mass} after={estimate.mass} unit="kg" better="down" />
                 </div>
               )}
 
               <div className="mt-4 rounded-xl border border-[#dbe4ea] bg-white p-3 text-xs">
                 <p className="font-semibold text-[#294353]">변경 요약</p>
-                <div className="mt-2 flex items-center justify-between text-[#607383]"><span>편집된 변수</span><strong className="font-mono text-[#0f6475]">{changedCount}</strong></div>
+                <div className="mt-2 flex items-center justify-between text-[#607383]"><span>편집된 파라미터</span><strong className="font-mono text-[#0f6475]">{changedCount}</strong></div>
                 <div className="mt-2 flex items-center justify-between text-[#607383]"><span>파라메트릭 상태</span><strong className="text-emerald-700">실시간</strong></div>
               </div>
 
@@ -452,7 +452,7 @@ export function DesignLabView({
         <DialogContent className="max-h-[92vh] overflow-y-auto border-[#dbe4ea] bg-[#f7f9fb] p-5 text-[#172b3a] sm:max-w-[1180px]">
           <DialogHeader>
             <DialogTitle className="text-xl">Baseline vs 현재 Draft</DialogTitle>
-            <DialogDescription>같은 카메라 방향의 개념 형상과 변경된 설계변수·성능을 함께 비교합니다.</DialogDescription>
+            <DialogDescription>같은 카메라 방향의 개념 형상과 변경된 파라미터·성능을 함께 비교합니다.</DialogDescription>
           </DialogHeader>
           {baseline && draft && estimate && (
             <div className="mt-2 space-y-4">
@@ -470,18 +470,18 @@ export function DesignLabView({
                         <span className="font-mono text-[#8a99a4]">{item.before}</span>
                         <span className="font-mono font-semibold text-[#0f6475]">→ {item.after}</span>
                       </div>
-                    )) : <p className="py-8 text-center text-xs text-[#82919c]">아직 변경된 변수가 없습니다.</p>}
+                    )) : <p className="py-8 text-center text-xs text-[#82919c]">아직 변경된 파라미터가 없습니다.</p>}
                   </div>
                 </div>
                 <div className="rounded-xl border border-[#dbe4ea] bg-white p-4">
                   <p className="text-sm font-semibold">성능 변화</p>
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    <CompareMetric label="Range" before={selected.maxDistance / 1000} after={estimate.range / 1000} unit="km" />
-                    <CompareMetric label="Hover" before={selected.hoverTime} after={estimate.hover} unit="s" />
-                    <CompareMetric label="Max Speed" before={selected.maxSpeed} after={estimate.maxSpeed} unit="m/s" />
-                    <CompareMetric label="Power" before={selected.power} after={estimate.power} unit="W" invert />
-                    <CompareMetric label="Drag @20" before={selected.dragAt20} after={estimate.drag} unit="N" invert />
-                    <CompareMetric label="Mass" before={selected.mass} after={estimate.mass} unit="kg" invert />
+                    <CompareMetric label="비행거리" before={selected.maxDistance / 1000} after={estimate.range / 1000} unit="km" />
+                    <CompareMetric label="체공시간" before={selected.hoverTime} after={estimate.hover} unit="s" />
+                    <CompareMetric label="최고속도" before={selected.maxSpeed} after={estimate.maxSpeed} unit="m/s" />
+                    <CompareMetric label="소비전력" before={selected.power} after={estimate.power} unit="W" invert />
+                    <CompareMetric label="항력" before={selected.dragAt20} after={estimate.drag} unit="N" invert />
+                    <CompareMetric label="질량" before={selected.mass} after={estimate.mass} unit="kg" invert />
                   </div>
                 </div>
               </div>
@@ -642,7 +642,7 @@ function SourceParameterControl({
       ) : typeof value === 'string' && /NACA|PROFILE/i.test(definition.label) ? (
         <ControlSelect label="Profile" value={value} options={nacaOptions} baseline={String(baseline ?? '')} onChange={onChange} />
       ) : (
-        <ReadOnlyValue label="Value" value={String(value ?? '—')} note="파생 CAD 변수 · 읽기 전용" />
+        <ReadOnlyValue label="Value" value={String(value ?? '—')} note="파생 CAD 파라미터 · 읽기 전용" />
       )}
       {definition.compatibility && <p className="mt-2 text-[9px] text-[#82919c]">{definition.compatibility}</p>}
     </div>

@@ -7,6 +7,7 @@ import {
   Beaker,
   Boxes,
   CheckCircle2,
+  HelpCircle,
   Hexagon,
   MapPin,
   Share2,
@@ -15,6 +16,8 @@ import {
 import { CompareView } from '@/components/views/compare-view';
 import { DesignLabView } from '@/components/views/design-lab-view';
 import { ExplorerView } from '@/components/views/explorer-view';
+import { GuideView } from '@/components/views/guide-view';
+import { LandingView } from '@/components/views/landing-view';
 import { SimulatorView } from '@/components/views/simulator-view';
 import { GalleryView } from '@/components/views/gallery-view';
 import { NearbyFlightSites } from '@/components/views/nearby-flight-sites';
@@ -51,7 +54,7 @@ const navItems = [
 ];
 
 export function AeroTwinApp() {
-  const [view, setView] = useState<WorkspaceView>('explore');
+  const [view, setView] = useState<WorkspaceView>('home');
   const [dataset, setDataset] = useState<DatasetIndex | null>(null);
   const [showcases, setShowcases] = useState<ShowcaseMap>({});
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -220,26 +223,37 @@ export function AeroTwinApp() {
               준비됨
             </div>
 
-          <div className="ml-auto flex items-center gap-2">
-            <Popover>
-              <PopoverTrigger className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ccd8df] bg-white px-3 py-2 text-xs font-medium text-[#3c5362] transition hover:bg-[#f4f7f9]">
-                <MapPin className="size-3.5 text-[#147d91]" />
-                <span className="hidden sm:inline">주변 비행지</span>
-              </PopoverTrigger>
-              <PopoverContent align="end" sideOffset={8} className="w-[min(22rem,calc(100vw-32px))] bg-white p-4 text-[#172b3a] shadow-xl">
-                <NearbyFlightSites />
-              </PopoverContent>
-            </Popover>
-            <Link href="/packages" className="shrink-0 rounded-lg bg-[#147d91] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#0f6475]">
-              패키지 상품!
-            </Link>
-            <Badge variant="outline" className="hidden border-[#cfdbe2] bg-[#f7f9fb] text-[10px] text-[#526675] sm:inline-flex">
-              파라메트릭 27,714개 · 원본 STL 12개
-            </Badge>
-          </div>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setView('guide')}
+                aria-current={view === 'guide' ? 'page' : undefined}
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition ${
+                  view === 'guide'
+                    ? 'border-[#9ccdd6] bg-[#eef8fa] text-[#0f6475]'
+                    : 'border-[#dbe4ea] bg-white text-[#607383] hover:bg-[#f4f7f9]'
+                }`}
+              >
+                <HelpCircle className="size-3.5" /> <span className="hidden sm:inline">가이드</span>
+              </button>
+              <Popover>
+                <PopoverTrigger className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ccd8df] bg-white px-3 py-2 text-xs font-medium text-[#3c5362] transition hover:bg-[#f4f7f9]">
+                  <MapPin className="size-3.5 text-[#147d91]" />
+                  <span className="hidden sm:inline">주변 비행지</span>
+                </PopoverTrigger>
+                <PopoverContent align="end" sideOffset={8} className="w-[min(22rem,calc(100vw-32px))] bg-white p-4 text-[#172b3a] shadow-xl">
+                  <NearbyFlightSites />
+                </PopoverContent>
+              </Popover>
+              <Link href="/packages" className="shrink-0 rounded-lg bg-[#147d91] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#0f6475]">
+                패키지 상품!
+              </Link>
+              <Badge variant="outline" className="hidden border-[#cfdbe2] bg-[#f7f9fb] text-[10px] text-[#526675] sm:inline-flex">
+                파라메트릭 27,714개 · 원본 STL 12개
+              </Badge>
+            </div>
           </div>
 
-        <nav className="mx-auto flex max-w-[1720px] items-center overflow-x-auto px-2 lg:px-4" aria-label="설계 작업 단계">
+          <nav className="mx-auto flex max-w-[1720px] items-center overflow-x-auto px-2 lg:px-4" aria-label="설계 작업 단계">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = item.id === view;
@@ -288,6 +302,7 @@ export function AeroTwinApp() {
                     selectShowcaseAndOpen(id, 'simulator')
                   }
                   onOpenCompare={openCompareFromExplorer}
+                  onOpenGuide={() => setView('guide')}
                 />
               )}
               {view === 'simulator' && selectedDetail && (
@@ -300,7 +315,7 @@ export function AeroTwinApp() {
               )}
               {view === 'simulator' && !selectedDetail && (
                 <ShowcaseRequiredState
-                  title="Performance Simulator"
+                  title="성능 확인"
                   selectedId={selectedId}
                   defaultId={dataset.summary.defaultShowcaseId}
                   onChoose={(id) => selectShowcaseAndOpen(id, 'simulator')}
@@ -325,6 +340,13 @@ export function AeroTwinApp() {
                   workspace={workspace}
                   initialPostId={initialPostId}
                   onReuse={reuseDesign}
+                />
+              )}
+              {view === 'guide' && <GuideView onBack={() => setView('explore')} />}
+              {view === 'home' && (
+                <LandingView
+                  onStart={() => setView('explore')}
+                  onOpenGuide={() => setView('guide')}
                 />
               )}
             </>

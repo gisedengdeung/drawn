@@ -5,11 +5,11 @@ export type Objective = 'range' | 'hover' | 'power' | 'drag' | 'speed' | 'balanc
 export type ScoredDesign = DesignSummary & { score: number };
 
 export const CANDIDATE_OBJECTIVES: { id: Objective; label: string; detail: string }[] = [
-  { id: 'range', label: '비행거리 최대', detail: 'Range ↑' },
-  { id: 'hover', label: '체공시간 최대', detail: 'Hover ↑' },
-  { id: 'power', label: '소비전력 최소', detail: 'Power ↓' },
-  { id: 'drag', label: '항력 최소', detail: 'Drag @20 ↓' },
-  { id: 'speed', label: '최대속도 최대', detail: 'Speed ↑' },
+  { id: 'range', label: '비행거리 최대', detail: '비행거리 ↑' },
+  { id: 'hover', label: '체공시간 최대', detail: '체공시간 ↑' },
+  { id: 'power', label: '소비전력 최소', detail: '소비전력 ↓' },
+  { id: 'drag', label: '항력 최소', detail: '항력 ↓' },
+  { id: 'speed', label: '최대속도 최대', detail: '최고속도 ↑' },
   { id: 'balanced', label: '균형형', detail: '3목적 Pareto knee' },
 ];
 

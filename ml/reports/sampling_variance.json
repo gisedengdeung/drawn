@@ -1,0 +1,115 @@
+{
+  "note": "prediction spread from resampling the same STL; 12 showcase designs, 20 samplings each, 1024 points",
+  "points": 1024,
+  "repeats": 20,
+  "per_design": {
+    "411": {
+      "wings": 0,
+      "rotors": 6,
+      "mass_cv_pct": 4.96,
+      "dist_cv_pct": 11.01,
+      "dist_min": 3063.5,
+      "dist_max": 4328.9,
+      "dist_mean": 3619.9
+    },
+    "1459": {
+      "wings": 2,
+      "rotors": 4,
+      "mass_cv_pct": 10.11,
+      "dist_cv_pct": 17.92,
+      "dist_min": 1857.9,
+      "dist_max": 3719.4,
+      "dist_mean": 2641.6
+    },
+    "1985": {
+      "wings": 0,
+      "rotors": 6,
+      "mass_cv_pct": 6.42,
+      "dist_cv_pct": 8.72,
+      "dist_min": 17143.7,
+      "dist_max": 22698.2,
+      "dist_mean": 19333.3
+    },
+    "3803": {
+      "wings": 0,
+      "rotors": 4,
+      "mass_cv_pct": 3.54,
+      "dist_cv_pct": 9.68,
+      "dist_min": 26840.8,
+      "dist_max": 36916.7,
+      "dist_mean": 32244.4
+    },
+    "8893": {
+      "wings": 0,
+      "rotors": 4,
+      "mass_cv_pct": 2.9,
+      "dist_cv_pct": 9.24,
+      "dist_min": 16711.3,
+      "dist_max": 23488.8,
+      "dist_mean": 19863.0
+    },
+    "13077": {
+      "wings": 2,
+      "rotors": 4,
+      "mass_cv_pct": 5.44,
+      "dist_cv_pct": 6.69,
+      "dist_min": 2212.9,
+      "dist_max": 3024.3,
+      "dist_mean": 2597.9
+    },
+    "16491": {
+      "wings": 0,
+      "rotors": 6,
+      "mass_cv_pct": 6.47,
+      "dist_cv_pct": 19.73,
+      "dist_min": 7030.8,
+      "dist_max": 14328.1,
+      "dist_mean": 9810.2
+    },
+    "17287": {
+      "wings": 0,
+      "rotors": 8,
+      "mass_cv_pct": 2.97,
+      "dist_cv_pct": 6.9,
+      "dist_min": 30657.7,
+      "dist_max": 41613.5,
+      "dist_mean": 37627.7
+    },
+    "17297": {
+      "wings": 0,
+      "rotors": 6,
+      "mass_cv_pct": 3.38,
+      "dist_cv_pct": 7.86,
+      "dist_min": 12984.6,
+      "dist_max": 17531.7,
+      "dist_mean": 14960.0
+    },
+    "20015": {
+      "wings": 0,
+      "rotors": 4,
+      "mass_cv_pct": 4.6,
+      "dist_cv_pct": 15.56,
+      "dist_min": 1048.3,
+      "dist_max": 2037.0,
+      "dist_mean": 1555.8
+    },
+    "20716": {
+      "wings": 0,
+      "rotors": 6,
+      "mass_cv_pct": 7.35,
+      "dist_cv_pct": 19.11,
+      "dist_min": 7066.0,
+      "dist_max": 13581.9,
+      "dist_mean": 10426.8
+    },
+    "22875": {
+      "wings": 0,
+      "rotors": 8,
+      "mass_cv_pct": 8.92,
+      "dist_cv_pct": 11.39,
+      "dist_min": 997.2,
+      "dist_max": 1626.2,
+      "dist_mean": 1306.2
+    }
+  }
+}

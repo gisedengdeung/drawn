@@ -22,7 +22,11 @@ export type DesignSummary = {
   primaryPropeller: string | null;
   primaryBattery: string | null;
   dragAt20: number;
+  liftAt20: number;
+  thrustAt20: number;
+  pitchAt20: number;
   powerAt20: number;
+  currentAt20: number;
   powerAt0: number;
   thrustAt0: number;
   currentAt0: number;

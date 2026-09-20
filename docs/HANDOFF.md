@@ -20,12 +20,17 @@
 > 전처리·후처리를 그래프에 편입한 자기완결 파일을 만듭니다.
 >
 > **다만 UI 연결 전에 반드시 읽어야 할 제약이 있습니다.**
-> `Max_Distance` 예측이 평균으로 수축해 **상한이 19,824m**입니다(데이터셋 최대 40,905m).
+> `Max_Distance` 예측이 평균으로 수축합니다. test split 예측 최댓값은 19,824m이지만
+> **이것은 모델의 상한이 아닙니다** - 학습에 포함된 설계에서는 39,805m도 나옵니다.
 > Pareto knee인 design 20015을 1,400m로 예측합니다. **랭킹·설계 탐색에 쓰면 퇴보합니다.**
 > [MODEL_CARD.md](MODEL_CARD.md)와 [POINTNET_MODEL.md](POINTNET_MODEL.md) 6절을 보세요.
 >
 > 아래 [4단계 baseline이 바뀌었습니다](#4단계-baseline이-바뀌었습니다)도 함께 읽으세요 —
 > 평균 예측이 아니라 `mesh` 회귀가 기준이며, `mesh+cad`를 합격선으로 쓰면 안 됩니다.
+>
+> **다음 작업은 6단계 — 속도 조건부 trim 모델입니다 (미착수).**
+> 형상 + 비행속도로 Performance Simulator의 Drag/Thrust/Pitch/Power/Current/FlightTime을
+> 예측합니다. 데스크탑 GPU가 필요하며, 작업 설계서는 [TRIM_MODEL_PLAN.md](TRIM_MODEL_PLAN.md)입니다.
 
 ## 담당 작업
 
@@ -208,6 +213,7 @@ Mot_amps_ratio_MFD, Mot_power_ratio_MFD, Batt_amps_ratio_MFD, ...
 | 3 | ~~PointNet 학습~~ **완료** (실제 21.5분) → [POINTNET_MODEL.md](POINTNET_MODEL.md) | **데스크탑** | 2~3일 |
 | 4 | ~~검증셋 R²/MAE, baseline 대비 비교~~ **완료** + prediction interval, model version | 데스크탑 | 1일 |
 | 5 | ~~ONNX 내보내기~~ **완료** / FastAPI 연결은 미착수 | — | 이후 |
+| **6** | **속도 조건부 trim 모델** — [TRIM_MODEL_PLAN.md](TRIM_MODEL_PLAN.md) | **데스크탑** | 미착수 |
 
 4단계의 baseline은 **"타깃 평균으로만 예측했을 때"** 입니다. 이 기준이 없으면 R² 수치의 좋고 나쁨을 판단할 수 없습니다.
 [MODEL_CARD.md](MODEL_CARD.md)가 요구하는 기록 항목은 검증셋 R²/MAE, prediction interval, model version입니다.

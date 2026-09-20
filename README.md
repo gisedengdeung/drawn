@@ -41,8 +41,8 @@ npm run data:prepare-drone-zones -- --csv <다운로드한 CSV 경로>
 1. **Design Explorer** — 27,714개 ID/topology 검색과 대표 12개 원본 STL 또는 전체 파라메트릭 프리뷰 진입
 2. **Design Studio** — 설계당 원본 27–225개 변수를 1:1 보존하고 구조·동체·추진·전력·날개·탑재·배치를 실시간 개념 형상에 반영
 3. **Performance Simulator** — 0–50m/s trim slider, STL Pitch 자세, Drag/Lift/Thrust 벡터와 실제 성능 곡선
-4. **A/B Compare** — Baseline vs Draft 및 데이터셋 두 설계의 변경 파라미터/KPI/trim 비교
-5. **Dataset Candidate Search** — 목표·제약 필터, 실제 non-dominated Pareto와 knee 추천, 추천 ID를 Draft·A/B 흐름으로 연결
+4. **A/B Compare** — Baseline vs Draft 및 데이터셋 두 설계의 변경 파라미터/KPI/trim 비교. 별도 단계가 아니라 Design Explorer·Design Studio 어디서든 팝업으로 바로 확인
+5. **Dataset Candidate Search** — 목표·제약 필터와 실제 output.json 기반 랭킹(균형형은 non-dominated Pareto knee). 별도 단계가 아니라 Design Explorer 사이드바의 "조건으로 후보 찾기" 모드로 통합되어 있으며, 계산된 추천안은 바로 선택되어 3D·성능·A/B 비교로 이어짐
 
 ## 데이터 원칙
 

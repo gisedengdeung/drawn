@@ -274,8 +274,6 @@ export type WorkspaceView =
   | 'explore'
   | 'simulator'
   | 'lab'
-  | 'compare'
-  | 'optimizer'
   | 'gallery';
 
 export function formatMetric(value: number, digits = 1) {

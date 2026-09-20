@@ -9,7 +9,6 @@ import {
   Boxes,
   CheckCircle2,
   HelpCircle,
-  Hexagon,
   MapPin,
   Share2,
   ShoppingBag,
@@ -25,6 +24,7 @@ import { PartsAgentView } from '@/components/views/parts-agent-view';
 import { useDesignWorkspace } from '@/hooks/use-design-workspace';
 import { GalleryView } from '@/components/views/gallery-view';
 import { NearbyFlightSites } from '@/components/views/nearby-flight-sites';
+import { DrawnLogo } from '@/components/drawn-logo';
 import { isDesignDraft, workspaceStorageKey } from '@/lib/design-gallery';
 import { hydrateDraft } from '@/lib/design-draft';
 import type { GalleryDetail, WorkspaceSnapshot } from '@/lib/design-gallery';
@@ -230,9 +230,7 @@ export function DrawnApp() {
               onClick={() => setView('home')}
               className="flex min-w-0 items-center gap-2.5 text-left"
             >
-              <div className="grid size-8 place-items-center rounded-[10px] bg-[#3182f6] shadow-sm">
-                <Hexagon className="size-4.5 text-white" />
-              </div>
+              <DrawnLogo className="size-8 shrink-0 rounded-lg shadow-sm" />
               <div>
                 <p className="text-sm font-semibold tracking-[-0.02em] text-[#1d1d1f]">
                   Drawn
@@ -414,8 +412,8 @@ function LoadingWorkspace() {
   return (
     <div className="grid min-h-[calc(100vh-103px)] place-items-center px-6">
       <div className="text-center">
-        <div className="mx-auto mb-5 grid size-12 place-items-center rounded-xl border border-[#bfdbfe] bg-[#eff6ff]">
-          <Hexagon className="size-6 animate-pulse text-[#3182f6]" />
+        <div className="mx-auto mb-5 grid size-12 place-items-center rounded-xl border border-[#b9dce3] bg-[#eef8fa]">
+          <DrawnLogo className="size-7" />
         </div>
         <p className="font-medium text-[#3c3c43]">
           AircraftVerse 인덱스를 준비하고 있습니다

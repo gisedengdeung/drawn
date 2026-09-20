@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink, Info, Loader2, Navigation } from 'lucide-react';
 
@@ -22,6 +22,14 @@ export function FlightMapPage() {
   const { dataset, error: datasetError } = useDroneZones();
   const { status, position, locate } = useGeolocation();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // 위젯 등에서 /flight-map?zone=<id>로 들어오면 해당 공역을 바로 선택합니다.
+  useEffect(() => {
+    window.queueMicrotask(() => {
+      const zoneParam = new URLSearchParams(window.location.search).get('zone');
+      if (zoneParam) setSelectedId(zoneParam);
+    });
+  }, []);
 
   const zones = dataset?.zones ?? EMPTY_ZONES;
   const sortedZones = useMemo(() => {

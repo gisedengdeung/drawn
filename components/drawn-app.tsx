@@ -361,7 +361,12 @@ export function DrawnApp() {
               <p className="mt-2 text-sm text-rose-200/70">{error}</p>
             </div>
           ) : !dataset || showcaseList.length === 0 ? (
-            <LoadingWorkspace />
+            view === 'home' ? (
+              <LandingView
+                onStart={() => setView('explore')}
+                onOpenGuide={() => setView('guide')}
+              />
+            ) : <LoadingWorkspace />
           ) : (
             <>
               {view === 'explore' && (
@@ -464,8 +469,8 @@ function LoadingWorkspace() {
   return (
     <div className="grid min-h-[calc(100vh-103px)] place-items-center px-6">
       <div className="text-center">
-        <div className="mx-auto mb-5 grid size-12 place-items-center rounded-xl border border-[#bfdbfe] bg-[#eff6ff]">
-          <DrawnLogo className="size-6 animate-pulse text-[#3182f6]" />
+        <div className="mx-auto mb-5 grid size-12 place-items-center rounded-xl border border-[#b9dce3] bg-[#eef8fa]">
+          <DrawnLogo className="size-7" />
         </div>
         <p className="font-medium text-[#3c3c43]">
           AircraftVerse 인덱스를 준비하고 있습니다

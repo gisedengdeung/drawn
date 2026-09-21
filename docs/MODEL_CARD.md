@@ -1,5 +1,7 @@
 # Neighbor Estimate v1 — Model Card
 
+이 문서는 기존 6개 KPI를 계산하는 Neighbor Estimate의 설명입니다. 현재 연결된 best MLP의 입력·출력과 한계는 [AI 모델 범위와 개선 기준](AI_MODEL_LIMITATIONS.md)을 참고하세요. 두 계산 결과의 출처와 검증 범위는 다릅니다.
+
 ## 목적
 
 학습 checkpoint가 아직 없는 팀 프로젝트 초기 단계에서 `설계 변경 → 즉시 3D 변화 → 데이터 근접 성능 변화 → 비교` 흐름을 검증하기 위한 deterministic AircraftVerse 인접 설계 추정기입니다. 화면에서 AI 예측으로 표기하지 않습니다.

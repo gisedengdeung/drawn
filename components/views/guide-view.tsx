@@ -23,9 +23,9 @@ import { SectionHeading } from '@/components/views/shared';
 
 function MediaPlaceholder({ label, className = '' }: { label: string; className?: string }) {
   return (
-    <div className={`flex aspect-video items-center justify-center rounded-lg border border-dashed border-[#c7d3d9] bg-[#f5f5f7] text-center ${className}`}>
+    <div className={`flex aspect-video items-center justify-center rounded-lg border border-dashed border-[#e5e5ea] bg-[#f5f5f7] text-center ${className}`}>
       <div>
-        <ImageIcon className="mx-auto size-5 text-[#a7b6bd]" />
+        <ImageIcon className="mx-auto size-5 text-[#86868b]" />
         <p className="mt-1.5 max-w-40 text-[10px] leading-4 text-[#86868b]">{label}</p>
       </div>
     </div>
@@ -176,7 +176,7 @@ export function GuideView({ onBack }: { onBack: () => void }) {
             </thead>
             <tbody>
               {AIRFRAME_STATS.map((row) => (
-                <tr key={row.label} className="border-b border-[#e5ebef]">
+                <tr key={row.label} className="border-b border-[#e5e5ea]">
                   <td className="py-2.5 pr-3 font-medium text-[#3c3c43]">{row.label}</td>
                   <td className="py-2.5 pr-3 font-mono text-[#3c3c43]">{row.successRate}</td>
                   <td className="py-2.5 pr-3 font-mono text-[#3c3c43]">{row.mass}</td>
@@ -195,7 +195,7 @@ export function GuideView({ onBack }: { onBack: () => void }) {
           데이터셋 안에서 나온 결과이고, 드론 공학의 절대 법칙은 아니에요.
         </p>
 
-        <div className="mt-5 border-t border-[#e5ebef] pt-4">
+        <div className="mt-5 border-t border-[#e5e5ea] pt-4">
           <p className="text-sm leading-6 text-[#6e6e73]">
             형태만으로는 “어디에 쓰기 좋은지” 알기 어려워서, 실제로 비행 가능한 10,737개 설계를 질량·비행거리·
             체공시간·속도·소비전력 5가지 기준으로 컴퓨터가 스스로 5개 그룹으로 묶도록 했어요(군집분석). 사람이
@@ -203,7 +203,7 @@ export function GuideView({ onBack }: { onBack: () => void }) {
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {PURPOSE_CLUSTERS.map((cluster) => (
-              <div key={cluster.label} className="rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] p-3.5">
+              <div key={cluster.label} className="rounded-xl bg-[#f5f5f7] p-3.5">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-[#3c3c43]">{cluster.label}</p>
                   <span className="font-mono text-[10px] text-[#86868b]">{cluster.share}</span>
@@ -218,7 +218,7 @@ export function GuideView({ onBack }: { onBack: () => void }) {
           </p>
         </div>
 
-        <div className="mt-5 border-t border-[#e5ebef] pt-4">
+        <div className="mt-5 border-t border-[#e5e5ea] pt-4">
           <p className="text-sm leading-6 text-[#6e6e73]">
             다만 이 설계도가 전부 같은 정밀도는 아니에요. 27,714개 중{' '}
             <strong className="text-[#1b64da]">12개만 실제로 정밀하게 만들어진 3D 파일(STL)</strong>이 있어서
@@ -274,7 +274,7 @@ export function GuideView({ onBack }: { onBack: () => void }) {
         </h2>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {WORKFLOW_STEPS.map(({ icon: Icon, label, desc }) => (
-            <div key={label} className="rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] p-3.5">
+            <div key={label} className="rounded-xl bg-[#f5f5f7] p-3.5">
               <Icon className="size-4 text-[#3182f6]" />
               <p className="mt-2 text-xs font-semibold text-[#3c3c43]">{label}</p>
               <p className="mt-1 text-[11px] leading-4 text-[#6e6e73]">{desc}</p>

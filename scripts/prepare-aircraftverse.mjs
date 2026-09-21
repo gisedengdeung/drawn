@@ -208,6 +208,8 @@ function readTrimAt(metadata, speed) {
     power:   nullable(row[8]),
     thrust:  nullable(row[4]),
     current: nullable(row[7]),
+    lift:    nullable(row[5]),
+    pitch:   nullable(row[2]),
   };
 }
 

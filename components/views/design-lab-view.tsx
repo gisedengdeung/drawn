@@ -212,14 +212,14 @@ export function DesignLabView({
         )}
       />
 
-      <div className="mb-3 grid grid-cols-3 rounded-xl border border-[#e5e5ea] bg-white p-1 @min-[900px]/lab:hidden">
+      <div className="mb-3 grid grid-cols-3 rounded-xl bg-[#f5f5f7] p-1 @min-[900px]/lab:hidden">
         {([
           ['parameters', '파라미터', SlidersHorizontal],
           ['preview', '3D', Box],
           ['performance', '성능', Activity],
         ] as const).map(([id, label, Icon]) => (
-          <button key={id} aria-pressed={mobilePanel === id} onClick={() => setMobilePanel(id)} className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold ${mobilePanel === id ? 'bg-[#3182f6] text-white' : 'text-[#6e6e73]'}`}>
-            <Icon className="size-3.5" /> {label}
+          <button key={id} aria-pressed={mobilePanel === id} onClick={() => setMobilePanel(id)} className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${mobilePanel === id ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}>
+            <Icon className={`size-3.5 ${mobilePanel === id ? 'text-[#3182f6]' : ''}`} /> {label}
           </button>
         ))}
       </div>
@@ -238,7 +238,7 @@ export function DesignLabView({
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#86868b]" />
               <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="파라미터 검색" className="h-9 border-[#e5e5ea] bg-[#f5f5f7] pl-8 text-xs" />
             </div>
-            <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-[#e5e5ea] bg-[#f5f5f7] px-3 py-2">
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-[#f5f5f7] px-3 py-2">
               <div>
                 <p className="text-xs font-medium text-[#6e6e73]">전문가 모드</p>
                 <p className="mt-0.5 text-[10px] leading-4 text-[#86868b]">데이터셋 원본 변수 {parameterCount}개를 그대로 편집합니다</p>
@@ -256,7 +256,7 @@ export function DesignLabView({
                   <ParameterSection value="structure" icon={<Layers3 />} title="기체 구조" count={1 + draft.segments.length * 3} hint={GROUP_HINTS.structure}>
                     <ReadOnlyValue label="허브 형태" value={formatComponent(draft.topology)} note="허브(몸통 중심) 형태 변경은 1단계 설계 선택에서 다른 설계를 고르면 됩니다." />
                     {draft.segments.map((segment, index) => (
-                      <div key={segment.id} className="rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] p-3">
+                      <div key={segment.id} className="rounded-xl bg-[#f5f5f7] p-3">
                         <p className="mb-3 flex items-center justify-between text-xs font-semibold text-[#3c3c43]">
                           팔 {index + 1}<span className="font-normal text-[#6e6e73]">{formatComponent(segment.nodeType)}</span>
                         </p>
@@ -280,7 +280,7 @@ export function DesignLabView({
                 {groupVisible('propulsion', ['motor', 'propeller', '추진', '모터', '프로펠러']) && (
                   <ParameterSection value="propulsion" icon={<CircleGauge />} title="추진 시스템" count={draft.propulsionGroups.length * 2} hint={GROUP_HINTS.propulsion}>
                     {draft.propulsionGroups.map((propulsion, index) => (
-                      <div key={propulsion.id} className="rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] p-3">
+                      <div key={propulsion.id} className="rounded-xl bg-[#f5f5f7] p-3">
                         <p className="mb-2 text-xs font-semibold text-[#3c3c43]">모터·프로펠러 세트 {index + 1}</p>
                         <ControlSelect label="모터" value={propulsion.motorType} options={catalogs.motors} baseline={baseline.propulsionGroups[index]?.motorType} format={formatMotorLabel} onChange={(value) => mutateDraft('propulsion', (next) => { next.propulsionGroups[index].motorType = value; syncSegmentComponent(next, propulsion.segmentId, 'motorType', value); })} />
                         <ControlSelect label="프로펠러" value={propulsion.propellerType} options={catalogs.propellers} baseline={baseline.propulsionGroups[index]?.propellerType} format={formatPropellerLabel} onChange={(value) => mutateDraft('propulsion', (next) => { next.propulsionGroups[index].propellerType = value; syncSegmentComponent(next, propulsion.segmentId, 'propellerType', value); })} />
@@ -315,7 +315,7 @@ export function DesignLabView({
                 {Object.keys(draft.layout).length > 0 && groupVisible('layout', ['sensor', 'battery x', 'battery y', '센서', '배치']) && (
                   <ParameterSection value="layout" icon={<Ruler />} title="내부 배치" count={Object.keys(draft.layout).length * 2} advanced hint={GROUP_HINTS.layout}>
                     {Object.entries(draft.layout).map(([name, position]) => (
-                      <div key={name} className="rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] p-3">
+                      <div key={name} className="rounded-xl bg-[#f5f5f7] p-3">
                         <p className="mb-2 text-xs font-semibold capitalize text-[#3c3c43]">{formatComponent(name)}</p>
                         <NumberSlider label="X 위치" unit="mm" min={-280} max={280} step={1} value={position.x} baseline={baseline.layout[name]?.x ?? position.x} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].x = value; }, false)} />
                         <NumberSlider label="Y 위치" unit="mm" min={-280} max={280} step={1} value={position.y} baseline={baseline.layout[name]?.y ?? position.y} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].y = value; }, false)} />
@@ -326,7 +326,7 @@ export function DesignLabView({
 
                 {expertMode && (
                 <ParameterSection value="source-parameters" icon={<SlidersHorizontal />} title="전문가용 원본 변수" count={parameterCount} advanced hint="AircraftVerse 데이터셋 원본 변수명을 그대로 보여줍니다. 위 친화적 그룹과 같은 값이 다시 나타날 수 있어요 — 대부분은 위에서 조정하는 것만으로 충분하고, 이 목록은 원본 그대로 세밀하게 맞추고 싶을 때만 쓰면 됩니다.">
-                  <div className="rounded-xl border border-[#cfe1e5] bg-[#eff6ff] p-3 text-[10px] leading-4 text-[#45616f]">
+                  <div className="rounded-xl border border-[#bfdbfe] bg-[#eff6ff] p-3 text-[10px] leading-4 text-[#3c3c43]">
                     설계 원본의 {parameterCount}개 변수를 1:1로 보존합니다. 이름은 데이터셋 원본 표기라 위 그룹보다 낯설 수 있어요. 성능 계산에 쓰이는 변수는 실제로 반영되고, 나머지는 3D 형상에만 반영됩니다.
                   </div>
                   {(draft.parameterDefinitions ?? [])
@@ -411,7 +411,7 @@ export function DesignLabView({
                   </TooltipContent>
                 </Tooltip>}
               </div>
-              <div className="mt-3 rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] p-3">
+              <div className="mt-3 rounded-xl bg-[#f5f5f7] p-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-1.5 font-medium text-[#3c3c43]"><span className={`size-2 rounded-full ${estimateState === 'calculating' ? 'animate-pulse bg-amber-500' : estimateImpact === 'geometry-only' ? 'bg-[#3182f6]' : 'bg-emerald-600'}`} />{estimateState === 'calculating' ? '성능 계산 중' : estimateImpact === 'geometry-only' ? '3D만 반영됨' : '업데이트됨'}</span>
                   <span className="font-mono text-[#6e6e73]">{estimate?.source === 'dataset' ? '원본 KPI' : estimateImpact === 'geometry-only' ? '추정 입력 제외' : `${estimate?.similarity ?? 100}% 유사`}</span>
@@ -513,7 +513,7 @@ function CompareMetric({ label, before, after, unit, invert = false }: { label: 
   const afterAvailable = isAvailableMetric(after);
   const digits = unit === 'W' || unit === 's' ? 0 : 1;
   return (
-    <div className="rounded-lg border border-[#e5e5ea] bg-[#f5f5f7] p-3">
+    <div className="rounded-lg bg-[#f5f5f7] p-3">
       <p className="text-[10px] text-[#86868b]">{label}</p>
       <p className="mt-1 font-mono text-xs text-[#86868b]">{beforeAvailable ? formatMetric(before, digits) : '—'} →</p>
       <p className="mt-0.5 font-mono text-sm font-semibold text-[#3c3c43]">{afterAvailable ? `${formatMetric(after, digits)} ${unit}` : '—'}</p>
@@ -632,7 +632,7 @@ function SourceParameterControl({
       ? '3D 반영'
       : '참조값';
   return (
-    <div className="rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] p-3">
+    <div className="rounded-xl bg-[#f5f5f7] p-3">
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="break-all font-mono text-[10px] font-semibold text-[#3c3c43]">{definition.label}</p>
@@ -692,7 +692,7 @@ function ControlSelect({ label, value, options, baseline, format = formatCompone
 
 function WingControls({ wing, baseline, nacaOptions, onChange }: { wing: WingParameters; baseline: WingParameters; nacaOptions: string[]; onChange: (mutator: (wing: WingParameters) => void) => void }) {
   return (
-    <div className="rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] p-3">
+    <div className="rounded-xl bg-[#f5f5f7] p-3">
       <p className="mb-3 flex items-center justify-between text-xs font-semibold text-[#3c3c43]">날개 세트<span className="font-normal text-[#6e6e73]">{formatComponent(wing.type)}</span></p>
       <ControlSelect label="날개 단면 (NACA)" value={wing.nacaProfile} options={nacaOptions} baseline={baseline.nacaProfile} onChange={(value) => onChange((next) => { next.nacaProfile = value; })} />
       <NumberSlider label="날개 폭 (Span)" unit="mm" min={200} max={2000} step={1} value={wing.span} baseline={baseline.span} onChange={(value) => onChange((next) => { next.span = value; })} />
@@ -708,7 +708,7 @@ function WingControls({ wing, baseline, nacaOptions, onChange }: { wing: WingPar
 
 function ReadOnlyValue({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="rounded-xl border border-[#e5e5ea] bg-[#f5f5f7] p-3">
+    <div className="rounded-xl bg-[#f5f5f7] p-3">
       <div className="flex items-center justify-between gap-3 text-xs"><span className="text-[#6e6e73]">{label}</span><strong className="truncate text-right text-[#3c3c43]">{value}</strong></div>
       {note && <p className="mt-1.5 text-[10px] text-[#86868b]">{note}</p>}
     </div>
@@ -735,7 +735,7 @@ function EstimateRow({ icon, label, before, after, unit, better }: { icon: React
       </div>
       <div className="mt-1.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2 font-mono text-xs">
         <span className="text-[#86868b]">{isAvailableMetric(before) ? formatMetric(before, digits) : '—'}</span>
-        <ChevronRight className="size-3 text-[#a4b0b8]" />
+        <ChevronRight className="size-3 text-[#86868b]" />
         <strong className="text-right text-[#3c3c43]">{isAvailableMetric(after) ? `${formatMetric(after, digits)} ${unit}` : '—'}</strong>
       </div>
     </div>

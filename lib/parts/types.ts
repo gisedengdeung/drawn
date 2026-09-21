@@ -32,7 +32,12 @@ export type ProductOffer = {
   id: string;
   productId: string;
   title: string;
+  /** Legacy canonical product URL, kept for saved v1 quotes. */
   url: string;
+  promotionUrl?: string | null;
+  priceKind?: 'listing' | 'sku';
+  provider?: 'aliexpress_affiliate' | 'aliexpress_ds';
+  market?: { country: 'KR'; currencyRequested: 'KRW' };
   optionId: string | null;
   optionLabel: string | null;
   optionVerified: boolean;

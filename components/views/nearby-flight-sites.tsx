@@ -1,7 +1,8 @@
 'use client';
 
+/* oxlint-disable next/no-html-link-for-pages -- Standard anchors avoid Vinext's production Link module export bug. */
+
 import { useMemo } from 'react';
-import Link from 'next/link';
 import { ExternalLink, Info, Loader2, Map, MapPin, Navigation } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -82,7 +83,7 @@ export function NearbyFlightSites() {
       {status === 'ready' && (
         <div className="mt-3 space-y-2">
           {zones.map((zone) => (
-            <Link
+            <a
               key={zone.id}
               href={`/flight-map?zone=${zone.id}`}
               aria-label={`${zone.name} 지도에서 보기 (약 ${zone.distanceKm.toFixed(0)}km)`}
@@ -110,14 +111,14 @@ export function NearbyFlightSites() {
                   <Map className="size-3 text-[#86868b]" />
                 </div>
               </div>
-            </Link>
+            </a>
           ))}
-          <Link
+          <a
             href="/flight-map"
             className="mt-1 flex items-center gap-1.5 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-2 text-[10px] font-medium text-[#1b64da] hover:bg-[#eff6ff]"
           >
             <Map className="size-3 shrink-0" /> 지도에서 전체 34곳 크게 보기
-          </Link>
+          </a>
           <a
             href={DRONE_ONESTOP_URL}
             target="_blank"

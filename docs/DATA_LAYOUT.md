@@ -41,4 +41,6 @@ npm run data:prepare -- --data-root "D:/datasets/AircraftVerse_1" --data-root "D
 
 `.gitignore`의 `/data/`는 원본·캐시·이관 기록을 제외합니다. 개발 서버 파일 감시와 TypeScript 검사도 이 디렉터리를 건너뜁니다. `public/data`와 `public/models`의 추적은 유지합니다.
 
-배포는 `npm run build`의 `dist` 산출물을 사용합니다. 현재 저장소에는 별도 소스 압축·업로드 스크립트가 없습니다. 향후 프로젝트 디렉터리 전체를 압축하는 업로더를 추가할 때는 `/data/`를 명시적으로 제외해야 합니다. `.gitignore`는 임의 압축 도구의 제외 규칙을 대신하지 않습니다. 원본을 팀과 공유해야 한다면 웹 배포와 분리된 데이터 저장소를 사용합니다.
+현재 배포는 Docker Compose의 Node 프런트, FastAPI, PostgreSQL, nginx로 구성합니다. 프런트 빌드 산출물은 `dist`이며 API는 별도의 Python 서비스와 `backend/model_bundle`을 사용합니다. `.dockerignore`는 `/data/`, `/ml/`, 비공개 환경 파일과 학습 원본을 이미지에서 제외합니다. `.gitignore`는 임의 압축 도구의 제외 규칙을 대신하지 않습니다. 원본을 팀과 공유할 때는 웹 배포와 분리된 데이터 저장소를 사용합니다.
+
+학습 원본과 체크포인트는 [ML 안내](../ml/README.md)의 `ml/sources/`, `ml/archive/` 구조를 따릅니다. 실행용 가중치와 전처리·검증 자료는 `backend/model_bundle`에서 관리합니다.

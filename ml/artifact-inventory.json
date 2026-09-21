@@ -1,0 +1,224 @@
+{
+    "schemaVersion":  1,
+    "operation":  "Lossless artifact organization",
+    "status":  "verified",
+    "runtimeBundle":  "backend/model_bundle",
+    "canonicalRun":  "ml/sources/dongha/20260920_160522",
+    "canonicalDataset":  "ml/sources/dongha/dataset_510k.csv",
+    "files":  [
+                  {
+                      "originalPath":  "dongha/dataset_510k.csv",
+                      "path":  "ml/sources/dongha/dataset_510k.csv",
+                      "bytes":  27389781,
+                      "beforeSha256":  "349d42fbbc922dea967009e2ca1b313504170f4a62fe89e32fbd472b00b210c8",
+                      "afterSha256":  "349d42fbbc922dea967009e2ca1b313504170f4a62fe89e32fbd472b00b210c8"
+                  },
+                  {
+                      "originalPath":  "dongha/dataset_sample.csv",
+                      "path":  "ml/sources/dongha/dataset_sample.csv",
+                      "bytes":  3863,
+                      "beforeSha256":  "7d7638947a9b8ac52a5a78d3d014562b28f53faba477a51c2df17adee3575d64",
+                      "afterSha256":  "7d7638947a9b8ac52a5a78d3d014562b28f53faba477a51c2df17adee3575d64"
+                  },
+                  {
+                      "originalPath":  "dongha/dataset_summary.json",
+                      "path":  "ml/sources/dongha/dataset_summary.json",
+                      "bytes":  3321,
+                      "beforeSha256":  "437ad2b368f2c72865a46b3ac93762fe87cb9cd0724bc4f2d0ed42dab2979236",
+                      "afterSha256":  "437ad2b368f2c72865a46b3ac93762fe87cb9cd0724bc4f2d0ed42dab2979236"
+                  },
+                  {
+                      "originalPath":  "dongha/desktop.ini",
+                      "path":  "ml/sources/dongha/desktop.ini",
+                      "bytes":  246,
+                      "beforeSha256":  "77dfbc0acf3983dc7877bd9107509f61ed1e433b271b5f45d85ac6128e145a9a",
+                      "afterSha256":  "77dfbc0acf3983dc7877bd9107509f61ed1e433b271b5f45d85ac6128e145a9a"
+                  },
+                  {
+                      "originalPath":  "dongha/make_dl_dataset.py",
+                      "path":  "ml/sources/dongha/make_dl_dataset.py",
+                      "bytes":  5466,
+                      "beforeSha256":  "7a1b3c69f50f734eb28edf23160d76e8222d85a3fa94f64399a3055f8531750c",
+                      "afterSha256":  "7a1b3c69f50f734eb28edf23160d76e8222d85a3fa94f64399a3055f8531750c"
+                  },
+                  {
+                      "originalPath":  "dongha/train_dl_model (1).py",
+                      "path":  "ml/sources/dongha/train_dl_model (1).py",
+                      "bytes":  4705,
+                      "beforeSha256":  "4ae95d526c031c48013a45cd9ded1608d7b17faeebf5c38bc2b33c6ff6abe967",
+                      "afterSha256":  "4ae95d526c031c48013a45cd9ded1608d7b17faeebf5c38bc2b33c6ff6abe967"
+                  },
+                  {
+                      "originalPath":  "dongha/train_dl_model.py",
+                      "path":  "ml/sources/dongha/train_dl_model.py",
+                      "bytes":  4878,
+                      "beforeSha256":  "d1a097c3b3b91acb2355700f40ae0f90b40702f62053e14dcc79a6d1238061b9",
+                      "afterSha256":  "d1a097c3b3b91acb2355700f40ae0f90b40702f62053e14dcc79a6d1238061b9"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/best_model.pt",
+                      "path":  "ml/sources/dongha/20260920_160522/best_model.pt",
+                      "bytes":  684535,
+                      "beforeSha256":  "0f87569726f6d4099ecd37cd199d94081e7e1d0ba5854833fa5aa63365e7cae1",
+                      "afterSha256":  "0f87569726f6d4099ecd37cd199d94081e7e1d0ba5854833fa5aa63365e7cae1"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/config.json",
+                      "path":  "ml/sources/dongha/20260920_160522/config.json",
+                      "bytes":  2098,
+                      "beforeSha256":  "2664048192564834378f947b8e377f38b1adb187cd6b3e9be326a331bed9895b",
+                      "afterSha256":  "2664048192564834378f947b8e377f38b1adb187cd6b3e9be326a331bed9895b"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/desktop.ini",
+                      "path":  "ml/sources/dongha/20260920_160522/desktop.ini",
+                      "bytes":  246,
+                      "beforeSha256":  "77dfbc0acf3983dc7877bd9107509f61ed1e433b271b5f45d85ac6128e145a9a",
+                      "afterSha256":  "77dfbc0acf3983dc7877bd9107509f61ed1e433b271b5f45d85ac6128e145a9a"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/inference_input_sample.csv",
+                      "path":  "ml/sources/dongha/20260920_160522/inference_input_sample.csv",
+                      "bytes":  4050,
+                      "beforeSha256":  "aa1e7902f4c6edae3c23a39b099a3f3eb0ac6ebaabd1e77a1ca4f3e064497fdf",
+                      "afterSha256":  "aa1e7902f4c6edae3c23a39b099a3f3eb0ac6ebaabd1e77a1ca4f3e064497fdf"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/inference_output_sample.csv",
+                      "path":  "ml/sources/dongha/20260920_160522/inference_output_sample.csv",
+                      "bytes":  2231,
+                      "beforeSha256":  "bc262aa211cbd92a5b69d478d57e924090f65513813ef40002bc310002dd9d01",
+                      "afterSha256":  "bc262aa211cbd92a5b69d478d57e924090f65513813ef40002bc310002dd9d01"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/learning_curve.png",
+                      "path":  "ml/sources/dongha/20260920_160522/learning_curve.png",
+                      "bytes":  60308,
+                      "beforeSha256":  "7b346007c7c7a20371fe86d3b93f50da6a85be4b1095cf13b4a02bcd798b3926",
+                      "afterSha256":  "7b346007c7c7a20371fe86d3b93f50da6a85be4b1095cf13b4a02bcd798b3926"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/metrics.json",
+                      "path":  "ml/sources/dongha/20260920_160522/metrics.json",
+                      "bytes":  8567,
+                      "beforeSha256":  "fc30224413e8cb583f2fa776d9e789691164ead13bfcb47a1d5cde2500c9e2f1",
+                      "afterSha256":  "fc30224413e8cb583f2fa776d9e789691164ead13bfcb47a1d5cde2500c9e2f1"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/model_preprocessor.pkl",
+                      "path":  "ml/sources/dongha/20260920_160522/model_preprocessor.pkl",
+                      "bytes":  36201,
+                      "beforeSha256":  "30f6e1b4d8e3863f366d222e1ca9958937ccc40e637e8a187d5483c5cb94d070",
+                      "afterSha256":  "30f6e1b4d8e3863f366d222e1ca9958937ccc40e637e8a187d5483c5cb94d070"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/prediction_sample.csv",
+                      "path":  "ml/sources/dongha/20260920_160522/prediction_sample.csv",
+                      "bytes":  3043,
+                      "beforeSha256":  "f21b89ef54512a668db2bf338fe7cc2931e250509ec6975f2ab6fb106cd3ff7a",
+                      "afterSha256":  "f21b89ef54512a668db2bf338fe7cc2931e250509ec6975f2ab6fb106cd3ff7a"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/split_design_ids.json",
+                      "path":  "ml/sources/dongha/20260920_160522/split_design_ids.json",
+                      "bytes":  76026,
+                      "beforeSha256":  "b2d0f93e4030d1bee84da40f5f9dadd704c7504be6d180185255272dacfb0475",
+                      "afterSha256":  "b2d0f93e4030d1bee84da40f5f9dadd704c7504be6d180185255272dacfb0475"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/test_predictions.csv",
+                      "path":  "ml/sources/dongha/20260920_160522/test_predictions.csv",
+                      "bytes":  2033591,
+                      "beforeSha256":  "9e6104d8dbae42c4f083ca3fc0ffbca9bfeb4ba52296620a15ed0945fe481f91",
+                      "afterSha256":  "9e6104d8dbae42c4f083ca3fc0ffbca9bfeb4ba52296620a15ed0945fe481f91"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/training_history.csv",
+                      "path":  "ml/sources/dongha/20260920_160522/training_history.csv",
+                      "bytes":  9355,
+                      "beforeSha256":  "bbb4f5112e84591cc7f08a67393d529d73e852b7a8601c040c23d1185a431212",
+                      "afterSha256":  "bbb4f5112e84591cc7f08a67393d529d73e852b7a8601c040c23d1185a431212"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/validation_predictions.csv",
+                      "path":  "ml/sources/dongha/20260920_160522/validation_predictions.csv",
+                      "bytes":  2044067,
+                      "beforeSha256":  "bd8ad9dab41c12c992b27e5ca599a5523f00c5ed0423ba1867818b80c59cff43",
+                      "afterSha256":  "bd8ad9dab41c12c992b27e5ca599a5523f00c5ed0423ba1867818b80c59cff43"
+                  },
+                  {
+                      "originalPath":  "dongha/20260920_160522/verification.json",
+                      "path":  "ml/sources/dongha/20260920_160522/verification.json",
+                      "bytes":  258,
+                      "beforeSha256":  "27b9b92eb1fcd9c4c30366689039719016ca78634472e2589d6e159e8c79eaef",
+                      "afterSha256":  "27b9b92eb1fcd9c4c30366689039719016ca78634472e2589d6e159e8c79eaef"
+                  },
+                  {
+                      "originalPath":  "dongha/v2/dataset_510k.csv",
+                      "path":  "ml/sources/dongha/v2/dataset_510k.csv",
+                      "bytes":  63703766,
+                      "beforeSha256":  "171986e21d8df7d6b1d2ff48132164f41a8e41b7004d6ca7692c0c0e4e35db28",
+                      "afterSha256":  "171986e21d8df7d6b1d2ff48132164f41a8e41b7004d6ca7692c0c0e4e35db28"
+                  },
+                  {
+                      "originalPath":  "dongha/v2/dataset_sample.csv",
+                      "path":  "ml/sources/dongha/v2/dataset_sample.csv",
+                      "bytes":  4365,
+                      "beforeSha256":  "7db0d2f4a49a9af96a8c35795352d9be136300ddfb3e00f67954b14db03d9995",
+                      "afterSha256":  "7db0d2f4a49a9af96a8c35795352d9be136300ddfb3e00f67954b14db03d9995"
+                  },
+                  {
+                      "originalPath":  "dongha/v2/dataset_summary.json",
+                      "path":  "ml/sources/dongha/v2/dataset_summary.json",
+                      "bytes":  2466,
+                      "beforeSha256":  "960d8d9ae14893a850c329d6e81d85aa007517323ad39262b0f3befe0dce4c18",
+                      "afterSha256":  "960d8d9ae14893a850c329d6e81d85aa007517323ad39262b0f3befe0dce4c18"
+                  },
+                  {
+                      "originalPath":  "dongha/v2/desktop.ini",
+                      "path":  "ml/sources/dongha/v2/desktop.ini",
+                      "bytes":  246,
+                      "beforeSha256":  "77dfbc0acf3983dc7877bd9107509f61ed1e433b271b5f45d85ac6128e145a9a",
+                      "afterSha256":  "77dfbc0acf3983dc7877bd9107509f61ed1e433b271b5f45d85ac6128e145a9a"
+                  },
+                  {
+                      "originalPath":  "dongha/v2/dl_preprocessor.pkl",
+                      "path":  "ml/sources/dongha/v2/dl_preprocessor.pkl",
+                      "bytes":  30856,
+                      "beforeSha256":  "dba980605af94a4569cfb7ee9b87f1adc68992c6109faa2e6c3c0d3054768d59",
+                      "afterSha256":  "dba980605af94a4569cfb7ee9b87f1adc68992c6109faa2e6c3c0d3054768d59"
+                  },
+                  {
+                      "originalPath":  "best_model.pt",
+                      "path":  "ml/archive/root-artifacts/best_model.pt",
+                      "bytes":  684535,
+                      "beforeSha256":  "0f87569726f6d4099ecd37cd199d94081e7e1d0ba5854833fa5aa63365e7cae1",
+                      "afterSha256":  "0f87569726f6d4099ecd37cd199d94081e7e1d0ba5854833fa5aa63365e7cae1"
+                  },
+                  {
+                      "originalPath":  "model_preprocessor.pkl",
+                      "path":  "ml/archive/root-artifacts/model_preprocessor.pkl",
+                      "bytes":  36201,
+                      "beforeSha256":  "30f6e1b4d8e3863f366d222e1ca9958937ccc40e637e8a187d5483c5cb94d070",
+                      "afterSha256":  "30f6e1b4d8e3863f366d222e1ca9958937ccc40e637e8a187d5483c5cb94d070"
+                  },
+                  {
+                      "originalPath":  "dl_preprocessor.pkl",
+                      "path":  "ml/archive/root-artifacts/dl_preprocessor.pkl",
+                      "bytes":  30754,
+                      "beforeSha256":  "a762026837b922b72e09828bf4afff1f94108f9cf993f6357fc81038a64d32f3",
+                      "afterSha256":  "a762026837b922b72e09828bf4afff1f94108f9cf993f6357fc81038a64d32f3"
+                  }
+              ],
+    "verifiedAtUtc":  "2026-09-21T10:15:28.5805052+00:00",
+    "duplicateCopies":  [
+                            {
+                                "canonicalPath":  "ml/sources/dongha/20260920_160522/best_model.pt",
+                                "archivedPath":  "ml/archive/root-artifacts/best_model.pt"
+                            },
+                            {
+                                "canonicalPath":  "ml/sources/dongha/20260920_160522/model_preprocessor.pkl",
+                                "archivedPath":  "ml/archive/root-artifacts/model_preprocessor.pkl"
+                            }
+                        ]
+}

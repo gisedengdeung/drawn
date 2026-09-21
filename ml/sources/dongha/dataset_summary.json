@@ -1,0 +1,120 @@
+{
+  "index_designs": 27714,
+  "raw_trim_files": 27714,
+  "feasible_designs": 10737,
+  "excluded_no_valid_hover": 4328,
+  "excluded_nonfinite_hover_designs": 14,
+  "excluded_nonpositive_hover_designs": 4314,
+  "feasible_nonfinite_speed_rows": 700,
+  "included_designs": 6409,
+  "excluded_all_zero_speed_rows": 177422,
+  "excluded_nonfinite_speed_rows": 0,
+  "designs_with_unavailable_trim_at_20": 2217,
+  "rows": 149437,
+  "columns": 30,
+  "feature_columns": [
+    "speed",
+    "numPropellers",
+    "numWings",
+    "armLength",
+    "meanArmLength",
+    "maxArmLength",
+    "fuselageLength",
+    "fuselageHorizontalDiameter",
+    "fuselageVerticalDiameter",
+    "totalWingSpan",
+    "meanWingChord",
+    "parameterCount",
+    "hub_enc",
+    "primaryMotor_enc",
+    "primaryPropeller_enc",
+    "primaryBattery_enc",
+    "dragAt20",
+    "powerAt20",
+    "powerAt0",
+    "thrustAt0",
+    "currentAt0"
+  ],
+  "target_columns": [
+    "target_drag",
+    "target_lift",
+    "target_thrust",
+    "target_pitch",
+    "target_power",
+    "target_current",
+    "target_flightTime",
+    "target_distance"
+  ],
+  "category_counts": {
+    "hub": 10,
+    "primaryMotor": 48,
+    "primaryPropeller": 144,
+    "primaryBattery": 56
+  },
+  "csv_path": "C:\\Dev\\drawn\\drawn\\dataset_510k.csv",
+  "csv_size_bytes": 27389781,
+  "preprocessor_path": "C:\\Dev\\drawn\\drawn\\dl_preprocessor.pkl",
+  "sample_path": "C:\\Dev\\drawn\\drawn\\dataset_sample.csv",
+  "notes": [
+    "dataset_510k.csv is the original filename, not a guaranteed row count.",
+    "speed is the raw array row index (0-50 m/s), not an array column.",
+    "Included designs are feasible with a finite hover row and positive hover power.",
+    "All-zero or non-finite speed rows are excluded from training targets.",
+    "excluded_*_speed_rows count only rows of included designs.",
+    "Unavailable 20 m/s condition inputs are zero-filled, matching the index convention.",
+    "Split training and validation by design_id to avoid sharing a design across sets."
+  ],
+  "validation": {
+    "verified_rows_against_raw": 149437,
+    "verified_designs_against_raw": 6409,
+    "nonfinite_values": 0,
+    "duplicate_design_speed_pairs": 0,
+    "encoder_roundtrip_verified": true,
+    "base_and_condition_inputs_verified": true,
+    "sample_csv_verified": true,
+    "speed_min": 0,
+    "speed_max": 49
+  },
+  "target_statistics": {
+    "target_drag": {
+      "min": 0.0,
+      "max": 115.93,
+      "mean": 9.274751500632373
+    },
+    "target_lift": {
+      "min": 0.0,
+      "max": 113.71,
+      "mean": 0.1064595782838253
+    },
+    "target_thrust": {
+      "min": 9.36,
+      "max": 294.58,
+      "mean": 58.46528175752992
+    },
+    "target_pitch": {
+      "min": -90.0,
+      "max": 90.0,
+      "mean": -9.038826662740822
+    },
+    "target_power": {
+      "min": 196.85,
+      "max": 18490.91,
+      "mean": 1287.4152814898584
+    },
+    "target_current": {
+      "min": 23.22,
+      "max": 639.45,
+      "mean": 114.208942229836
+    },
+    "target_flightTime": {
+      "min": 38.38,
+      "max": 1360.2,
+      "mean": 189.44941426822007
+    },
+    "target_distance": {
+      "min": 0.0,
+      "max": 31000.56,
+      "mean": 2485.2030056813237
+    }
+  }
+}

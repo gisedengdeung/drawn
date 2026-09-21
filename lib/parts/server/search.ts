@@ -125,6 +125,8 @@ function offerFor(item: BomItem, product: SourceProduct, sku: SourceSku | undefi
   const price = sku ? sku.price : product.price;
   return {
     id: `${product.productId}:${sku?.id ?? 'unverified'}`, productId: product.productId, title: product.title, url: product.url,
+    promotionUrl: product.promotionUrl ?? null, priceKind: sku ? 'sku' : 'listing',
+    provider: sku ? 'aliexpress_ds' : 'aliexpress_affiliate', market: { country: 'KR', currencyRequested: 'KRW' },
     optionId: sku?.id ?? null, optionLabel: sku?.label || null, optionVerified,
     packPrice: price, packQuantity: pack, currency: sku?.currency ?? product.currency,
     match, reasons, specs, shippingAvailable: null, shippingCost: null, shippingCurrency: null,
@@ -148,7 +150,15 @@ export function buildOffers(item: BomItem, products: SourceProduct[], assessment
   return offers.sort((a, b) => Number(b.optionVerified) - Number(a.optionVerified)).slice(0, 3);
 }
 
-export async function searchParts(request: PartSearchRequest, dependencies: { config?: PartsConfig; fetcher?: Fetcher; now?: () => number; signal?: AbortSignal } = {}): Promise<PartSearchResult> {
+export type PartsSearchDependencies = {
+  config?: PartsConfig; fetcher?: Fetcher; now?: () => number; signal?: AbortSignal;
+  /** A coordinating agent can avoid extra nested model calls. */
+  allowAI?: boolean;
+  /** Charged before every outbound HTTP attempt, including retries. False denies the attempt. */
+  consumeBudget?: (kind: 'provider' | 'ai') => boolean | void | Promise<boolean | void>;
+};
+
+export async function searchParts(request: PartSearchRequest, dependencies: PartsSearchDependencies = {}): Promise<PartSearchResult> {
   const config = dependencies.config ?? getPartsConfig();
   const now = dependencies.now ?? Date.now;
   const retrievedAt = new Date(now()).toISOString();
@@ -156,15 +166,27 @@ export async function searchParts(request: PartSearchRequest, dependencies: { co
   if (!config.appKey || !config.appSecret) return { ...result, status: 'not_configured', warnings: ['실제 상품을 찾으려면 상품 조회 서비스 연결이 필요합니다.'] };
   if (/^(unknown|none|null|n\/?a|미상|미정)$/i.test(request.item.model.trim())) return { ...result, status: 'not_found', warnings: ['부품 모델이 없어 상품을 검색할 수 없습니다.'] };
   const signal = AbortSignal.any([AbortSignal.timeout(55_000), ...(dependencies.signal ? [dependencies.signal] : [])]);
-  const fetcher = dependencies.fetcher ?? fetch;
+  const transport = dependencies.fetcher ?? fetch;
+  const fetcher: Fetcher = async (input, init) => {
+    const requestUrl = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const kind = requestUrl.startsWith('https://api.openai.com/') ? 'ai' : 'provider';
+    if (signal.aborted) throw new PartsError('error', '부품 조회가 취소되었습니다.');
+    let permitted: boolean | void;
+    try { permitted = await dependencies.consumeBudget?.(kind); }
+    catch { permitted = false; }
+    if (permitted === false) {
+      throw new PartsError('rate_limited', '이번 요청의 상품 조회 한도에 도달했습니다. 확인된 결과를 검토한 뒤 다시 요청하세요.');
+    }
+    return transport(input, init);
+  };
   const provider = new AliExpressProvider(config, fetcher, signal, now);
   const ai = new PartsAI(config, fetcher, signal);
   const queries = [`${request.item.model} ${category[request.item.kind]}`.slice(0, 150)];
-  let aiAvailable = Boolean(config.openaiKey);
+  let aiAvailable = dependencies.allowAI !== false && Boolean(config.openaiKey);
   if (aiAvailable) {
     try { const query = await ai.query(request.item); if (query && query !== queries[0]) queries.push(query); }
     catch { result.warnings.push('AI 검색어 분석을 사용할 수 없어 원래 모델명으로 검색합니다.'); aiAvailable = false; }
-  } else result.warnings.push('AI 분석이 연결되어 있지 않아 모델명과 규격만으로 검색합니다.');
+  } else if (dependencies.allowAI !== false) result.warnings.push('AI 분석이 연결되어 있지 않아 모델명과 규격만으로 검색합니다.');
   try {
     const found = new Map<string, SourceProduct>();
     const searches = await Promise.allSettled(queries.slice(0, 2).map((query) => provider.search(query)));
@@ -180,7 +202,7 @@ export async function searchParts(request: PartSearchRequest, dependencies: { co
     if (!ids.length) return { ...result, status: 'not_found', warnings: [...result.warnings, '조회 가능한 제휴 상품을 찾지 못했습니다.'] };
     // Re-read current product data. Missing detail rows are dropped, never upgraded from search snippets.
     let products = (await provider.details(ids)).filter((product) => ids.includes(product.productId));
-    if (config.accessToken) {
+    if (config.dsEnabled && config.accessToken) {
       const enriched: SourceProduct[] = [];
       for (let offset = 0; offset < Math.min(products.length, 4); offset += 2) {
         const batch = products.slice(offset, offset + 2);
@@ -191,7 +213,11 @@ export async function searchParts(request: PartSearchRequest, dependencies: { co
         });
       }
       products = [...enriched, ...products.slice(4)];
-    } else result.warnings.push('상품 옵션 조회 권한이 없어 옵션별 가격은 미확인 상태입니다.');
+    }
+    if (config.trackingId && products.length) {
+      try { products = await provider.promotionLinks(products); }
+      catch (error) { result.warnings.push(error instanceof PartsError ? error.message : '제휴 링크를 만들지 못해 일반 상품 링크를 제공합니다.'); }
+    }
     let assessments: SourceAssessment[] = [];
     if (aiAvailable && products.length) {
       try { assessments = await ai.assess(request.item, products); }

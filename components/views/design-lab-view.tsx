@@ -22,9 +22,11 @@ import {
   Zap,
 } from 'lucide-react';
 
+import { PerformancePredictionPanel } from './performance-prediction-panel';
 import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
 import { StlViewer } from '@/components/stl-viewer';
 import { cloneDraft } from '@/lib/design-draft';
+import { countChanges, estimateDraft } from '@/lib/design-performance';
 import type { DesignWorkspace } from '@/hooks/use-design-workspace';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
@@ -46,18 +48,7 @@ import type {
   WingParameters,
 } from '@/lib/drawn-types';
 import { formatBatteryLabel, formatComponent, formatEnergyConfiguration, formatMetric, formatMotorLabel, formatPropellerLabel, isAvailableMetric, percentChange } from '@/lib/drawn-types';
-import { DataDisclaimer, DesignSelector, SectionHeading, SourceBadge } from '@/components/views/shared';
-
-type DraftEstimate = {
-  mass: number;
-  range: number;
-  hover: number;
-  maxSpeed: number;
-  power: number;
-  drag: number;
-  similarity: number;
-  closestId: number;
-};
+import { DataDisclaimer, DesignSelector, SectionHeading } from '@/components/views/shared';
 
 type MobilePanel = 'parameters' | 'preview' | 'performance';
 
@@ -93,6 +84,7 @@ export function DesignLabView({
   onOpenDatasetCompare,
   onOpenParts,
   workspace,
+  focusedParameterId,
 }: {
   designs: Array<Pick<DesignSummary, 'id' | 'numPropellers' | 'numWings'>>;
   selected: DesignSummary;
@@ -102,12 +94,14 @@ export function DesignLabView({
   onOpenDatasetCompare: () => void;
   onOpenParts: () => void;
   workspace: DesignWorkspace;
+  focusedParameterId?: string | null;
 }) {
   const { baseline, draft, setDraft, catalogs, loading, loadError } = workspace;
   const [mode, setMode] = useState<DraftGeometryMode>('parametric-preview');
   const [showGhost, setShowGhost] = useState(false);
   const [changedGroup, setChangedGroup] = useState<ParameterGroup | null>(null);
   const [search, setSearch] = useState('');
+  const [openSections, setOpenSections] = useState<string[]>(['structure', 'fuselage', 'propulsion']);
   const [expertMode, setExpertMode] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('preview');
   const [compareOpen, setCompareOpen] = useState(false);
@@ -117,6 +111,25 @@ export function DesignLabView({
   const estimateTimeoutRef = useRef<number | null>(null);
   const packagedReference = referenceDesign ?? ('modelPath' in selected ? selected as ShowcaseDesign : null);
 
+  const focusedParameter = draft?.parameterDefinitions.find((definition) => definition.id === focusedParameterId || definition.path === focusedParameterId);
+  const focusId = focusedParameter?.id;
+  const focusLabel = focusedParameter?.label;
+  useEffect(() => {
+    if (!focusId || !focusLabel) return;
+    let scrollFrame = 0;
+    const frame = window.requestAnimationFrame(() => {
+      setSearch(focusLabel);
+      setExpertMode(true);
+      setMobilePanel('parameters');
+      setOpenSections((sections) => sections.includes('source-parameters') ? sections : [...sections, 'source-parameters']);
+      scrollFrame = window.requestAnimationFrame(() => {
+        const control = document.getElementById(`source-parameter-${encodeURIComponent(focusId)}`);
+        control?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        control?.focus({ preventScroll: true });
+      });
+    });
+    return () => { window.cancelAnimationFrame(frame); window.cancelAnimationFrame(scrollFrame); };
+  }, [focusId, focusLabel]);
   useEffect(() => {
     window.queueMicrotask(() => {
       try {
@@ -185,34 +198,34 @@ export function DesignLabView({
     || terms.some((term) => term.toLocaleLowerCase('ko-KR').includes(query));
 
   return (
-    <section className="px-3 py-4 lg:px-5">
+    <section className="@container/lab px-3 py-4 lg:px-5">
       <SectionHeading
         eyebrow={`파라메트릭 Design Studio / Baseline #${selected.id}`}
         title="설계 파라미터와 3D를 한 화면에서 조정하세요"
-        description="치수·부품·날개 조건은 즉시 개념 형상에 반영되고, 성능은 AircraftVerse 범위 안에서 데이터 유사도 기반으로 갱신됩니다."
+        description="치수·부품·날개 조건을 편집하고, 속도별 AI 예측과 기존 설계 KPI를 함께 확인하세요."
         actions={(
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={onOpenParts} disabled={loading || !draft} className="bg-[#3182f6] text-white hover:bg-[#1b64da]"><ShoppingBag className="size-4" />부품 agent에서 정리</Button>
+            <Button onClick={onOpenParts} disabled={loading || !draft} className="bg-[#3182f6] text-white hover:bg-[#1b64da]"><ShoppingBag className="size-4" />부품 찾기</Button>
             {expertMode && <Badge variant="outline" className="border-[#bfdbfe] bg-[#eff6ff] text-[#1b64da]">원본 {parameterCount} · 편집 가능 {editableParameterCount}</Badge>}
             <DesignSelector designs={designs} value={selected.id} onChange={onSelect} />
           </div>
         )}
       />
 
-      <div className="mb-3 grid grid-cols-3 rounded-xl bg-[#f5f5f7] p-1 lg:hidden">
+      <div className="mb-3 grid grid-cols-3 rounded-xl bg-[#f5f5f7] p-1 @min-[900px]/lab:hidden">
         {([
           ['parameters', '파라미터', SlidersHorizontal],
           ['preview', '3D', Box],
           ['performance', '성능', Activity],
         ] as const).map(([id, label, Icon]) => (
-          <button key={id} onClick={() => setMobilePanel(id)} className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${mobilePanel === id ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}>
+          <button key={id} aria-pressed={mobilePanel === id} onClick={() => setMobilePanel(id)} className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${mobilePanel === id ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}>
             <Icon className={`size-3.5 ${mobilePanel === id ? 'text-[#3182f6]' : ''}`} /> {label}
           </button>
         ))}
       </div>
 
-      <div className="grid gap-3 lg:h-[calc(100vh-205px)] lg:min-h-[560px] lg:grid-cols-[minmax(260px,.85fr)_minmax(360px,1.5fr)_minmax(230px,.75fr)]">
-        <aside className={`${mobilePanel === 'parameters' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white shadow-sm lg:block`}>
+      <div className="grid gap-3 @min-[900px]/lab:h-[calc(100vh-205px)] @min-[900px]/lab:min-h-[560px] @min-[900px]/lab:grid-cols-[minmax(260px,.85fr)_minmax(360px,1.5fr)_minmax(230px,.75fr)]">
+        <aside className={`${mobilePanel === 'parameters' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white shadow-sm @min-[900px]/lab:block`}>
           <div className="border-b border-[#e5e5ea] p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -234,11 +247,11 @@ export function DesignLabView({
             </div>
           </div>
 
-          <ScrollArea className="h-[500px] lg:h-[calc(100%-116px)]">
+          <ScrollArea className="h-[500px] @min-[900px]/lab:h-[calc(100%-116px)]">
             {loading || !draft || !baseline ? (
               <div className="grid h-80 place-items-center text-xs text-[#6e6e73]">설계 파라미터를 준비하고 있습니다…</div>
             ) : (
-              <Accordion multiple defaultValue={['structure', 'fuselage', 'propulsion']} className="px-3 pb-5">
+              <Accordion multiple value={openSections} onValueChange={(value) => setOpenSections(value.map(String))} className="px-3 pb-5">
                 {groupVisible('structure', ['topology', 'hub', 'arm', 'angle', 'offset', '구조', '길이']) && (
                   <ParameterSection value="structure" icon={<Layers3 />} title="기체 구조" count={1 + draft.segments.length * 3} hint={GROUP_HINTS.structure}>
                     <ReadOnlyValue label="허브 형태" value={formatComponent(draft.topology)} note="허브(몸통 중심) 형태 변경은 1단계 설계 선택에서 다른 설계를 고르면 됩니다." />
@@ -319,8 +332,8 @@ export function DesignLabView({
                   {(draft.parameterDefinitions ?? [])
                     .filter((definition) => !query || `${definition.label} ${GROUP_LABELS[definition.group]} ${definition.optimization ?? ''}`.toLocaleLowerCase('ko-KR').includes(query))
                     .map((definition) => (
+                      <div key={definition.id} id={`source-parameter-${encodeURIComponent(definition.id)}`} tabIndex={-1} className="rounded-xl outline-none focus:ring-2 focus:ring-[#3182f6]">
                       <SourceParameterControl
-                        key={definition.id}
                         definition={definition}
                         nacaOptions={catalogs.nacaProfiles}
                         onChange={(value) => mutateDraft(
@@ -329,6 +342,7 @@ export function DesignLabView({
                           definition.affectsPerformance,
                         )}
                       />
+                      </div>
                     ))}
                 </ParameterSection>
                 )}
@@ -337,7 +351,7 @@ export function DesignLabView({
           </ScrollArea>
         </aside>
 
-        <div className={`${mobilePanel === 'preview' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-[#f5f5f7] shadow-sm lg:block`}>
+        <div className={`${mobilePanel === 'preview' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-[#f5f5f7] shadow-sm @min-[900px]/lab:block`}>
           <div className="flex h-full flex-col">
             <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e5ea] bg-white px-3 py-2.5">
               <div className="flex rounded-lg bg-[#f5f5f7] p-1">
@@ -379,22 +393,30 @@ export function DesignLabView({
           </div>
         </div>
 
-        <aside className={`${mobilePanel === 'performance' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white shadow-sm lg:block`}>
+        <aside className={`${mobilePanel === 'performance' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white shadow-sm @min-[900px]/lab:block`}>
           <ScrollArea className="h-full">
             <div className="p-4">
+              <div className="mb-5"><PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} compact /></div>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-[#1d1d1f]">실시간 성능 변화</p>
+                  <p className="text-sm font-semibold text-[#1d1d1f]">기존 설계 KPI 비교</p>
                   <p className="mt-1 text-xs text-[#6e6e73]">Baseline 대비 현재 Draft</p>
                 </div>
-                <SourceBadge source="INTERPOLATED" />
+                {estimate && <Tooltip>
+                  <TooltipTrigger render={<Badge variant="outline" className={`cursor-help text-[10px] underline decoration-dotted underline-offset-2 ${estimate.source === 'dataset' ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1b64da]' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`} />}>
+                    {estimate.source === 'dataset' ? '원본 시뮬레이션' : '편집 설계 추정'}
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-64 text-left leading-5 whitespace-normal">
+                    {estimate.source === 'dataset' ? '편집하지 않은 설계의 AircraftVerse 원본 시뮬레이션 KPI입니다. 실물 측정값이나 새로 계산한 해석 결과가 아닙니다.' : 'Neighbor Estimate v1: 인접 설계의 거리 가중 평균과 편집 보정을 사용한 추정값입니다. 학습 모델이나 물리 해석 결과가 아닙니다.'}
+                  </TooltipContent>
+                </Tooltip>}
               </div>
               <div className="mt-3 rounded-xl bg-[#f5f5f7] p-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-1.5 font-medium text-[#3c3c43]"><span className={`size-2 rounded-full ${estimateState === 'calculating' ? 'animate-pulse bg-amber-500' : estimateImpact === 'geometry-only' ? 'bg-[#3182f6]' : 'bg-emerald-600'}`} />{estimateState === 'calculating' ? '성능 계산 중' : estimateImpact === 'geometry-only' ? '3D만 반영됨' : '업데이트됨'}</span>
-                  <span className="font-mono text-[#6e6e73]">{estimateImpact === 'geometry-only' ? '추정 입력 제외' : `${estimate?.similarity ?? 100}% 유사`}</span>
+                  <span className="font-mono text-[#6e6e73]">{estimate?.source === 'dataset' ? '원본 KPI' : estimateImpact === 'geometry-only' ? '추정 입력 제외' : `${estimate?.similarity ?? 100}% 유사`}</span>
                 </div>
-                <p className="mt-2 text-[11px] text-[#86868b]">{estimateImpact === 'geometry-only' ? '이 CAD 파생 파라미터는 데이터셋 KPI 거리 계산에 사용하지 않습니다.' : <>가장 가까운 AircraftVerse 설계 <strong className="text-[#3c3c43]">#{estimate?.closestId ?? selected.id}</strong></>}</p>
+                <p className="mt-2 text-[11px] text-[#86868b]">{estimate?.source === 'dataset' ? <>AircraftVerse 기준 설계 <strong className="text-[#3c3c43]">#{selected.id}</strong>의 저장된 원본 시뮬레이션 값입니다.</> : estimateImpact === 'geometry-only' ? '이 CAD 파생 파라미터는 데이터셋 KPI 거리 계산에 사용하지 않습니다.' : <>Neighbor Estimate v1 · 가장 가까운 설계 <strong className="text-[#3c3c43]">#{estimate?.closestId ?? selected.id}</strong></>}</p>
               </div>
 
               {estimate && (
@@ -790,135 +812,6 @@ function syncSegmentComponent(draft: DesignDraft, segmentId: string, key: 'motor
   if (segment) segment[key] = value;
 }
 
-function estimateDraft(selected: DesignSummary, draft: DesignDraft, baseline: DesignDraft, datasetDesigns: DesignSummary[]): DraftEstimate {
-  if (countChanges(draft, baseline) === 0) {
-    return {
-      mass: selected.mass,
-      range: selected.maxDistance,
-      hover: selected.hoverTime,
-      maxSpeed: selected.maxSpeed,
-      power: selected.power,
-      drag: selected.dragAt20,
-      similarity: 100,
-      closestId: selected.id,
-    };
-  }
-  const baseArm = average(baseline.segments.map((item) => item.length), selected.armLength || 300);
-  const draftArm = average(draft.segments.map((item) => item.length), baseArm);
-  const bodyBase = baseline.fuselage.length * baseline.fuselage.horizontalDiameter * baseline.fuselage.verticalDiameter;
-  const bodyDraft = draft.fuselage.length * draft.fuselage.horizontalDiameter * draft.fuselage.verticalDiameter;
-  const armRatio = draftArm / Math.max(baseArm, 1);
-  const bodyRatio = Math.max(0.45, Math.min(2.1, bodyDraft / Math.max(bodyBase, 1)));
-  const baseBattery = batteryCapacity(baseline.energy.batteryTypes[0]);
-  const draftBattery = batteryCapacity(draft.energy.batteryTypes[0]);
-  const batteryRatio = Math.max(0.55, Math.min(1.9, draftBattery / Math.max(baseBattery, 1)));
-  const baseWing = baseline.wings.reduce((sum, wing) => sum + wing.span * (wing.chordInner + wing.chordOuter) * 0.5, 0);
-  const draftWing = draft.wings.reduce((sum, wing) => sum + wing.span * (wing.chordInner + wing.chordOuter) * 0.5, 0);
-  const wingRatio = baseWing > 0 ? Math.max(0.55, Math.min(1.8, draftWing / baseWing)) : 1;
-  const componentChanges = draft.propulsionGroups.reduce((sum, group, index) => {
-    const base = baseline.propulsionGroups[index];
-    return sum + (group.motorType !== base?.motorType ? 1 : 0) + (group.propellerType !== base?.propellerType ? 1 : 0);
-  }, 0)
-    + draft.energy.batteryTypes.filter((item, index) => item !== baseline.energy.batteryTypes[index]).length
-    + draft.wings.filter((wing, index) => wing.nacaProfile !== baseline.wings[index]?.nacaProfile).length;
-  const meanAngleDelta = average(
-    draft.segments.map((segment, index) => Math.abs(segment.angle - (baseline.segments[index]?.angle ?? segment.angle))),
-    0,
-  );
-  const meanOffsetDelta = average(
-    draft.segments.map((segment, index) => Math.abs(segment.offset - (baseline.segments[index]?.offset ?? segment.offset))),
-    0,
-  );
-  const meanWingRotationDelta = average(
-    draft.wings.map((wing, index) => Math.abs(wing.rotation - (baseline.wings[index]?.rotation ?? wing.rotation))),
-    0,
-  );
-  const controlSurfaceDelta = draft.wings.reduce((sum, wing, index) => {
-    const base = baseline.wings[index];
-    return sum + Math.abs(wing.aileronBias - (base?.aileronBias ?? wing.aileronBias)) + Math.abs(wing.flapBias - (base?.flapBias ?? wing.flapBias));
-  }, 0);
-  const neighbors = nearestDatasetDesigns(selected, draft, datasetDesigns);
-  const closest = neighbors[0]?.design ?? selected;
-  const neighborMetric = (read: (design: DesignSummary) => number, fallback: number) => {
-    const usable = neighbors.filter(({ design }) => isAvailableMetric(read(design)));
-    if (!usable.length) return fallback;
-    const denominator = usable.reduce((sum, item) => sum + item.weight, 0);
-    return usable.reduce((sum, item) => sum + read(item.design) * item.weight, 0) / Math.max(denominator, 0.0001);
-  };
-  const datasetMass = neighborMetric((design) => design.mass, selected.mass);
-  const mass = Math.max(0.5, datasetMass + (draft.payload.mass - baseline.payload.mass));
-  const massRatio = mass / Math.max(selected.mass, 0.5);
-  const layoutDragPenalty = 1 + meanAngleDelta / 900 + meanOffsetDelta / 1800 + meanWingRotationDelta / 720;
-  const dragFactor = Math.max(0.55, Math.min(1.85, armRatio ** 1.12 * bodyRatio ** 0.22 / wingRatio ** 0.08 * layoutDragPenalty));
-  const efficiency = Math.max(0.87, 1 - componentChanges * 0.012);
-  const similarityPenalty = Math.abs(Math.log(armRatio)) * 18 + Math.abs(Math.log(bodyRatio)) * 15 + Math.abs(Math.log(batteryRatio)) * 10 + componentChanges * 2.8 + meanAngleDelta * 0.06 + meanOffsetDelta * 0.025 + meanWingRotationDelta * 0.04 + controlSurfaceDelta * 5;
-  const proximityDistance = (neighbors[0]?.distance ?? 0) + similarityPenalty / 100;
-  return {
-    mass,
-    range: neighborMetric((design) => design.maxDistance, selected.maxDistance) * batteryRatio ** 0.22 * efficiency / massRatio ** 0.16,
-    hover: neighborMetric((design) => design.hoverTime, selected.hoverTime) * batteryRatio ** 0.24 * efficiency / massRatio ** 0.28,
-    maxSpeed: neighborMetric((design) => design.maxSpeed, selected.maxSpeed) * efficiency / dragFactor ** 0.08,
-    power: neighborMetric((design) => design.power, selected.power) * massRatio ** 0.25 * dragFactor ** 0.18 / efficiency,
-    drag: neighborMetric((design) => design.dragAt20, selected.dragAt20) * dragFactor ** 0.35,
-    similarity: Math.round(Math.max(35, 100 / (1 + proximityDistance * 2.8))),
-    closestId: closest.id,
-  };
-}
-
-function nearestDatasetDesigns(selected: DesignSummary, draft: DesignDraft, designs: DesignSummary[]) {
-  if (!designs.length) return [{ design: selected, distance: 0, weight: 1 }];
-  const meanArm = average(draft.segments.map((item) => item.length), selected.meanArmLength || selected.armLength || 300);
-  const totalWingSpan = draft.wings.reduce((sum, wing) => sum + wing.span, 0);
-  const meanWingChord = average(draft.wings.map((wing) => (wing.chordInner + wing.chordOuter) * 0.5), 0);
-  const motor = draft.propulsionGroups[0]?.motorType ?? '';
-  const propeller = draft.propulsionGroups[0]?.propellerType ?? '';
-  const battery = draft.energy.batteryTypes[0] ?? '';
-  const sameTopology = designs.filter((design) => design.hub === draft.topology);
-  const candidates = sameTopology.length >= 8
-    ? sameTopology
-    : designs.filter((design) => design.numPropellers === selected.numPropellers && (design.numWings > 0) === (draft.wings.length > 0));
-  return candidates
-    .map((design) => {
-      const distance =
-        normalizedDelta(meanArm, design.meanArmLength || design.armLength, 470) * 1.2
-        + normalizedDelta(draft.fuselage.length, design.fuselageLength, 475) * 0.65
-        + normalizedDelta(draft.fuselage.horizontalDiameter, design.fuselageHorizontalDiameter, 700) * 0.55
-        + normalizedDelta(draft.fuselage.verticalDiameter, design.fuselageVerticalDiameter, 303) * 0.55
-        + normalizedDelta(totalWingSpan, design.totalWingSpan, 2000) * 0.8
-        + normalizedDelta(meanWingChord, design.meanWingChord, 450) * 0.65
-        + (motor && design.primaryMotor !== motor ? 0.18 : 0)
-        + (propeller && design.primaryPropeller !== propeller ? 0.18 : 0)
-        + (battery && design.primaryBattery !== battery ? 0.14 : 0);
-      return { design, distance, weight: 1 / (distance + 0.025) ** 2 };
-    })
-    .sort((a, b) => a.distance - b.distance || a.design.id - b.design.id)
-    .slice(0, 5);
-}
-
-function normalizedDelta(a: number, b: number, range: number) {
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
-  return Math.abs(a - b) / Math.max(range, 1);
-}
-
-function countChanges(a: DesignDraft, b: DesignDraft) {
-  let structuralCount = 0;
-  const compare = (left: unknown, right: unknown) => {
-    if (typeof left === 'object' && left != null && typeof right === 'object' && right != null) {
-      const leftRecord = left as Record<string, unknown>;
-      const rightRecord = right as Record<string, unknown>;
-      for (const key of new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)])) compare(leftRecord[key], rightRecord[key]);
-    } else if (left !== right) structuralCount += 1;
-  };
-  const withoutDefinitions = (draft: DesignDraft) => {
-    const copy = cloneDraft(draft);
-    copy.parameterDefinitions = [];
-    return copy;
-  };
-  compare(withoutDefinitions(a), withoutDefinitions(b));
-  const rawCount = (a.parameterDefinitions ?? []).filter((item, index) => item.value !== b.parameterDefinitions?.[index]?.value).length;
-  return Math.max(structuralCount, rawCount);
-}
-
 function draftDifferences(baseline: DesignDraft, draft: DesignDraft) {
   const rows: Array<{ label: string; before: string; after: string }> = [];
   const add = (label: string, before: number | string | boolean, after: number | string | boolean, unit = '') => {
@@ -969,12 +862,4 @@ function maxArmSpan(draft: DesignDraft | null) {
     distanceByPath.set(segment.path, parentDistance + segment.length);
   }
   return Math.max(...distanceByPath.values(), ...draft.segments.map((segment) => segment.length), 0) * 2;
-}
-
-function average(values: number[], fallback: number) {
-  return values.length ? values.reduce((sum, item) => sum + item, 0) / values.length : fallback;
-}
-
-function batteryCapacity(value?: string) {
-  return Number(value?.match(/(\d{3,6})mAh/i)?.[1] ?? 5000);
 }

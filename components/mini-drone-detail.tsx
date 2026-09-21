@@ -1,7 +1,8 @@
 'use client';
 
+/* oxlint-disable next/no-html-link-for-pages -- Standard anchors avoid Vinext's production Link module export bug. */
+
 import { useState } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, Bot, Check, ChevronLeft, ChevronRight, Minus, Package, Plus } from 'lucide-react';
 import { miniDronePackage as product, packageWon as won } from '@/lib/mini-drone-package';
@@ -22,13 +23,13 @@ export function MiniDroneDetail() {
     <main className="min-h-screen bg-white text-[#1d1d1f]">
       <header className="border-b border-slate-200">
         <div className="mx-auto flex min-h-16 max-w-[1440px] flex-wrap items-center justify-between gap-3 px-5 py-3 lg:px-8">
-          <Link href="/packages" className="flex items-center gap-2 text-sm font-semibold"><Package className="size-6 text-[#3182f6]" />Drawn <span className="ml-2 border-l pl-4 font-normal text-slate-500">패키지 스토어</span></Link>
-          <Link href="/packages" className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs hover:bg-slate-50"><ArrowLeft className="size-4" />패키지 목록</Link>
+          <a href="/packages" className="flex items-center gap-2 text-sm font-semibold"><Package className="size-6 text-[#3182f6]" />Drawn <span className="ml-2 border-l pl-4 font-normal text-slate-500">패키지 스토어</span></a>
+          <a href="/packages" className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs hover:bg-slate-50"><ArrowLeft className="size-4" />패키지 목록</a>
         </div>
       </header>
 
       <div className="mx-auto max-w-[1440px] px-5 pb-12 lg:px-8">
-        <nav aria-label="현재 위치" className="flex flex-wrap items-center gap-2 py-5 text-xs text-slate-500"><Link href="/packages" className="hover:text-[#3182f6]">패키지 상품</Link><ChevronRight className="size-3" /><span>입문·취미</span><ChevronRight className="size-3" /><span className="text-slate-700">미니 드론 패키지</span></nav>
+        <nav aria-label="현재 위치" className="flex flex-wrap items-center gap-2 py-5 text-xs text-slate-500"><a href="/packages" className="hover:text-[#3182f6]">패키지 상품</a><ChevronRight className="size-3" /><span>입문·취미</span><ChevronRight className="size-3" /><span className="text-slate-700">미니 드론 패키지</span></nav>
 
         <div className="grid items-start gap-8 lg:grid-cols-2 lg:gap-0">
           <section aria-label="상품 이미지" className="min-w-0 lg:pr-9">

@@ -1,4 +1,5 @@
-import type { BomItem, PartSearchResult } from './types';
+import type { BomItem, PartSearchResult, ProductOffer } from './types';
+import { affiliatePromotionLink, canonicalProductLink } from './links';
 
 const statuses = new Set(['ok', 'not_found', 'not_configured', 'permission_denied', 'rate_limited', 'error']);
 const matches = new Set(['exact', 'alternative', 'needs_review']);
@@ -6,11 +7,11 @@ const money = (value: unknown) => value === null || (typeof value === 'number' &
 const nullableString = (value: unknown) => value === null || typeof value === 'string';
 
 export function productLink(url: string) {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'https:' && /(^|\.)aliexpress\.com$/.test(parsed.hostname)
-      && /^\/item\/(?:[^/]+\/)?\d+\.html$/.test(parsed.pathname) && !parsed.username && !parsed.password && !parsed.port ? parsed.href : null;
-  } catch { return null; }
+  return canonicalProductLink(url);
+}
+
+export function purchaseLink(offer: ProductOffer) {
+  return affiliatePromotionLink(offer.promotionUrl, offer.productId) ?? canonicalProductLink(offer.url, offer.productId);
 }
 
 export function isPartSearchResult(value: unknown, itemId: string): value is PartSearchResult {
@@ -20,7 +21,12 @@ export function isPartSearchResult(value: unknown, itemId: string): value is Par
     && Array.isArray(data.warnings) && data.warnings.every((entry) => typeof entry === 'string')
     && typeof data.retrievedAt === 'string' && Array.isArray(data.offers) && data.offers.length <= 3
     && data.offers.every((offer) => offer && typeof offer.id === 'string' && typeof offer.productId === 'string'
-      && typeof offer.title === 'string' && typeof offer.url === 'string' && productLink(offer.url) !== null
+      && typeof offer.title === 'string' && typeof offer.url === 'string' && canonicalProductLink(offer.url, offer.productId) !== null
+      && (offer.promotionUrl === undefined || offer.promotionUrl === null || affiliatePromotionLink(offer.promotionUrl, offer.productId) !== null)
+      && (offer.priceKind === undefined || offer.priceKind === 'listing' || offer.priceKind === 'sku')
+      && (offer.provider === undefined || offer.provider === 'aliexpress_affiliate' || offer.provider === 'aliexpress_ds')
+      && (offer.market === undefined || (offer.market?.country === 'KR' && offer.market.currencyRequested === 'KRW'))
+      && !(offer.priceKind === 'listing' && offer.optionVerified)
       && typeof offer.optionVerified === 'boolean' && nullableString(offer.optionId) && nullableString(offer.optionLabel)
       && money(offer.packPrice) && (offer.packQuantity === null || (Number.isSafeInteger(offer.packQuantity) && offer.packQuantity > 0))
       && typeof offer.currency === 'string' && matches.has(offer.match) && Array.isArray(offer.reasons)

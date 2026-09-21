@@ -9,7 +9,6 @@ const { PartsAI } = await loadTypeScript('lib/parts/server/ai.ts');
 const { getPartsConfig } = await loadTypeScript('lib/parts/server/config.ts');
 const { parsePartSpecs } = await loadTypeScript('lib/parts/bom.ts');
 const { calculateOfferAmounts } = await loadTypeScript('lib/parts/pricing.ts');
-const { POST } = await loadTypeScript('app/api/parts/search/route.ts');
 
 const config = { appKey: 'test-app', appSecret: 'never-print-secret', trackingId: '', accessToken: '',
   gateway: 'https://eco.taobao.com/router/rest', openaiKey: '', openaiModel: 'gpt-5-mini' };
@@ -188,7 +187,7 @@ test('no credentials means no remote call, demo products or prices', async () =>
   const result = await searchParts(request, { config: { ...config, appKey: '', appSecret: '' }, fetcher: async () => { throw new Error('Must never run'); } });
   assert.equal(result.status, 'not_configured');
   assert.deepEqual(result.offers, []);
-  assert.equal(getPartsConfig({ ALIEXPRESS_TOP_REGION: 'https://evil.test' }).gateway, 'https://eco.taobao.com/router/rest');
+  assert.equal(getPartsConfig({ ALIEXPRESS_TOP_REGION: 'https://evil.test' }).gateway, 'https://api-sg.aliexpress.com/sync');
 });
 
 test('mocked upstream integration rechecks details and retains only actual product prices', async () => {
@@ -220,7 +219,7 @@ test('permission and rate limits are distinct and upstream bodies never leak', a
 });
 
 test('DS response preserves option price/stock and rejects foreign IDs', async () => {
-  const result = await searchParts(request, { config: { ...config, accessToken: 'test-session' }, fetcher: async (_url, init) => {
+  const result = await searchParts(request, { config: { ...config, dsEnabled: true, accessToken: 'test-session' }, fetcher: async (_url, init) => {
     const params = new URLSearchParams(init.body);
     const method = params.get('method');
     if (method !== 'aliexpress.ds.product.get') return affiliateResponse(method);
@@ -251,9 +250,4 @@ test('caller cancellation is passed to provider fetch and prevents retries', asy
   assert.equal(calls, 1);
 });
 
-test('route rejects cross-origin and malformed requests before search', async () => {
-  const cross = await POST(new Request('http://localhost:3000/api/parts/search', { method: 'POST', headers: { origin: 'https://evil.test', 'content-type': 'application/json' }, body: JSON.stringify(request) }));
-  assert.equal(cross.status, 403);
-  const malformed = await POST(new Request('http://localhost:3000/api/parts/search', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...request, item: { ...item, quantity: -2 } }) }));
-  assert.equal(malformed.status, 400);
-});
+// Endpoint origin/session/validation checks live in backend/tests/test_api_postgres.py.

@@ -1,5 +1,6 @@
 import type { BomSnapshot, QuoteLine } from './types';
-import { calculateOfferAmounts } from './pricing';
+import { calculateOfferAmounts, offerPriceKind } from './pricing';
+import { purchaseLink } from './client';
 
 const kindNames = { motor: '모터', propeller: '프로펠러', battery: '배터리', servo: '서보' };
 const matchNames = { exact: '동일 모델', alternative: '대체 후보', needs_review: '확인 필요' };
@@ -15,8 +16,9 @@ export function quoteToCsv(snapshot: BomSnapshot, lines: QuoteLine[]): string {
   const rows: Array<Array<string | number | null | undefined>> = [[
     '설계 ID', '설계 기준', '견적 생성 시각', '부품 종류', '필요 모델', '필요 수량', '규격', '실제 인스턴스',
     '조회 상태', '상품명', '상품 링크', '판매 옵션', '옵션 검증', '후보 분류', '비교 근거',
-    '묶음 가격', '통화', '묶음당 개수', '구매 묶음 수', '개당 가격', '부품 소계 (KRW)',
+    '표시 가격', '통화', '묶음당 개수', '구매 묶음 수', '개당 가격', '부품 소계 (KRW)',
     '한국 배송 가능', '배송비 (KRW)', '조회 시각', '확인 사항',
+    '구매 링크', '제휴 링크', '가격 기준', '조회 범위',
   ]];
   let subtotal = 0;
   let shipping = 0;
@@ -43,9 +45,12 @@ export function quoteToCsv(snapshot: BomSnapshot, lines: QuoteLine[]): string {
       offer?.shippingAvailable === true ? '가능' : offer?.shippingAvailable === false ? '불가' : '미확인',
       amounts?.shipping, offer?.retrievedAt ?? line?.result?.retrievedAt,
       [...item.issues, ...line?.result?.warnings ?? []].join('; '),
+      offer ? purchaseLink(offer) : null, offer?.promotionUrl ?? null,
+      offer ? (offerPriceKind(offer) === 'listing' ? '상품 표시 가격 · 옵션 미확인' : '선택 옵션 가격') : null,
+      'AliExpress 제휴 상품 · 한국 조건 · KRW 요청 · 배송/결제액 미확인',
     ]);
   }
-  const total = Array<string | number | null>(25).fill('');
+  const total = Array<string | number | null>(29).fill('');
   total[3] = '확인된 금액 합계';
   total[20] = confirmed ? Math.round(subtotal * 100) / 100 : null;
   total[22] = shippingConfirmed ? Math.round(shipping * 100) / 100 : null;

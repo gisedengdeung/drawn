@@ -1019,11 +1019,9 @@ function traceSegment(
     }
   }
 
-  // `segment.offset` is a small real-world mounting-bracket displacement
-  // (a few centimetres, absorbed inside the arm's own housing on a real
-  // drone). Drawing it as a visible strut made the propeller look like it
-  // was bolted on sideways, so this simplified concept view intentionally
-  // keeps the motor/propeller in line with the arm instead of displacing it.
+  const lateralOffset = (segment.offset || 0) * SCALE;
+  end.x -= Math.sin(outgoing) * lateralOffset;
+  end.z += Math.cos(outgoing) * lateralOffset;
   return { end, outgoing };
 }
 

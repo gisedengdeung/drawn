@@ -799,6 +799,17 @@ function buildFromPlacements(
   const toDirection = (v: readonly number[]) =>
     new THREE.Vector3(v[0], v[2], -v[1]).normalize();
 
+  /**
+   * 실측 치수를 쓰면 형상은 정확해지지만 슬라이더를 움직여도 상자가 그대로라
+   * 편집 피드백이 사라진다. 기준 설계 대비 변화율을 곱해 둘 다 잡는다.
+   * 편집 전에는 비율이 정확히 1이므로 실측 그대로 그려진다.
+   */
+  const reference = baseline ?? draft;
+  const growth = (current: number, original: number) =>
+    original > 0 && current > 0
+      ? THREE.MathUtils.clamp(Math.cbrt(current / original), 0.4, 2.5)
+      : 1;
+
   // `ARM_55703_1`의 55703은 sourceParameters의 `Arm_55703_Length`와 같은 키다.
   const baseLengthByKey = new Map<string, number>();
   for (const [name, value] of draft.sourceParameters) {
@@ -894,17 +905,6 @@ function buildFromPlacements(
       .add(adjust.pivot)
       .add(adjust.slide);
   };
-
-  /**
-   * 실측 치수를 쓰면 형상은 정확해지지만 슬라이더를 움직여도 상자가 그대로라
-   * 편집 피드백이 사라진다. 기준 설계 대비 변화율을 곱해 둘 다 잡는다.
-   * 편집 전에는 비율이 정확히 1이므로 실측 그대로 그려진다.
-   */
-  const reference = baseline ?? draft;
-  const growth = (current: number, original: number) =>
-    original > 0 && current > 0
-      ? THREE.MathUtils.clamp(Math.cbrt(current / original), 0.4, 2.5)
-      : 1;
 
   /** 부품의 로컬 축을 그대로 회전으로 옮긴다. 세 축이 직교하므로 항상 정회전이다. */
   const orientToBasis = (mesh: THREE.Object3D, part: PartPlacement) => {

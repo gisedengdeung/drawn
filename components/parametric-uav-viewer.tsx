@@ -392,10 +392,10 @@ export function ParametricUavViewer({
       data-tree-wing-anchors={hierarchyDiagnostics.treeWingAnchors}
       data-radial-fallback-wings={hierarchyDiagnostics.fallbackWings}
       data-surplus-wing-anchors={hierarchyDiagnostics.surplusWings}
-      className="absolute inset-0 overflow-hidden bg-[#eef3f6] outline-none [&>canvas:focus-visible]:ring-2 [&>canvas:focus-visible]:ring-inset [&>canvas:focus-visible]:ring-[#147d91]"
+      className="absolute inset-0 overflow-hidden bg-[#f5f5f7] outline-none [&>canvas:focus-visible]:ring-2 [&>canvas:focus-visible]:ring-inset [&>canvas:focus-visible]:ring-[#3182f6]"
     >
       {status === 'loading' && (
-        <div className="absolute inset-0 z-10 grid place-items-center text-xs font-semibold tracking-[0.12em] text-[#607383]">
+        <div className="absolute inset-0 z-10 grid place-items-center text-xs font-semibold tracking-[0.12em] text-[#6e6e73]">
           파라메트릭 형상 준비 중
         </div>
       )}
@@ -515,11 +515,13 @@ function buildAircraft(
     draft,
     fallbackLength,
     (start, end, nodeType) => {
-      const radius = /Wing/i.test(nodeType)
-        ? 0.055
-        : /Branch|Cross/i.test(nodeType)
-          ? 0.09
-          : 0.075;
+      const radius = /MountBracket/i.test(nodeType)
+        ? 0.035
+        : /Wing/i.test(nodeType)
+          ? 0.055
+          : /Branch|Cross/i.test(nodeType)
+            ? 0.09
+            : 0.075;
       group.add(
         cylinderBetween(start, end, radius, material('structure', 0.4)),
       );

@@ -1,7 +1,8 @@
 'use client';
 
+/* oxlint-disable next/no-html-link-for-pages -- Standard anchors avoid Vinext's production Link module export bug. */
+
 import { useMemo } from 'react';
-import Link from 'next/link';
 import { ExternalLink, Info, Loader2, Map, MapPin, Navigation } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -22,17 +23,17 @@ export function NearbyFlightSites() {
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <h3 className="flex items-center gap-1.5 text-sm font-medium text-[#294353]">
-          <MapPin className="size-3.5 text-[#147d91]" /> 내 주변 비행 장소
+        <h3 className="flex items-center gap-1.5 text-sm font-medium text-[#3c3c43]">
+          <MapPin className="size-3.5 text-[#3182f6]" /> 내 주변 비행 장소
         </h3>
         <Badge
           variant="outline"
-          className="border-[#b8dfe4] bg-[#eef8fa] text-[9px] tracking-[0.06em] text-[#0f6475]"
+          className="border-[#bfdbfe] bg-[#eff6ff] text-[9px] tracking-[0.06em] text-[#1b64da]"
         >
           국토부 UL 공역
         </Badge>
       </div>
-      <p className="mt-1 text-[11px] leading-5 text-[#82919c]">
+      <p className="mt-1 text-[11px] leading-5 text-[#86868b]">
         국토교통부 초경량비행장치 비행공역(UA) 전체 {dataset?.zones.length ?? 34}곳
         공식 데이터로 가까운 곳을 안내합니다. 연 1회 갱신되는 스냅샷이라 실시간
         공역 변경은 반영하지 않습니다.
@@ -49,14 +50,14 @@ export function NearbyFlightSites() {
           onClick={locate}
           size="sm"
           disabled={!dataset}
-          className="mt-3 w-full bg-[#147d91] text-white hover:bg-[#0f6878]"
+          className="mt-3 w-full bg-[#3182f6] text-white hover:bg-[#1b64da]"
         >
           <Navigation className="size-3.5" /> 내 위치에서 가까운 순으로 찾기
         </Button>
       )}
 
       {status === 'loading' && (
-        <div className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-[#dbe4ea] bg-[#f7f9fb] py-4 text-xs text-[#607383]">
+        <div className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#f5f5f7] py-4 text-xs text-[#6e6e73]">
           <Loader2 className="size-3.5 animate-spin" /> 위치 확인 중…
         </div>
       )}
@@ -82,18 +83,18 @@ export function NearbyFlightSites() {
       {status === 'ready' && (
         <div className="mt-3 space-y-2">
           {zones.map((zone) => (
-            <Link
+            <a
               key={zone.id}
               href={`/flight-map?zone=${zone.id}`}
               aria-label={`${zone.name} 지도에서 보기 (약 ${zone.distanceKm.toFixed(0)}km)`}
-              className="block rounded-lg border border-[#dbe4ea] bg-[#f7f9fb] p-2.5 transition hover:border-[#9ccdd6] hover:bg-[#eef8fa]"
+              className="block rounded-lg bg-[#f5f5f7] p-2.5 transition hover:border-[#93c5fd] hover:bg-[#eff6ff]"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-[#294353]">
-                    {zone.name} <span className="font-mono text-[10px] text-[#9aabb5]">{zone.code}</span>
+                  <p className="truncate text-xs font-medium text-[#3c3c43]">
+                    {zone.name} <span className="font-mono text-[10px] text-[#86868b]">{zone.code}</span>
                   </p>
-                  <p className="mt-0.5 truncate text-[10px] text-[#82919c]">
+                  <p className="mt-0.5 truncate text-[10px] text-[#86868b]">
                     {zone.shape === 'polygon'
                       ? '다각형 구역 · 중심점 근사'
                       : zone.radiusKm != null
@@ -102,27 +103,27 @@ export function NearbyFlightSites() {
                     {zone.ceilingFt != null ? ` · 고도 ${zone.ceilingFt}ft AGL` : ''}
                   </p>
                   {zone.remark && (
-                    <p className="mt-0.5 truncate text-[10px] text-[#9aabb5]">{zone.remark}</p>
+                    <p className="mt-0.5 truncate text-[10px] text-[#86868b]">{zone.remark}</p>
                   )}
                 </div>
-                <div className="flex shrink-0 items-center gap-1 font-mono text-[11px] font-semibold text-[#0f6475]">
+                <div className="flex shrink-0 items-center gap-1 font-mono text-[11px] font-semibold text-[#1b64da]">
                   약 {zone.distanceKm.toFixed(0)}km
-                  <Map className="size-3 text-[#9aabb5]" />
+                  <Map className="size-3 text-[#86868b]" />
                 </div>
               </div>
-            </Link>
+            </a>
           ))}
-          <Link
+          <a
             href="/flight-map"
-            className="mt-1 flex items-center gap-1.5 rounded-lg border border-[#b8dfe4] bg-[#eef8fa] px-2.5 py-2 text-[10px] font-medium text-[#0f6475] hover:bg-[#e0f1f4]"
+            className="mt-1 flex items-center gap-1.5 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-2 text-[10px] font-medium text-[#1b64da] hover:bg-[#eff6ff]"
           >
             <Map className="size-3 shrink-0" /> 지도에서 전체 34곳 크게 보기
-          </Link>
+          </a>
           <a
             href={DRONE_ONESTOP_URL}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 rounded-lg border border-dashed border-[#cfdbe2] px-2.5 py-2 text-[10px] text-[#607383] hover:bg-[#f4f7f9]"
+            className="flex items-center gap-1.5 rounded-lg border border-dashed border-[#e5e5ea] px-2.5 py-2 text-[10px] text-[#6e6e73] hover:bg-[#f5f5f7]"
           >
             <Info className="size-3 shrink-0" /> 비행 승인·최신 공역 정보는 드론
             원스톱에서 최종 확인하세요

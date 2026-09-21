@@ -23,12 +23,20 @@ export type SourceSku = {
   stock: number | null;
 };
 
-// TOP protocol: sorted nonempty key/value pairs, UTF-8 HMAC-MD5, uppercase hex.
-// This is deliberately not the different AliExpress IOP /rest SHA256 protocol.
-export function signTop(params: Record<string, string>, secret: string): string {
+function signParameters(params: Record<string, string>, secret: string, algorithm: 'md5' | 'sha256'): string {
   const text = Object.keys(params).filter((key) => key !== 'sign' && params[key] !== '')
     .sort().map((key) => key + params[key]).join('');
-  return createHmac('md5', secret).update(text, 'utf8').digest('hex').toUpperCase();
+  return createHmac(algorithm, secret).update(text, 'utf8').digest('hex').toUpperCase();
+}
+
+// Legacy TOP apps use HMAC-MD5 with a GMT+8 timestamp.
+export function signTop(params: Record<string, string>, secret: string): string {
+  return signParameters(params, secret, 'md5');
+}
+
+// IOP /sync dotted methods sign parameters without a /rest API path prefix.
+export function signAliExpressSync(params: Record<string, string>, secret: string): string {
+  return signParameters(params, secret, 'sha256');
 }
 
 export function productUrl(value: unknown, productId: string): string | null {
@@ -37,7 +45,7 @@ export function productUrl(value: unknown, productId: string): string | null {
 
 function providerFailure(value: Record<string, unknown>): void {
   const code = scalarText(value.code ?? value.resp_code ?? value.rsp_code);
-  const detail = scalarText(value.sub_code) + ' ' + scalarText(value.msg ?? value.resp_msg ?? value.rsp_msg);
+  const detail = scalarText(value.sub_code) + ' ' + scalarText(value.msg ?? value.message ?? value.resp_msg ?? value.rsp_msg);
   if (!code || code === '0' || code === '200') return;
   if (/limit|frequen|throttl/i.test(code + detail) || ['7', '15', '429'].includes(code)) {
     throw new PartsError('rate_limited', 'AliExpress 조회 한도에 도달했습니다. 잠시 후 다시 시도하세요.');
@@ -69,17 +77,20 @@ export class AliExpressProvider {
   constructor(private config: PartsConfig, private fetcher: Fetcher, private signal: AbortSignal, private now: () => number = Date.now) {}
 
   private async call(method: string, input: Record<string, string>, authorized = false): Promise<Record<string, unknown>> {
+    const iop = this.config.gateway === 'https://api-sg.aliexpress.com/sync';
     const params: Record<string, string> = {
-      method, app_key: this.config.appKey, sign_method: 'hmac',
-      timestamp: new Date(this.now() + 8 * 3_600_000).toISOString().slice(0, 19).replace('T', ' '),
+      method, app_key: this.config.appKey, sign_method: iop ? 'sha256' : 'hmac',
+      timestamp: iop ? String(this.now())
+        : new Date(this.now() + 8 * 3_600_000).toISOString().slice(0, 19).replace('T', ' '),
       format: 'json', v: '2.0', ...input,
     };
     if (authorized) params.session = this.config.accessToken;
-    params.sign = signTop(params, this.config.appSecret);
+    params.sign = iop ? signAliExpressSync(params, this.config.appSecret) : signTop(params, this.config.appSecret);
     const json = await fetchJson(this.config.gateway, {
       method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' },
       body: new URLSearchParams(params).toString(),
     }, this.fetcher, this.signal);
+    providerFailure(json);
     if (json.error_response) {
       providerFailure(record(json.error_response));
       throw new PartsError('error', 'AliExpress가 상품 조회를 처리하지 못했습니다.');

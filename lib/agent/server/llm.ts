@@ -29,7 +29,7 @@ export class AgentModel {
       throw new ApiError(
         503,
         'not_configured',
-        '설계 도우미의 OpenAI API 설정이 필요합니다.',
+        '설계 도우미 AI의 OpenAI API 설정이 필요합니다.',
       );
     this.client = new OpenAI({ apiKey, maxRetries: 0, timeout: 30000 });
     this.model =

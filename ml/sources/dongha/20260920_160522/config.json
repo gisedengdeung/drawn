@@ -1,0 +1,77 @@
+{
+  "task": "conditional_speed_to_trim_regression",
+  "data_path": "C:\\Dev\\drawn\\drawn\\test-ai-modeling\\dataset_510k.csv",
+  "dataset_sha256": "349d42fbbc922dea967009e2ca1b313504170f4a62fe89e32fbd472b00b210c8",
+  "seed": 42,
+  "max_epochs": 200,
+  "patience": 25,
+  "batch_size": 2048,
+  "learning_rate": 0.001,
+  "hidden": [
+    256,
+    256,
+    128
+  ],
+  "dropout": 0.05,
+  "input_dim_after_encoding": 274,
+  "target_columns": [
+    "target_drag",
+    "target_lift",
+    "target_thrust",
+    "target_pitch",
+    "target_power",
+    "target_current",
+    "target_flightTime",
+    "target_distance"
+  ],
+  "feature_columns": [
+    "speed",
+    "numPropellers",
+    "numWings",
+    "armLength",
+    "meanArmLength",
+    "maxArmLength",
+    "fuselageLength",
+    "fuselageHorizontalDiameter",
+    "fuselageVerticalDiameter",
+    "totalWingSpan",
+    "meanWingChord",
+    "parameterCount",
+    "hub_enc",
+    "primaryMotor_enc",
+    "primaryPropeller_enc",
+    "primaryBattery_enc",
+    "dragAt20",
+    "powerAt20",
+    "powerAt0",
+    "thrustAt0",
+    "currentAt0"
+  ],
+  "device": "cuda",
+  "gpu_name": "NVIDIA GeForce RTX 5070 Ti",
+  "torch_version": "2.13.0+cu130",
+  "cuda_runtime": "13.0",
+  "python_executable": "C:\\Dev\\drawn\\drawn\\test-ai-modeling\\.venv\\Scripts\\python.exe",
+  "split": {
+    "train": {
+      "designs": 5127,
+      "rows": 120227
+    },
+    "validation": {
+      "designs": 641,
+      "rows": 14639
+    },
+    "test": {
+      "designs": 641,
+      "rows": 14571
+    }
+  },
+  "notes": [
+    "Design IDs are disjoint across train, validation and test.",
+    "Input and target scalers and one-hot categories are fitted on training rows only.",
+    "Unknown component categories map to all-zero one-hot blocks.",
+    "Requires known hover and optional 20 m/s performance inputs; not geometry-only prediction.",
+    "Validation chooses the checkpoint; test rows are evaluated only after training.",
+    "This regresses valid simulation trims; it does not predict flight feasibility."
+  ]
+}

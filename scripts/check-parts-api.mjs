@@ -2,16 +2,16 @@ import { pathToFileURL } from 'node:url';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CONFIG_HELP = [
-  'Start the local app with authentication, D1 and AliExpress credentials configured, then sign in and save a project.',
+  'Start the local app with authentication, PostgreSQL and AliExpress credentials configured, then sign in and save a project.',
   'Set PARTS_SMOKE_SESSION_COOKIE to the signed-in browser request Cookie header (keep it private).',
   'Set PARTS_SMOKE_PROJECT_ID and PARTS_SMOKE_REVISION to the saved project ID and current positive revision.',
-  'Optional PARTS_SMOKE_BASE_URL defaults to http://localhost:5173; only a local origin is allowed.',
+  'Optional PARTS_SMOKE_BASE_URL defaults to http://localhost:3000; only a local origin is allowed.',
   'Run npm run parts:check. An accepted run uses 1 daily Agent run. There are no automatic retries.',
   'After a failure or timeout, inspect the Agent history before manually running this command again.',
 ].join('\n');
 
 function configuration(env) {
-  const base = new URL(env.PARTS_SMOKE_BASE_URL || 'http://localhost:5173');
+  const base = new URL(env.PARTS_SMOKE_BASE_URL || 'http://localhost:3000');
   const projectId = env.PARTS_SMOKE_PROJECT_ID?.trim();
   const revisionText = env.PARTS_SMOKE_REVISION?.trim();
   const cookie = env.PARTS_SMOKE_SESSION_COOKIE?.trim();

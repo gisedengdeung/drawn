@@ -304,7 +304,7 @@ export function StlViewer({
     >
       {status === 'ready' && (
         <div className="pointer-events-none absolute bottom-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex h-9 items-center gap-2 rounded-lg border border-[#cfdae0] bg-white/90 px-3 text-[11px] text-[#607383] shadow-sm backdrop-blur">
+          <div className="flex h-9 items-center gap-2 rounded-lg border border-[#e5e5ea] bg-white/90 px-3 text-[11px] text-[#6e6e73] shadow-sm backdrop-blur">
             <MousePointer2 className="size-3" /> 드래그 회전 · 스크롤 확대
           </div>
         <Button
@@ -315,7 +315,7 @@ export function StlViewer({
           aria-pressed={autoRotate}
           onClick={toggleAutoRotate}
           className={`pointer-events-auto h-9 gap-2 rounded-lg border-2 px-3 text-xs font-bold shadow-md transition-colors ${autoRotate
-            ? 'border-[#0f6475] bg-[#147d91] text-white hover:border-[#0b5362] hover:bg-[#0f6475] hover:text-white'
+            ? 'border-[#1b64da] bg-[#3182f6] text-white hover:border-[#153e8a] hover:bg-[#1b64da] hover:text-white'
             : 'border-[#b7791f] bg-[#fff4db] text-[#80510d] hover:border-[#965f13] hover:bg-[#ffe8b3] hover:text-[#694008]'
           }`}
         >
@@ -325,7 +325,7 @@ export function StlViewer({
         </div>
       )}
       {status === 'loading' && (
-        <div className="absolute inset-0 z-10 grid place-items-center text-xs font-semibold tracking-[0.12em] text-[#607383]">
+        <div className="absolute inset-0 z-10 grid place-items-center text-xs font-semibold tracking-[0.12em] text-[#6e6e73]">
           원본 STL 불러오는 중
         </div>
       )}

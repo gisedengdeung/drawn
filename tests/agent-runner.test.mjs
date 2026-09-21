@@ -11,7 +11,6 @@ const { createBomSnapshot } = await loadTypeScript('lib/parts/bom.ts');
 const { calculateOfferAmounts } = await loadTypeScript('lib/parts/pricing.ts');
 const { applyDraftChanges } = await loadTypeScript('lib/agent/optimization.ts');
 const { estimateDraft } = await loadTypeScript('lib/design-performance.ts');
-const callback = await loadTypeScript('app/api/integrations/aliexpress/callback/route.ts');
 const index = JSON.parse(readFileSync(new URL('../public/data/design-index.json', import.meta.url), 'utf8'));
 const shard = JSON.parse(readFileSync(new URL('../public/data/design-trees/shard-000.json', import.meta.url), 'utf8'));
 const baseline = hydrateDraft(shard['1']);
@@ -31,7 +30,7 @@ async function fixture(t, options = {}) {
     const request = { url, init, body: url.startsWith('https://api.openai.com/') ? JSON.parse(init.body) : new URLSearchParams(init.body) };
     requests.push(request);
     if (url === 'https://api.openai.com/v1/responses' && options.model) return options.model(request.body, requests);
-    if (url.startsWith('https://eco.taobao.com/router/rest') && options.provider) return options.provider(request.body, requests);
+    if (['https://api-sg.aliexpress.com/sync', 'https://eco.taobao.com/router/rest'].includes(url) && options.provider) return options.provider(request.body, requests);
     unexpected.push(url);
     throw new Error('Unmocked network request blocked');
   });
@@ -74,6 +73,8 @@ function affiliateMock() {
   const products = new Map();
   return params => {
     const method = params.get('method');
+    assert.equal(params.get('sign_method'), 'sha256');
+    assert.match(params.get('sign'), /^[A-F0-9]{64}$/);
     assert.equal(params.get('session'), null, 'Affiliates default must not use seller credentials');
     if (method === 'aliexpress.affiliate.product.query') {
       const id = String(1005001000000 + products.size);
@@ -245,22 +246,7 @@ test('all-variable lock reaches optimizer without being dropped by the runner', 
   assert.ok(result.warnings.some(warning => warning.includes('모두 잠겨')));
 });
 
-test('Affiliates callback never reflects query content or accepts seller authorization tokens', async () => {
-  const ready = await callback.GET(new Request('https://drawn.test/api/integrations/aliexpress/callback'));
-  assert.equal(ready.status, 200);
-  for (const name of ['code', 'access_token', 'error']) {
-    const marker = '<script>alert("private-token")</script>';
-    const reply = await callback.GET(new Request('https://drawn.test/api/integrations/aliexpress/callback?' + new URLSearchParams({ [name]: marker })));
-    assert.equal(reply.status, 400);
-    const body = await reply.text();
-    assert.ok(!body.includes(marker));
-    assert.ok(!body.includes('private-token'));
-    assert.equal(reply.headers.get('cache-control'), 'no-store');
-    assert.equal(reply.headers.get('referrer-policy'), 'no-referrer');
-    assert.match(reply.headers.get('content-security-policy'), /default-src 'none'/);
-    assert.match(body, /토큰 발급을 처리하지 않습니다/);
-  }
-});
+// The registration callback is served by FastAPI; its HTTP checks live in backend tests.
 for (const [name, answer] of [
   ['invented numeric price', '부품의 확정 가격은 999999원입니다. [e1]'],
   ['invented supplier URL', '이 링크에서 구매하세요: https://invented-supplier.example/buy [e1]'],

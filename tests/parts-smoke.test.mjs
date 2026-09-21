@@ -47,7 +47,7 @@ test('parts smoke fails before network for missing credentials, invalid project/
   for (const environment of [{}, { ...env, PARTS_SMOKE_SESSION_COOKIE: '' }, { ...env, PARTS_SMOKE_PROJECT_ID: 'anything' },
     { ...env, PARTS_SMOKE_REVISION: '0' }, { ...env, PARTS_SMOKE_REVISION: '3.1' }, { ...env, PARTS_SMOKE_REVISION: '9007199254740992' },
     { ...env, PARTS_SMOKE_SESSION_COOKIE: COOKIE + '\r\nOther: header' },
-    ...['https://example.com', 'http://localhost.example.com', 'http://user:password@localhost:5173', 'http://localhost:5173/path', 'file:///tmp', 'not a URL']
+    ...['https://example.com', 'http://localhost.example.com', 'http://user:password@localhost:5173', 'http://localhost:3000/path', 'file:///tmp', 'not a URL']
       .map((base) => ({ ...env, PARTS_SMOKE_BASE_URL: base }))]) {
     const checked = await check({ environment });
     assert.equal(checked.exitCode, 2);
@@ -62,12 +62,12 @@ test('parts smoke authenticates project GET then makes exactly one canonical par
   assert.equal(checked.exitCode, 0);
   assert.equal(checked.requests.length, 2);
   const [get, run] = checked.requests;
-  assert.equal(get.url, `http://localhost:5173/api/projects/${PROJECT_ID}`);
-  assert.equal(run.url, 'http://localhost:5173/api/agent/run');
+  assert.equal(get.url, `http://localhost:3000/api/projects/${PROJECT_ID}`);
+  assert.equal(run.url, 'http://localhost:3000/api/agent/run');
   assert.equal(run.method, 'POST');
   for (const request of checked.requests) {
     assert.equal(request.headers.Cookie, COOKIE);
-    assert.equal(request.headers.Origin, 'http://localhost:5173');
+    assert.equal(request.headers.Origin, 'http://localhost:3000');
     assert.equal(request.redirect, 'error'); // Cookies must never follow a server redirect elsewhere.
     assert.equal(request.cache, 'no-store');
   }

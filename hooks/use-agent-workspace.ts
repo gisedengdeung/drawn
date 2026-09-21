@@ -65,6 +65,7 @@ export function useAgentWorkspace({
   const activeRun = useRef<string | null>(null);
   const streamController = useRef<AbortController | null>(null);
   const operationLock = useRef(false);
+  const quoteRequestVersion = useRef(0);
   const draftSignature = draft ? draftFingerprint(draft) : '';
   const latestDraftSignature = useRef(draftSignature);
   useEffect(() => {
@@ -164,6 +165,7 @@ export function useAgentWorkspace({
       setRuns([]);
       setResult(null);
       setResultRunId(null);
+      quoteRequestVersion.current += 1;
       setUndoRevision(null);
       await refreshSession();
     } catch (reason) {
@@ -208,6 +210,7 @@ export function useAgentWorkspace({
       setRuns([]);
       setResult(null);
       setResultRunId(null);
+      quoteRequestVersion.current += 1;
       setUndoRevision(null);
     }
     return value;
@@ -230,6 +233,7 @@ export function useAgentWorkspace({
 
   const loadProject = async (id: string) => {
     if (operationLock.current) return;
+    quoteRequestVersion.current += 1;
     operationLock.current = true;
     setBusy(true);
     setError('');
@@ -281,6 +285,7 @@ export function useAgentWorkspace({
     setError('');
     setResult(null);
     setResultRunId(null);
+    quoteRequestVersion.current += 1;
     setProgress(['현재 설계를 저장하고 있습니다.']);
     activeRun.current = null;
     const controller = new AbortController();
@@ -488,7 +493,14 @@ export function useAgentWorkspace({
     setSavedQuote(saved);
   };
   const selectRun = (item: AgentRun) => {
-    if (running) return;
+    if (
+      operationLock.current ||
+      running ||
+      !project ||
+      item.projectId !== project.id
+    )
+      return;
+    const requestVersion = ++quoteRequestVersion.current;
     setResult(item.result ?? null);
     setResultRunId(item.id);
     setProgress([]);
@@ -500,12 +512,16 @@ export function useAgentWorkspace({
           quote: NonNullable<AgentResult['quote']>;
         }>;
       }>(`/api/projects/${encodeURIComponent(project.id)}/quotes`)
-        .then((value) =>
+        .then((value) => {
+          if (requestVersion !== quoteRequestVersion.current) return;
           setSavedQuote(
             value.quotes.find((quote) => quote.runId === item.id) ?? null,
-          ),
-        )
-        .catch((reason: unknown) => setError(describeError(reason)));
+          );
+        })
+        .catch((reason: unknown) => {
+          if (requestVersion === quoteRequestVersion.current)
+            setError(describeError(reason));
+        });
   };
   const refresh = async () => {
     setBusy(true);

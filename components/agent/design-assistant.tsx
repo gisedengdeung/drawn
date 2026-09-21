@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import {
   Bot,
   Check,
@@ -8,6 +9,8 @@ import {
   History,
   LoaderCircle,
   LogIn,
+  Maximize2,
+  Minimize2,
   MessageCircle,
   RotateCcw,
   Save,
@@ -25,7 +28,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useAssistantSheet } from '@/hooks/use-assistant-sheet';
+import type { usePartsQuoteWorkspace } from '@/hooks/use-parts-quote-workspace';
+import {
+  PartsBomPreview,
+  PartsQuotePanel,
+} from '@/components/agent/parts-quote-panel';
 import type { AgentWorkspaceController } from '@/hooks/use-agent-workspace';
 import type {
   AgentMode,
@@ -71,6 +79,7 @@ const statusLabel: Record<string, string> = {
   cancelled: '취소',
 };
 const evidenceLabel: Record<Evidence['kind'], string> = {
+  'model-prediction': 'AI 모델 예측',
   'dataset-output': '원본 시뮬레이션',
   'dataset-trim': '원본 trim',
   'draft-estimate': '편집 설계 추정',
@@ -79,7 +88,17 @@ const evidenceLabel: Record<Evidence['kind'], string> = {
   'user-input': '설계 입력',
 };
 const fieldClass =
-  'w-full rounded-lg border border-[#ccd8df] bg-white px-3 py-2 text-sm text-[#172b3a] outline-none focus:border-[#147d91] focus:ring-2 focus:ring-[#147d91]/15 disabled:opacity-60';
+  'w-full rounded-lg border border-[#e5e5ea] bg-white px-3 py-2 text-sm text-[#1d1d1f] outline-none focus:border-[#3182f6] focus:ring-2 focus:ring-[#3182f6]/15 disabled:opacity-60';
+
+type PartsQuoteController = ReturnType<typeof usePartsQuoteWorkspace>;
+type AssistantInput = {
+  message: string;
+  setMessage: (value: string) => void;
+  locks: string[];
+  setLocks: Dispatch<SetStateAction<string[]>>;
+  pendingProjectId: string;
+  setPendingProjectId: (value: string) => void;
+};
 
 export function DesignAssistant({
   open,
@@ -87,6 +106,10 @@ export function DesignAssistant({
   mode,
   onModeChange,
   controller,
+  partsQuote,
+  partsFocusRequest,
+  draftLoading,
+  loadError,
   draft,
   onNavigate,
   onCompare,
@@ -96,16 +119,43 @@ export function DesignAssistant({
   mode: AgentMode;
   onModeChange: (mode: AgentMode) => void;
   controller: AgentWorkspaceController;
+  partsQuote: PartsQuoteController;
+  partsFocusRequest: number;
+  draftLoading: boolean;
+  loadError: string | null;
   draft: DesignDraft | null;
   onNavigate: (target: NonNullable<Evidence['target']>) => void;
   onCompare: (designId: number) => void;
 }) {
-  const mobile = useIsMobile();
+  const mobile = useAssistantSheet();
+  const [expanded, setExpanded] = useState(false);
+  // Keep input above conditional desktop/sheet content, with one draft per mode.
+  const [messages, setMessages] = useState<Record<AgentMode, string>>({
+    parts: '',
+    optimize: '',
+    qa: '',
+  });
+  const [locks, setLocks] = useState<string[]>([]);
+  const [pendingProjectId, setPendingProjectId] = useState('');
+  const input: AssistantInput = {
+    message: messages[mode],
+    setMessage: (value) =>
+      setMessages((current) => ({ ...current, [mode]: value })),
+    locks,
+    setLocks,
+    pendingProjectId,
+    setPendingProjectId,
+  };
   const content = (
     <AssistantContent
       mode={mode}
       onModeChange={onModeChange}
       controller={controller}
+      partsQuote={partsQuote}
+      partsFocusRequest={partsFocusRequest}
+      draftLoading={draftLoading}
+      loadError={loadError}
+      input={input}
       draft={draft}
       onNavigate={onNavigate}
       onCompare={onCompare}
@@ -115,48 +165,79 @@ export function DesignAssistant({
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
+          id="design-assistant-panel"
           side="bottom"
-          className="max-h-[92dvh] rounded-t-2xl border-[#dbe4ea] bg-[#f7f9fb] text-[#172b3a]"
+          showCloseButton={false}
+          className="max-h-[92dvh] gap-0 rounded-t-2xl border-[#e5e5ea] bg-[#f5f5f7] text-[#1d1d1f] data-[side=bottom]:h-[92dvh]"
         >
-          <SheetHeader className="border-b border-[#dbe4ea] pb-3">
-            <SheetTitle className="flex items-center gap-2 text-[#172b3a]">
-              <Bot className="size-5 text-[#147d91]" />
-              설계 도우미
+          <SheetHeader className="relative shrink-0 border-b border-[#e5e5ea] pb-3 pr-14">
+            <SheetTitle className="flex items-center gap-2 text-[#1d1d1f]">
+              <Bot className="size-5 text-[#3182f6]" />
+              설계 도우미 AI
             </SheetTitle>
-            <SheetDescription className="text-[#607383]">
+            <SheetDescription className="text-[#6e6e73]">
               현재 설계에서 부품 찾기, 설계 개선, 질문까지
             </SheetDescription>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="absolute right-3 top-3"
+              aria-label="설계 도우미 AI 닫기"
+              onClick={() => onOpenChange(false)}
+            >
+              <X />
+            </Button>
           </SheetHeader>
-          <div className="min-h-0 overflow-y-auto px-4 pb-5">{content}</div>
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            {content}
+          </div>
         </SheetContent>
       </Sheet>
     );
   if (!open) return null;
   return (
     <aside
-      aria-label="설계 도우미"
-      className="sticky top-[103px] flex h-[calc(100dvh-103px)] w-[390px] shrink-0 flex-col border-l border-[#dbe4ea] bg-[#f7f9fb]"
+      id="design-assistant-panel"
+      aria-label="설계 도우미 AI"
+      style={{ width: expanded ? 'min(640px, calc(100vw - 480px))' : '420px' }}
+      className="sticky top-[103px] flex h-[calc(100dvh-103px)] min-w-0 shrink-0 flex-col border-l border-[#e5e5ea] bg-[#f5f5f7]"
     >
-      <div className="flex items-start justify-between border-b border-[#dbe4ea] p-4">
+      <div className="flex items-start justify-between border-b border-[#e5e5ea] p-4">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold">
-            <Bot className="size-5 text-[#147d91]" />
-            설계 도우미
+            <Bot className="size-5 text-[#3182f6]" />
+            설계 도우미 AI
           </h2>
-          <p className="mt-1 text-xs text-[#607383]">
+          <p className="mt-1 text-xs text-[#6e6e73]">
             현재 설계의 근거를 함께 확인하세요.
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="설계 도우미 닫기"
-          onClick={() => onOpenChange(false)}
-        >
-          <X />
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-expanded={expanded}
+            aria-label={
+              expanded ? '설계 도우미 AI 접기' : '설계 도우미 AI 넓게 보기'
+            }
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? <Minimize2 /> : <Maximize2 />}
+            {expanded ? '접기' : '넓게 보기'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="설계 도우미 AI 닫기"
+            onClick={() => onOpenChange(false)}
+          >
+            <X />
+          </Button>
+        </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">{content}</div>
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4">
+        {content}
+      </div>
     </aside>
   );
 }
@@ -165,6 +246,11 @@ function AssistantContent({
   mode,
   onModeChange,
   controller: agent,
+  partsQuote,
+  partsFocusRequest,
+  draftLoading,
+  loadError,
+  input,
   draft,
   onNavigate,
   onCompare,
@@ -172,21 +258,38 @@ function AssistantContent({
   mode: AgentMode;
   onModeChange: (mode: AgentMode) => void;
   controller: AgentWorkspaceController;
+  partsQuote: PartsQuoteController;
+  partsFocusRequest: number;
+  draftLoading: boolean;
+  loadError: string | null;
+  input: AssistantInput;
   draft: DesignDraft | null;
   onNavigate: (target: NonNullable<Evidence['target']>) => void;
   onCompare: (designId: number) => void;
 }) {
-  const [message, setMessage] = useState('');
-  const [locks, setLocks] = useState<string[]>([]);
-  const [pendingProjectId, setPendingProjectId] = useState('');
+  const {
+    message,
+    setMessage,
+    locks,
+    setLocks,
+    pendingProjectId,
+    setPendingProjectId,
+  } = input;
+  const quoteRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (mode !== 'parts' || !partsFocusRequest) return;
+    quoteRef.current?.focus({ preventScroll: true });
+    quoteRef.current?.scrollIntoView({ block: 'start' });
+  }, [mode, partsFocusRequest]);
   const currentMode = modes.find((item) => item.id === mode)!;
-  const blocked = agent.running || agent.busy;
+  const blocked = agent.running || agent.busy || partsQuote.saving;
   const quotaReached =
     !!agent.session?.usage &&
     (agent.session.usage.used >= agent.session.usage.limit ||
       agent.session.usage.globalRemaining <= 0);
   const canRun =
     !!draft &&
+    !draftLoading &&
     !!agent.session?.user &&
     !blocked &&
     !quotaReached &&
@@ -206,10 +309,10 @@ function AssistantContent({
   };
 
   return (
-    <div className="space-y-4 text-sm">
-      <div className="rounded-xl border border-[#dbe4ea] bg-white p-3">
+    <div className="min-w-0 space-y-4 text-sm [overflow-wrap:anywhere]">
+      <div className="rounded-xl border border-[#e5e5ea] bg-white p-3">
         {agent.sessionLoading ? (
-          <output className="flex items-center gap-2 text-xs text-[#607383]">
+          <output className="flex items-center gap-2 text-xs text-[#6e6e73]">
             <LoaderCircle className="size-4 animate-spin" />
             로그인 상태 확인 중
           </output>
@@ -220,7 +323,7 @@ function AssistantContent({
                 {agent.session.user.name || agent.session.user.email}
               </span>
               <button
-                className="shrink-0 text-xs text-[#607383] underline"
+                className="shrink-0 text-xs text-[#6e6e73] underline"
                 disabled={blocked}
                 onClick={() => void agent.signOut()}
               >
@@ -228,7 +331,7 @@ function AssistantContent({
               </button>
             </div>
             {agent.session.usage && (
-              <p className="mt-2 text-xs text-[#607383]">
+              <p className="mt-2 text-xs text-[#6e6e73]">
                 오늘 {agent.session.usage.used}/{agent.session.usage.limit}회
                 사용 · 무료 이용
                 <span className="block pt-1">
@@ -251,14 +354,14 @@ function AssistantContent({
             <p className="font-medium">
               설계를 저장하고 도우미와 이어서 작업하세요.
             </p>
-            <p className="mt-1 text-xs leading-5 text-[#607383]">
+            <p className="mt-1 text-xs leading-5 text-[#6e6e73]">
               Google 로그인 후 무료 일일 한도 안에서 이용할 수 있습니다.
             </p>
             {agent.session?.configured ? (
               <Button
                 onClick={() => void agent.signIn()}
                 disabled={blocked}
-                className="mt-3 w-full bg-[#147d91] text-white hover:bg-[#0f6475]"
+                className="mt-3 w-full bg-[#3182f6] text-white hover:bg-[#1b64da]"
               >
                 <LogIn />
                 Google로 로그인
@@ -274,7 +377,7 @@ function AssistantContent({
       </div>
 
       {agent.session?.user && (
-        <div className="space-y-2 rounded-xl border border-[#dbe4ea] bg-white p-3">
+        <div className="space-y-2 rounded-xl border border-[#e5e5ea] bg-white p-3">
           <div className="flex items-center justify-between gap-2">
             <p className="font-medium">내 프로젝트</p>
             <Button
@@ -302,7 +405,7 @@ function AssistantContent({
             ))}
           </select>
           {pendingProjectId && (
-            <div className="rounded-lg bg-[#eef8fa] p-2.5 text-xs text-[#0f6475]">
+            <div className="rounded-lg bg-[#eff6ff] p-2.5 text-xs text-[#1b64da]">
               <p>
                 불러오면 현재 편집 화면이 바뀝니다. 남길 편집은 먼저 새
                 프로젝트로 저장하세요.
@@ -311,7 +414,7 @@ function AssistantContent({
                 size="sm"
                 variant="outline"
                 className="mt-2"
-                disabled={blocked}
+                disabled={blocked || draftLoading}
                 onClick={() => void agent.loadProject(pendingProjectId)}
               >
                 선택한 프로젝트 불러오기
@@ -319,12 +422,12 @@ function AssistantContent({
             </div>
           )}
           {agent.project ? (
-            <p className="text-xs text-[#607383]">
+            <p className="text-xs text-[#6e6e73]">
               {agent.project.title} · v{agent.project.revision} ·{' '}
               {agent.dirty ? '저장하지 않은 변경' : '저장됨'}
             </p>
           ) : (
-            <p className="text-xs text-[#607383]">
+            <p className="text-xs text-[#6e6e73]">
               현재 브라우저의 편집본을 개인 프로젝트로 가져옵니다.
             </p>
           )}
@@ -355,7 +458,7 @@ function AssistantContent({
       <div>
         <fieldset
           aria-label="도우미 작업 선택"
-          className="grid grid-cols-3 gap-1 rounded-xl border border-[#dbe4ea] bg-white p-1"
+          className="grid grid-cols-3 gap-1 rounded-xl border border-[#e5e5ea] bg-white p-1"
         >
           {modes.map((item) => (
             <button
@@ -364,17 +467,25 @@ function AssistantContent({
               aria-pressed={mode === item.id}
               disabled={agent.running}
               onClick={() => onModeChange(item.id)}
-              className={`flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-xs font-medium transition ${mode === item.id ? 'bg-[#147d91] text-white' : 'text-[#607383] hover:bg-[#eef8fa]'}`}
+              className={`flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-xs font-medium transition ${mode === item.id ? 'bg-[#3182f6] text-white' : 'text-[#6e6e73] hover:bg-[#eff6ff]'}`}
             >
               <item.icon className="size-4" />
               {item.label}
             </button>
           ))}
         </fieldset>
-        <p className="mt-2 text-xs leading-5 text-[#607383]">
+        <p className="mt-2 text-xs leading-5 text-[#6e6e73]">
           {currentMode.hint}
         </p>
       </div>
+
+      {mode === 'parts' && (
+        <PartsBomPreview
+          snapshot={partsQuote.currentBom}
+          loading={draftLoading}
+          loadError={loadError}
+        />
+      )}
 
       <form onSubmit={submit} className="space-y-2">
         <label htmlFor="agent-message" className="block text-xs font-medium">
@@ -395,11 +506,11 @@ function AssistantContent({
           onChange={(event) => setMessage(event.target.value)}
         />
         {mode === 'optimize' && draft && (
-          <details className="rounded-lg border border-[#dbe4ea] bg-white p-2.5">
+          <details className="rounded-lg border border-[#e5e5ea] bg-white p-2.5">
             <summary className="cursor-pointer text-xs font-medium">
               변경하지 않을 파라미터 선택 ({locks.length})
             </summary>
-            <p className="my-2 text-xs text-[#607383]">
+            <p className="my-2 text-xs text-[#6e6e73]">
               탑재중량·부품 구성·기체 구조는 기본으로 유지합니다.
             </p>
             <div className="space-y-2">
@@ -420,7 +531,7 @@ function AssistantContent({
                           : current.filter((id) => id !== item.id),
                       )
                     }
-                    className="mt-0.5 accent-[#147d91]"
+                    className="mt-0.5 accent-[#3182f6]"
                   />
                   <span>{item.label}</span>
                 </label>
@@ -428,7 +539,7 @@ function AssistantContent({
             </div>
           </details>
         )}
-        <p className="text-[11px] text-[#607383]">
+        <p className="text-[11px] text-[#6e6e73]">
           {draft
             ? `Design #${draft.baselineId} · 실행 전에 현재 편집본을 저장합니다.`
             : '설계 데이터를 불러오는 중입니다.'}
@@ -437,14 +548,18 @@ function AssistantContent({
           <Button
             type="submit"
             disabled={!canRun}
-            className="flex-1 bg-[#147d91] text-white hover:bg-[#0f6475]"
+            className="flex-1 bg-[#3182f6] text-white hover:bg-[#1b64da]"
           >
             {agent.running ? (
               <LoaderCircle className="animate-spin" />
             ) : (
               <Send />
             )}
-            {agent.running ? '진행 중' : `${currentMode.label} 실행`}
+            {agent.running
+              ? '진행 중'
+              : mode === 'parts' && partsQuote.isQuote
+                ? '현재 설계로 다시 검색'
+                : `${currentMode.label} 실행`}
           </Button>
           {agent.running && (
             <Button
@@ -478,10 +593,10 @@ function AssistantContent({
       {agent.progress.length > 0 && (
         <output
           aria-live="polite"
-          className="rounded-lg border border-[#dbe4ea] bg-white p-3"
+          className="rounded-lg border border-[#e5e5ea] bg-white p-3"
         >
           <p className="mb-2 text-xs font-semibold">실행 진행</p>
-          <ol className="space-y-1 text-xs leading-5 text-[#607383]">
+          <ol className="space-y-1 text-xs leading-5 text-[#6e6e73]">
             {agent.progress.map((line, index) => (
               <li key={`${index}-${line}`} className="flex gap-2">
                 <span aria-hidden="true">
@@ -499,7 +614,7 @@ function AssistantContent({
       {agent.result && (
         <div className="space-y-3">
           <div className="rounded-xl border border-[#bddde3] bg-white p-3">
-            <p className="mb-2 text-xs font-semibold text-[#0f6475]">
+            <p className="mb-2 text-xs font-semibold text-[#1b64da]">
               답변 · 설계 v{agent.result.context.revision}
             </p>
             {agent.stale && (
@@ -520,10 +635,10 @@ function AssistantContent({
               {warning}
             </p>
           ))}
-          {quote && (
-            <div className="rounded-xl border border-[#dbe4ea] bg-white p-3">
+          {quote && mode !== 'parts' && (
+            <div className="rounded-xl border border-[#e5e5ea] bg-white p-3">
               <p className="font-medium">부품 견적 {quote.lines.length}종</p>
-              <p className="mt-1 text-xs leading-5 text-[#607383]">
+              <p className="mt-1 text-xs leading-5 text-[#6e6e73]">
                 모터·프로펠러·배터리·서보 범위입니다. 옵션과 배송비가 확인되지
                 않은 표시는 확정 합계에 포함되지 않습니다.
               </p>
@@ -534,7 +649,7 @@ function AssistantContent({
                 onClick={() => onNavigate({ view: 'parts' })}
               >
                 <ShoppingBag />
-                구매표와 CSV 보기
+                부품 후보와 구매 정리 보기
               </Button>
             </div>
           )}
@@ -562,8 +677,31 @@ function AssistantContent({
         </div>
       )}
 
+      {mode === 'parts' && (
+        <div
+          id="assistant-parts-quote"
+          ref={quoteRef}
+          tabIndex={-1}
+          className="scroll-mt-4 outline-none"
+        >
+          <PartsQuotePanel
+            snapshot={partsQuote.snapshot}
+            lines={partsQuote.lines}
+            ready={partsQuote.ready}
+            stale={partsQuote.stale}
+            isQuote={partsQuote.isQuote}
+            saving={partsQuote.saving}
+            canSave={partsQuote.canSave}
+            notice={partsQuote.notice}
+            disabled={blocked || draftLoading}
+            onSelect={partsQuote.selectOffer}
+            onSave={() => void partsQuote.save()}
+          />
+        </div>
+      )}
+
       {agent.runs.length > 0 && (
-        <details className="rounded-xl border border-[#dbe4ea] bg-white p-3">
+        <details className="rounded-xl border border-[#e5e5ea] bg-white p-3">
           <summary className="cursor-pointer text-xs font-semibold">
             <History className="mr-1 inline size-3.5" />이 프로젝트의 실행 기록
             ({agent.runs.length})
@@ -574,17 +712,20 @@ function AssistantContent({
                 <button
                   type="button"
                   disabled={blocked || !run.result}
-                  onClick={() => agent.selectRun(run)}
-                  className="w-full rounded-lg border border-[#e3e9ee] p-2 text-left hover:bg-[#eef8fa] disabled:opacity-60"
+                  onClick={() => {
+                    agent.selectRun(run);
+                    onModeChange(run.mode);
+                  }}
+                  className="w-full rounded-lg border border-[#e3e9ee] p-2 text-left hover:bg-[#eff6ff] disabled:opacity-60"
                 >
                   <span className="block text-xs font-medium">
                     {modes.find((item) => item.id === run.mode)?.label} · v
                     {run.revision} · {statusLabel[run.status] ?? run.status}
                   </span>
-                  <span className="mt-1 block truncate text-xs text-[#607383]">
+                  <span className="mt-1 block truncate text-xs text-[#6e6e73]">
                     {run.message}
                   </span>
-                  <span className="mt-1 block text-[10px] text-[#607383]">
+                  <span className="mt-1 block text-[10px] text-[#6e6e73]">
                     {new Date(run.createdAt).toLocaleString('ko-KR')}
                   </span>
                 </button>
@@ -609,21 +750,21 @@ function ProposalCard({
   onCompare: (designId: number) => void;
 }) {
   return (
-    <article className="rounded-xl border border-[#dbe4ea] bg-white p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#147d91]">
+    <article className="rounded-xl border border-[#e5e5ea] bg-white p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#3182f6]">
         {proposal.operation === 'select_dataset_design'
           ? '다른 설계를 새 기준으로 선택'
           : '현재 설계의 파라미터 개선'}
       </p>
       <h3 className="mt-1 font-semibold">{proposal.title}</h3>
-      <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[#607383]">
+      <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[#6e6e73]">
         {proposal.reason}
       </p>
       {proposal.changes.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[#dbe4ea] text-[#607383]">
+              <tr className="border-b border-[#e5e5ea] text-[#6e6e73]">
                 <th className="pb-1 font-medium">변경 항목</th>
                 <th className="pb-1 font-medium">현재</th>
                 <th className="pb-1 font-medium">제안</th>
@@ -631,14 +772,14 @@ function ProposalCard({
             </thead>
             <tbody>
               {proposal.changes.map((change) => (
-                <tr key={change.targetId} className="border-b border-[#eef2f5]">
+                <tr key={change.targetId} className="border-b border-[#f5f5f7]">
                   <td className="max-w-36 break-words py-2 pr-2">
                     {changeLabel(change.targetId)}
                   </td>
                   <td className="py-2 pr-2">
                     {change.before.toLocaleString()} {change.unit}
                   </td>
-                  <td className="py-2 text-[#0f6475]">
+                  <td className="py-2 text-[#1b64da]">
                     {change.after.toLocaleString()} {change.unit}
                   </td>
                 </tr>
@@ -657,7 +798,7 @@ function ProposalCard({
           size="sm"
           disabled={disabled}
           onClick={onApply}
-          className="bg-[#147d91] text-white hover:bg-[#0f6475]"
+          className="bg-[#3182f6] text-white hover:bg-[#1b64da]"
         >
           <Check />
           {proposal.operation === 'select_dataset_design'
@@ -687,7 +828,7 @@ function EvidenceList({
 }) {
   if (result.evidence.length === 0) return null;
   return (
-    <details className="rounded-xl border border-[#dbe4ea] bg-white p-3" open>
+    <details className="rounded-xl border border-[#e5e5ea] bg-white p-3" open>
       <summary className="cursor-pointer text-xs font-semibold">
         답변의 근거 ({result.evidence.length})
       </summary>
@@ -696,20 +837,20 @@ function EvidenceList({
           <li
             id={`agent-evidence-${evidence.id}`}
             key={evidence.id}
-            className="scroll-mt-4 border-t border-[#eef2f5] pt-2"
+            className="scroll-mt-4 border-t border-[#f5f5f7] pt-2"
           >
-            <span className="text-[10px] font-medium text-[#147d91]">
+            <span className="text-[10px] font-medium text-[#3182f6]">
               [{evidence.id}] · {evidenceLabel[evidence.kind]}
             </span>
             <p className="mt-1 text-xs font-semibold">{evidence.title}</p>
-            <div className="mt-2 text-xs leading-5 text-[#607383]">
+            <div className="mt-2 text-xs leading-5 text-[#6e6e73]">
               <EvidenceFacts text={evidence.text} />
             </div>
             {evidence.target && (
               <button
                 type="button"
                 onClick={() => onNavigate(evidence.target!)}
-                className="mt-2 inline-flex items-center text-xs font-medium text-[#0f6475]"
+                className="mt-2 inline-flex items-center text-xs font-medium text-[#1b64da]"
               >
                 관련{' '}
                 {evidence.target.view === 'lab'
@@ -805,9 +946,9 @@ function MetricFacts({ data }: { data: FactRecord }) {
   return (
     <dl className="grid grid-cols-2 gap-2">
       {rows.map((row) => (
-        <div key={row.key} className="rounded-md bg-[#f7f9fb] p-2">
-          <dt className="text-[11px] text-[#607383]">{row.label}</dt>
-          <dd className="mt-0.5 text-xs font-medium text-[#172b3a]">
+        <div key={row.key} className="rounded-md bg-[#f5f5f7] p-2">
+          <dt className="text-[11px] text-[#6e6e73]">{row.label}</dt>
+          <dd className="mt-0.5 text-xs font-medium text-[#1d1d1f]">
             {row.value}
           </dd>
         </div>
@@ -866,7 +1007,7 @@ function EvidenceFacts({ text }: { text: string }) {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[#dbe4ea]">
+              <tr className="border-b border-[#e5e5ea]">
                 <th className="pb-1 font-medium">성능 추정</th>
                 <th className="pb-1 font-medium">현재</th>
                 <th className="pb-1 font-medium">변경 후</th>
@@ -874,10 +1015,10 @@ function EvidenceFacts({ text }: { text: string }) {
             </thead>
             <tbody>
               {metricRows(data.before).map((row) => (
-                <tr key={row.key} className="border-b border-[#eef2f5]">
+                <tr key={row.key} className="border-b border-[#f5f5f7]">
                   <td className="py-1.5 pr-1">{row.label}</td>
                   <td className="py-1.5 pr-1">{row.value}</td>
-                  <td className="py-1.5 text-[#0f6475]">
+                  <td className="py-1.5 text-[#1b64da]">
                     {metricRows(data.after as FactRecord).find(
                       (after) => after.key === row.key,
                     )?.value ?? '확인값 없음'}
@@ -936,7 +1077,7 @@ function ParameterFacts({ data }: { data: FactRecord }) {
   const range = factRecord(data.range) ? data.range : null;
   return (
     <div className="space-y-1">
-      <p className="font-medium text-[#172b3a]">
+      <p className="font-medium text-[#1d1d1f]">
         현재 값:{' '}
         {value !== null
           ? numberText(value)
@@ -1107,7 +1248,7 @@ function SupplierFacts({ data }: { data: FactRecord }) {
           key={`${factText(entry.model)}-${index}`}
           className="rounded-lg border border-[#e3e9ee] p-2"
         >
-          <p className="font-medium text-[#172b3a]">
+          <p className="font-medium text-[#1d1d1f]">
             {factText(entry.model) || '모델 미확인'} ·{' '}
             {factNumber(entry.quantity) !== null
               ? `${String(entry.quantity)}개`
@@ -1129,9 +1270,9 @@ function SupplierFacts({ data }: { data: FactRecord }) {
               return (
                 <li
                   key={`${productId}-${offerIndex}`}
-                  className="border-t border-[#eef2f5] pt-2"
+                  className="border-t border-[#f5f5f7] pt-2"
                 >
-                  <p className="text-[#172b3a]">
+                  <p className="text-[#1d1d1f]">
                     {factText(offer.title) || '상품명 미확인'}
                   </p>
                   <p>
@@ -1155,7 +1296,7 @@ function SupplierFacts({ data }: { data: FactRecord }) {
                         href={canonical}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-medium text-[#0f6475] underline"
+                        className="font-medium text-[#1b64da] underline"
                       >
                         상품 링크
                       </a>
@@ -1165,7 +1306,7 @@ function SupplierFacts({ data }: { data: FactRecord }) {
                         href={promotion}
                         target="_blank"
                         rel="noopener noreferrer sponsored"
-                        className="font-medium text-[#0f6475] underline"
+                        className="font-medium text-[#1b64da] underline"
                       >
                         제휴 링크
                       </a>

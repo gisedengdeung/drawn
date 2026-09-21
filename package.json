@@ -6,9 +6,9 @@
     "node": ">=22.15.0"
   },
   "scripts": {
-    "dev": "vinext dev",
+    "dev": "node scripts/dev.mjs",
     "build": "vinext build",
-    "start": "wrangler dev --config dist/server/wrangler.json",
+    "start": "vinext start",
     "data:prepare": "node scripts/prepare-aircraftverse.mjs",
     "data:prepare-drone-zones": "node scripts/prepare-drone-zones.mjs",
     "data:validate": "node scripts/validate-generated-data.mjs",
@@ -17,7 +17,9 @@
     "parts:check": "node scripts/check-parts-api.mjs",
     "lint": "oxlint",
     "format": "oxfmt",
-    "db:migrate:local": "wrangler d1 migrations apply AGENT_DB --local --config dist/server/wrangler.json --persist-to .wrangler/state"
+    "db:migrate:local": "python -m alembic -c backend/alembic.ini upgrade head",
+    "test:backend": "python -m pytest backend/tests",
+    "model:check": "node scripts/check-performance-api.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

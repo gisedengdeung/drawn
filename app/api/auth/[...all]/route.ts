@@ -1,13 +1,4 @@
-import { createAuth } from '../../../../lib/agent/server/auth';
-import { bindings } from '../../../../lib/agent/server/env';
-import { fail } from '../../../../lib/agent/server/http';
+import { proxyApi } from '../../../../lib/server/api-proxy';
 export const dynamic = 'force-dynamic';
-async function handler(request: Request) {
-  try {
-    return await createAuth(await bindings()).handler(request);
-  } catch (error) {
-    return fail(error);
-  }
-}
-export const GET = handler;
-export const POST = handler;
+export const GET = proxyApi;
+export const POST = proxyApi;

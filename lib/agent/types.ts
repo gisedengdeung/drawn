@@ -24,10 +24,16 @@ export type Evidence = {
     | 'draft-estimate'
     | 'supplier-offer'
     | 'document'
-    | 'user-input';
+    | 'user-input'
+    | 'model-prediction';
   title: string;
   text: string;
-  target?: { view: WorkspaceView; designId?: number; parameterId?: string };
+  // 'parts' remains a compatible target for stored runs; it opens the assistant.
+  target?: {
+    view: WorkspaceView | 'parts';
+    designId?: number;
+    parameterId?: string;
+  };
 };
 export type AgentProposal = {
   id: string;

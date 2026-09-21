@@ -48,3 +48,12 @@ next-env.d.ts
 /**/Geom.stp
 /**/cadfile.stl
 /corpus_dic
+
+# Python backend caches and local environments
+/backend/.venv/
+**/__pycache__/
+.pytest_cache/
+*.pyc
+
+# Local ML environment only; model sources, archives and bundles remain trackable.
+/ml/.venv

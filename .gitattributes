@@ -1,0 +1,4 @@
+# Preserve verified model artifacts byte-for-byte on every platform.
+ml/sources/** -text
+ml/archive/** -text
+backend/model_bundle/** -text

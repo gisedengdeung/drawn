@@ -30,7 +30,10 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 import { Slider } from '@/components/ui/slider';
-import type { ShowcaseDesign } from '@/lib/drawn-types';
+import type { DesignDraft, DesignSummary, ShowcaseDesign } from '@/lib/drawn-types';
+import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
+import { PerformancePredictionPanel } from './performance-prediction-panel';
+import { formatValidSpeedRanges } from '@/lib/performance-client';
 import { formatHub, formatMetric } from '@/lib/drawn-types';
 import {
   DataDisclaimer,
@@ -58,38 +61,42 @@ const electricConfig = {
 
 type CurveMode = 'overview' | 'aero' | 'electric';
 
-export function SimulatorView({
-  designs,
-  selected,
-  onSelect,
-  onOpenLab,
-}: {
-  designs: ShowcaseDesign[];
-  selected: ShowcaseDesign;
+export function SimulatorView({ designs, selected, referenceDesign, draft, baseline, loading = false, loadError, onSelect, onOpenLab }: {
+  designs: Array<Pick<DesignSummary, 'id' | 'numPropellers' | 'numWings'>>;
+  selected: DesignSummary;
+  referenceDesign?: ShowcaseDesign | null;
+  draft: DesignDraft | null;
+  baseline: DesignDraft | null;
+  loading?: boolean;
+  loadError?: string | null;
   onSelect: (id: number) => void;
   onOpenLab: () => void;
 }) {
   const [speed, setSpeed] = useState(20);
+  return (
+    <section className="px-4 py-4 lg:px-6">
+      <SectionHeading eyebrow={`3단계 · 성능 확인 / Design #${selected.id}`} title="속도별 비행성능" description="현재 편집 설계의 AI 예측과 기준 설계의 원본 시뮬레이션을 구분해 확인하세요." actions={<><DesignSelector designs={designs} value={selected.id} onChange={onSelect} /><Button onClick={onOpenLab} className="bg-[#3182f6] text-white hover:bg-[#1b64da]"><ArrowLeft /> 파라미터 편집</Button></>} />
+      <PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} speed={speed} onSpeedChange={setSpeed} />
+      {referenceDesign ? <DatasetSimulation selected={referenceDesign} speed={speed} onSpeedChange={setSpeed} /> : (
+        <div className="mt-4 overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white">
+          <p className="p-4 text-xs text-[#6e6e73]">이 설계의 원본 STL·trim 곡선은 배포되지 않았습니다. 현재 편집 형상과 위 AI 예측을 확인할 수 있습니다.</p>
+          <div className="relative h-[440px]">{draft && baseline && <ParametricUavViewer draft={draft} baseline={baseline} />}</div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DatasetSimulation({ selected, speed, onSpeedChange }: { selected: ShowcaseDesign; speed: number; onSpeedChange: (speed: number) => void }) {
   const [curveMode, setCurveMode] = useState<CurveMode>('overview');
   const trim = selected.trim[speed];
   const validRows = useMemo(() => selected.trim.filter((row) => row.valid), [selected]);
+  const chartRows = selected.trim.map((row) => row.valid ? row : { speed: row.speed });
   const config = curveMode === 'overview' ? overviewConfig : curveMode === 'aero' ? aeroConfig : electricConfig;
 
   return (
-    <section className="px-4 py-4 lg:px-6">
-      <SectionHeading
-        eyebrow={`3단계 · 성능 확인 / Design #${selected.id}`}
-        title="속도별 비행성능"
-        description="속도를 움직이면 실제 trims.npy의 공력·추진·전력 값이 즉시 연결됩니다."
-        actions={
-          <>
-            <DesignSelector designs={designs} value={selected.id} onChange={onSelect} />
-            <Button onClick={onOpenLab} className="bg-[#3182f6] text-white hover:bg-[#1b64da]">
-              <ArrowLeft /> 파라미터 편집
-            </Button>
-          </>
-        }
-      />
+    <section className="min-w-0">
+      <div className="mb-3 mt-5"><h2 className="text-base font-semibold text-[#1d1d1f]">기준 설계 원본 시뮬레이션</h2><p className="mt-1 text-xs text-[#6e6e73]">AircraftVerse 기준 설계 #{selected.id}의 저장된 결과입니다. 현재 편집 내용은 위 AI 예측에만 반영됩니다.</p></div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <ModelStage
@@ -124,14 +131,14 @@ export function SimulatorView({
               min={0}
               max={50}
               step={1}
-              onValueChange={(value) => setSpeed(Number(Array.isArray(value) ? value[0] : value))}
+              onValueChange={(value) => onSpeedChange(Number(Array.isArray(value) ? value[0] : value))}
               className="mt-5 [&_[data-slot=slider-range]]:bg-[#3182f6] [&_[data-slot=slider-thumb]]:size-4 [&_[data-slot=slider-thumb]]:border-[#3182f6]"
               aria-label="비행 속도"
             />
             <div className="mt-2 flex justify-between font-mono text-[10px] text-[#6e6e73]"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span></div>
             <div className="mt-3 flex items-center justify-between rounded-lg bg-[#f5f5f7] px-3 py-2 text-[11px]">
-              <span className="text-[#6e6e73]">유효 trim 범위</span>
-              <span className="font-mono font-medium text-emerald-700">0–{validRows.at(-1)?.speed ?? 0} m/s</span>
+              <span className="text-[#6e6e73]">원본 유효 trim 구간</span>
+              <span className="font-mono font-medium text-emerald-700">{formatValidSpeedRanges(validRows.map((row) => row.speed))}</span>
             </div>
           </div>
 
@@ -145,7 +152,7 @@ export function SimulatorView({
                 <LiveMetric icon={<Zap />} label="전력" value={trim.power} unit="W" tone="violet" />
                 <LiveMetric icon={<BatteryCharging />} label="전류" value={trim.current} unit="A" tone="cyan" />
                 <LiveMetric icon={<Timer />} label="비행 시간" value={trim.flightTime} unit="sec" tone="green" />
-                <LiveMetric icon={<CircleGauge />} label="비행거리" value={trim.distance ? trim.distance / 1000 : null} unit="km" tone="amber" />
+                <LiveMetric icon={<CircleGauge />} label="비행거리" value={trim.distance != null ? trim.distance / 1000 : null} unit="km" tone="amber" />
               </div>
             ) : (
               <div className="grid min-h-56 place-items-center rounded-xl border border-amber-200 bg-amber-50 p-5 text-center">
@@ -164,7 +171,7 @@ export function SimulatorView({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2"><h2 className="font-semibold text-[#1d1d1f]">속도별 성능 곡선</h2><SourceBadge /></div>
-            <p className="mt-1 text-xs text-[#6e6e73]">유효한 AircraftVerse trim 행만 연결하며 세로선은 현재 속도입니다.</p>
+            <p className="mt-1 text-xs text-[#6e6e73]">원본 trim의 유효 구간을 표시합니다. 해석값이 없는 속도에서는 곡선이 끊어집니다.</p>
           </div>
           <div className="flex rounded-lg bg-[#f5f5f7] p-1">
             {([
@@ -178,7 +185,7 @@ export function SimulatorView({
         </div>
 
         <ChartContainer config={config} className="h-[300px] w-full aspect-auto" initialDimension={{ width: 900, height: 300 }}>
-          <LineChart data={validRows} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
+          <LineChart data={chartRows} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="#e2e8ec" />
             <XAxis dataKey="speed" tickLine={false} axisLine={false} tickMargin={10} unit="m/s" />
             <YAxis yAxisId="left" tickLine={false} axisLine={false} width={42} />
@@ -213,7 +220,7 @@ export function SimulatorView({
 }
 
 function LiveMetric({ icon, label, value, unit, tone }: { icon: React.ReactNode; label: string; value: number | null; unit: string; tone: 'cyan' | 'violet' | 'green' | 'amber' }) {
-  const available = value != null && Number.isFinite(value) && value !== 0;
+  const available = value != null && Number.isFinite(value);
   const toneClass = {
     cyan: 'bg-[#eff6ff] text-[#1b64da]',
     violet: 'bg-violet-50 text-violet-700',

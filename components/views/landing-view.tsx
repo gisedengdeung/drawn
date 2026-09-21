@@ -35,10 +35,12 @@ export function LandingView({
           </div>
           <div className="workspace-panel rounded-xl p-3">
             <Route className="mx-auto size-4 text-[#3182f6]" />
-            <p className="mt-2 font-mono text-sm font-semibold text-[#1d1d1f]">6단계</p>
+            <p className="mt-2 font-mono text-sm font-semibold text-[#1d1d1f]">4단계</p>
             <p className="mt-0.5 text-[10px] text-[#6e6e73]">선택부터 공유까지</p>
           </div>
         </div>
+
+        <p className="mt-4 text-xs leading-5 text-[#6e6e73]">설계 도우미 AI에서 부품 찾기·설계 개선·질문하기도 함께 이용해 보세요.</p>
 
         <Button onClick={onStart} className="mt-7 h-11 w-full bg-[#3182f6] text-base text-white hover:bg-[#1b64da]">
           시작하기 <ArrowRight />

@@ -1,0 +1,8 @@
+{
+  "design_splits_disjoint": true,
+  "all_6409_designs_covered": true,
+  "saved_checkpoint_inference_verified": true,
+  "prediction_rows_checked": 20,
+  "all_evaluation_predictions_finite": true,
+  "inference_device": "NVIDIA GeForce RTX 5070 Ti"
+}

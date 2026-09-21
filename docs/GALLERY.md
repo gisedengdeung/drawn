@@ -11,7 +11,9 @@
 
 ## 저장과 실행
 
-`npm run dev`로 실행합니다. `vite.config.ts`의 `GALLERY_DB` D1 바인딩을 사용하며, API가 처음 호출될 때 테이블을 생성합니다. 개발 환경의 SQLite 데이터는 `.wrangler/state/v3/d1/`에 저장되므로 서버 재시작 후에도 유지됩니다. 게시물은 브라우저 저장소에 의존하지 않아 같은 서버에 접속한 다른 브라우저에서도 조회할 수 있습니다.
+Docker Compose로 실행하며 Windows에서는 `powershell -ExecutionPolicy Bypass -File scripts/start-docker.ps1`을 사용합니다. 접속 주소는 `http://localhost:3000`입니다. 갤러리 API는 FastAPI가 처리하고 PostgreSQL의 `gallery_posts`에 저장합니다. 테이블은 Alembic migration으로 준비하며 Docker의 `postgres_data` 볼륨이 데이터를 보존합니다. 게시물은 브라우저 저장소에 의존하지 않아 같은 서버에 접속한 다른 브라우저에서도 조회할 수 있습니다.
+
+프런트만 개발할 때도 별도 FastAPI와 PostgreSQL이 필요합니다. `npm run dev`는 API 연결을 먼저 확인하며, 전체 실행 및 D1 이전 절차는 [FastAPI 실행·이전 안내](FASTAPI_MIGRATION.md)를 따릅니다.
 
 현재 편집 중인 작업은 브라우저의 `drawn-workspace-v1` 항목에 별도로 저장됩니다. 이 항목에는 설계 복사본과 가져온 원본 게시물 ID가 들어갑니다. 브라우저 저장소를 지우면 미게시 편집 내용은 사라집니다. 게시물 DB는 영향받지 않습니다.
 
@@ -19,7 +21,7 @@
 
 ## 공개 서비스로 배포할 때
 
-현재는 실행 중인 개발 서버 범위에서 공유됩니다. `localhost` 주소는 다른 컴퓨터에서 직접 접근할 수 없으며 인터넷 배포는 아직 수행하지 않았습니다. 실제 공개 배포에는 D1 데이터베이스를 생성하고 `vite.config.ts`의 개발용 `GALLERY_DB` ID를 실제 ID로 교체해야 합니다. 개발 DB는 자동으로 배포 DB로 복사되지 않습니다.
+현재 Compose는 `127.0.0.1:3000`에만 바인딩하며 인터넷 배포는 수행하지 않았습니다. `localhost` 주소는 다른 컴퓨터에서 직접 접근할 수 없습니다. 공개 배포에는 HTTPS 도메인, 서버의 `APP_BASE_URL`, PostgreSQL 저장소·백업 설정이 필요합니다. 기존 D1 데이터와 로컬 개발 데이터는 새 서버로 자동 복사되지 않습니다. 별도 export/import와 검증을 거칩니다.
 
 현재 닉네임은 사용자가 입력한 표시 이름이며 계정 인증이나 제작자 소유권 검증은 없습니다. 공개 운영에 필요한 계정, 게시물 관리·신고, 요청 제한은 별도 범위입니다. 가져오기 횟수는 가져오기 요청 횟수이며 고유 사용자 수가 아닙니다.
 

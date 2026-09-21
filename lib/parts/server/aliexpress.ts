@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { affiliatePromotionLink, canonicalProductLink } from '../links';
 import type { PartsConfig } from './config';
 import { fetchJson, list, PartsError, plain, positiveNumber, record, scalarText, type Fetcher } from './http';
 
@@ -6,6 +7,7 @@ export type SourceProduct = {
   productId: string;
   title: string;
   url: string;
+  promotionUrl?: string | null;
   price: number | null;
   currency: string;
   description: string;
@@ -21,30 +23,29 @@ export type SourceSku = {
   stock: number | null;
 };
 
-// TOP protocol: sorted nonempty key/value pairs, UTF-8 HMAC-MD5, uppercase hex.
-// This is deliberately not the different AliExpress IOP /rest SHA256 protocol.
-export function signTop(params: Record<string, string>, secret: string): string {
+function signParameters(params: Record<string, string>, secret: string, algorithm: 'md5' | 'sha256'): string {
   const text = Object.keys(params).filter((key) => key !== 'sign' && params[key] !== '')
     .sort().map((key) => key + params[key]).join('');
-  return createHmac('md5', secret).update(text, 'utf8').digest('hex').toUpperCase();
+  return createHmac(algorithm, secret).update(text, 'utf8').digest('hex').toUpperCase();
+}
+
+// Legacy TOP apps use HMAC-MD5 with a GMT+8 timestamp.
+export function signTop(params: Record<string, string>, secret: string): string {
+  return signParameters(params, secret, 'md5');
+}
+
+// IOP /sync dotted methods sign parameters without a /rest API path prefix.
+export function signAliExpressSync(params: Record<string, string>, secret: string): string {
+  return signParameters(params, secret, 'sha256');
 }
 
 export function productUrl(value: unknown, productId: string): string | null {
-  try {
-    const url = new URL(scalarText(value));
-    if (url.protocol !== 'https:' || !/(^|\.)aliexpress\.com$/i.test(url.hostname)) return null;
-    if (url.username || url.password || url.port) return null;
-    // A provider supplied item URL must identify the same product; reject redirect/search URLs.
-    if (!new RegExp(`^/item/(?:[^/]+/)?${productId}\\.html$`).test(url.pathname)) return null;
-    url.search = '';
-    url.hash = '';
-    return url.toString();
-  } catch { return null; }
+  return canonicalProductLink(value, productId);
 }
 
 function providerFailure(value: Record<string, unknown>): void {
   const code = scalarText(value.code ?? value.resp_code ?? value.rsp_code);
-  const detail = scalarText(value.sub_code) + ' ' + scalarText(value.msg ?? value.resp_msg ?? value.rsp_msg);
+  const detail = scalarText(value.sub_code) + ' ' + scalarText(value.msg ?? value.message ?? value.resp_msg ?? value.rsp_msg);
   if (!code || code === '0' || code === '200') return;
   if (/limit|frequen|throttl/i.test(code + detail) || ['7', '15', '429'].includes(code)) {
     throw new PartsError('rate_limited', 'AliExpress 조회 한도에 도달했습니다. 잠시 후 다시 시도하세요.');
@@ -67,7 +68,7 @@ export function parseAffiliateProducts(value: unknown): SourceProduct[] {
     const targetPrice = positiveNumber(entry.target_sale_price);
     const sourcePrice = positiveNumber(entry.sale_price);
     const currency = plain(targetPrice !== null ? entry.target_sale_price_currency : entry.sale_price_currency, 3).toUpperCase();
-    return [{ productId, title, url, price: /^[A-Z]{3}$/.test(currency) ? targetPrice ?? sourcePrice : null,
+    return [{ productId, title, url, promotionUrl: affiliatePromotionLink(entry.promotion_link, productId), price: /^[A-Z]{3}$/.test(currency) ? targetPrice ?? sourcePrice : null,
       currency: /^[A-Z]{3}$/.test(currency) ? currency : 'KRW', description: '', skus: [] }];
   });
 }
@@ -76,17 +77,20 @@ export class AliExpressProvider {
   constructor(private config: PartsConfig, private fetcher: Fetcher, private signal: AbortSignal, private now: () => number = Date.now) {}
 
   private async call(method: string, input: Record<string, string>, authorized = false): Promise<Record<string, unknown>> {
+    const iop = this.config.gateway === 'https://api-sg.aliexpress.com/sync';
     const params: Record<string, string> = {
-      method, app_key: this.config.appKey, sign_method: 'hmac',
-      timestamp: new Date(this.now() + 8 * 3_600_000).toISOString().slice(0, 19).replace('T', ' '),
+      method, app_key: this.config.appKey, sign_method: iop ? 'sha256' : 'hmac',
+      timestamp: iop ? String(this.now())
+        : new Date(this.now() + 8 * 3_600_000).toISOString().slice(0, 19).replace('T', ' '),
       format: 'json', v: '2.0', ...input,
     };
     if (authorized) params.session = this.config.accessToken;
-    params.sign = signTop(params, this.config.appSecret);
+    params.sign = iop ? signAliExpressSync(params, this.config.appSecret) : signTop(params, this.config.appSecret);
     const json = await fetchJson(this.config.gateway, {
       method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' },
       body: new URLSearchParams(params).toString(),
     }, this.fetcher, this.signal);
+    providerFailure(json);
     if (json.error_response) {
       providerFailure(record(json.error_response));
       throw new PartsError('error', 'AliExpress가 상품 조회를 처리하지 못했습니다.');
@@ -116,6 +120,25 @@ export class AliExpressProvider {
       ...(this.config.trackingId ? { tracking_id: this.config.trackingId } : {}),
     });
     return parseAffiliateProducts(result.products);
+  }
+
+  async promotionLinks(products: SourceProduct[]): Promise<SourceProduct[]> {
+    if (!this.config.trackingId || !products.length) return products;
+    const bounded = products.slice(0, 6);
+    const result = await this.call('aliexpress.affiliate.link.generate', {
+      promotion_link_type: '0', source_values: bounded.map((product) => product.url).join(','),
+      tracking_id: this.config.trackingId,
+    });
+    if (result.tracking_id && scalarText(result.tracking_id) !== this.config.trackingId) return products;
+    const links = new Map<string, string>();
+    for (const row of list(result.promotion_links, 'promotion_link')) {
+      // Bind every redirect to the exact source sent in this request, never array order.
+      const product = bounded.find((candidate) => candidate.url === row.source_value);
+      if (!product) continue;
+      const link = affiliatePromotionLink(row.promotion_link, product.productId);
+      if (link) links.set(product.productId, link);
+    }
+    return products.map((product) => ({ ...product, promotionUrl: links.get(product.productId) ?? product.promotionUrl ?? null }));
   }
 
   async skuDetails(product: SourceProduct): Promise<SourceProduct> {

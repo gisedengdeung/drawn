@@ -1,7 +1,8 @@
 'use client';
 
+/* oxlint-disable next/no-html-link-for-pages -- Standard anchors avoid Vinext's production Link module export bug. */
+
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { ArrowLeft, ExternalLink, Info, Loader2, Navigation } from 'lucide-react';
 
 import { DroneZonesMap } from '@/components/drone-zones-map';
@@ -46,12 +47,12 @@ export function FlightMapPage() {
       <header className="sticky top-0 z-40 border-b border-[#e5e5ea] bg-white/95 px-4 py-3 backdrop-blur-xl lg:px-6">
         <div className="mx-auto flex max-w-[1720px] flex-wrap items-center justify-between gap-3">
           <div>
-            <Link
+            <a
               href="/"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6e6e73] hover:text-[#3c3c43]"
             >
               <ArrowLeft className="size-3.5" /> 워크벤치로 돌아가기
-            </Link>
+            </a>
             <h1 className="mt-1.5 text-lg font-semibold text-[#1d1d1f]">
               드론 비행 공역 지도
             </h1>

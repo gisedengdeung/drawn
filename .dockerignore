@@ -1,0 +1,25 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+.next
+.vinext
+.wrangler
+dist
+outputs
+work
+data
+# Training sources, datasets and historical checkpoints stay outside runtime images.
+ml
+AircraftVerse_*
+*.tsbuildinfo
+*.log
+.pytest_cache
+backend/.pytest_cache
+backend/tests
+tests

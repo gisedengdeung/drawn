@@ -336,8 +336,7 @@ export type WorkspaceView =
   | 'simulator'
   | 'lab'
   | 'gallery'
-  | 'guide'
-  | 'parts';
+  | 'guide';
 
 export function formatMetric(value: number, digits = 1) {
   return new Intl.NumberFormat('ko-KR', {

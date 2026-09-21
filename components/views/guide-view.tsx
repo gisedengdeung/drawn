@@ -6,7 +6,6 @@ import {
   Beaker,
   Boxes,
   CircleGauge,
-  GitCompareArrows,
   Gauge,
   Image as ImageIcon,
   Layers3,
@@ -84,12 +83,10 @@ const PURPOSE_CLUSTERS = [
 ];
 
 const WORKFLOW_STEPS = [
-  { icon: Boxes, label: '1. 설계 선택', desc: '27,714개 중 마음에 드는 기체를 고릅니다. 카드에 나온 수치는 전부 실제 데이터예요.' },
+  { icon: Boxes, label: '1. 설계 선택', desc: '27,714개 중 마음에 드는 기체를 고릅니다. 조건에 맞는 후보를 찾고, 두 설계의 구성과 성능도 비교할 수 있어요.' },
   { icon: Beaker, label: '2. 파라미터 편집', desc: '팔 길이, 날개 크기 같은 치수를 직접 조정합니다. 성능 변화는 추정치로 함께 보여줘요.' },
   { icon: Activity, label: '3. 성능 확인', desc: '속도를 0~50m/s 사이에서 움직이며 항력·전력이 어떻게 변하는지 봅니다. 정밀 3D 12개에서만 가능해요.' },
-  { icon: GitCompareArrows, label: '4. 설계 비교', desc: '두 설계를 나란히 놓고 구성과 성능 차이를 비교합니다.' },
-  { icon: Sparkles, label: '5. 후보 탐색', desc: '"가볍게", "빠르게"처럼 원하는 조건만 정하면 데이터에서 딱 맞는 설계를 찾아줍니다.' },
-  { icon: Share2, label: '6. 공유 갤러리', desc: '완성한 설계를 게시하고, 다른 사람의 설계를 가져와 이어서 편집할 수 있어요.' },
+  { icon: Share2, label: '4. 공유 갤러리', desc: '완성한 설계를 게시하고, 다른 사람의 설계를 가져와 이어서 편집할 수 있어요.' },
 ] as const;
 
 const GLOSSARY = [
@@ -273,9 +270,9 @@ export function GuideView({ onBack }: { onBack: () => void }) {
 
       <section className="workspace-panel mt-4 rounded-2xl p-5">
         <h2 className="flex items-center gap-2 text-base font-semibold text-[#1d1d1f]">
-          <Route className="size-4 text-[#3182f6]" /> 전체 사용 흐름 (6단계)
+          <Route className="size-4 text-[#3182f6]" /> 전체 사용 흐름 (4개 작업 탭)
         </h2>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {WORKFLOW_STEPS.map(({ icon: Icon, label, desc }) => (
             <div key={label} className="rounded-xl bg-[#f5f5f7] p-3.5">
               <Icon className="size-4 text-[#3182f6]" />
@@ -283,6 +280,20 @@ export function GuideView({ onBack }: { onBack: () => void }) {
               <p className="mt-1 text-[11px] leading-4 text-[#6e6e73]">{desc}</p>
             </div>
           ))}
+        </div>
+        <div className="mt-4 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] p-4">
+          <p className="flex items-center gap-2 text-sm font-semibold text-[#1b64da]">
+            <Sparkles className="size-4" /> 설계 도우미 AI
+          </p>
+          <p className="mt-2 text-xs leading-5 text-[#6e6e73]">
+            작업 중 상단의 설계 도우미 AI를 열면 오른쪽 패널에서 부품 찾기·설계 개선·질문하기를 이용할 수 있어요.
+            부품 찾기는 현재 설계의 부품 목록과 수량을 확인하고, 상품 가격·구매 링크 비교부터 견적 저장·CSV 내보내기까지 이어집니다.
+            설계 개선에서는 원하는 목표에 맞는 후보와 변경안을 비교하고, 질문하기에서는 현재 설계의 수치와 근거를 확인해 보세요.
+          </p>
+          <p className="mt-2 text-xs leading-5 text-[#6e6e73]">
+            넓은 화면에서는 패널을 펼쳐 상품을 비교할 수 있고, 모바일에서는 하단 시트로 열립니다.
+            AI 실행과 개인 저장은 Google 로그인 후 이용하며, 화면을 닫거나 다른 모드를 보더라도 선택한 구매 후보는 유지돼요.
+          </p>
         </div>
       </section>
 

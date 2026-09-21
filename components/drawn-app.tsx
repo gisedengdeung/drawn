@@ -1,35 +1,38 @@
 'use client';
 
+/* oxlint-disable next/no-html-link-for-pages -- Standard anchors avoid Vinext's production Link module export bug. */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import Link from 'next/link';
 import {
   Activity,
   Beaker,
+  Bot,
   Boxes,
   CheckCircle2,
   HelpCircle,
   MapPin,
   Share2,
-  ShoppingBag,
 } from 'lucide-react';
 
+import { DrawnLogo } from '@/components/drawn-logo';
 import { CompareView } from '@/components/views/compare-view';
 import { DesignLabView } from '@/components/views/design-lab-view';
 import { ExplorerView } from '@/components/views/explorer-view';
 import { GuideView } from '@/components/views/guide-view';
 import { LandingView } from '@/components/views/landing-view';
 import { SimulatorView } from '@/components/views/simulator-view';
-import { PartsAgentView } from '@/components/views/parts-agent-view';
 import { useDesignWorkspace } from '@/hooks/use-design-workspace';
+import { useAgentWorkspace } from '@/hooks/use-agent-workspace';
+import { usePartsQuoteWorkspace } from '@/hooks/use-parts-quote-workspace';
+import { DesignAssistant } from '@/components/agent/design-assistant';
+import type { AgentMode, Evidence, Project } from '@/lib/agent/types';
 import { GalleryView } from '@/components/views/gallery-view';
 import { NearbyFlightSites } from '@/components/views/nearby-flight-sites';
-import { DrawnLogo } from '@/components/drawn-logo';
 import { isDesignDraft, workspaceStorageKey } from '@/lib/design-gallery';
 import { hydrateDraft } from '@/lib/design-draft';
 import type { GalleryDetail, WorkspaceSnapshot } from '@/lib/design-gallery';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -56,7 +59,6 @@ const navItems = [
   { id: 'lab' as const, step: 2, label: '파라미터 편집', short: '편집', icon: Beaker },
   { id: 'simulator' as const, step: 3, label: '성능 확인', short: '성능', icon: Activity },
   { id: 'gallery' as const, step: 4, label: '공유 갤러리', short: '공유', icon: Share2 },
-  { id: 'parts' as const, step: 5, label: '부품 agent', short: '부품 agent', icon: ShoppingBag },
 ];
 
 export function DrawnApp() {
@@ -74,6 +76,10 @@ export function DrawnApp() {
   const [workspaceNotice, setWorkspaceNotice] = useState('');
   const [initialPostId, setInitialPostId] = useState<string | null>(null);
   const [importVersion, setImportVersion] = useState(0);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantMode, setAssistantMode] = useState<AgentMode>('qa');
+  const [partsFocusRequest, setPartsFocusRequest] = useState(0);
+  const [focusedParameterId, setFocusedParameterId] = useState<string | undefined>();
 
   const saveWorkspace = useCallback((snapshot: WorkspaceSnapshot) => {
     setWorkspace(snapshot);
@@ -183,6 +189,45 @@ export function DrawnApp() {
     });
     return () => { active = false; };
   }, [activeWorkspace]);
+  const importAgentProject = useCallback((project: Project) => {
+    if (!dataset?.designs.some((design) => design.id === project.draft.baselineId)) {
+      throw new Error('현재 데이터셋에서 이 프로젝트의 기준 설계를 찾을 수 없습니다.');
+    }
+    saveWorkspace({ draft: hydrateDraft(project.draft), sourceId: project.sourceId });
+    setSelectedId(project.draft.baselineId);
+    setImportVersion((value) => value + 1);
+    setView('lab');
+    setFocusedParameterId(undefined);
+    setWorkspaceNotice(`「${project.title}」 v${project.revision}을 열었습니다.`);
+  }, [dataset, saveWorkspace]);
+  const agentWorkspace = useAgentWorkspace({
+    draft: currentDraft,
+    sourceId: activeWorkspace?.sourceId ?? null,
+    onImport: importAgentProject,
+  });
+  const partsQuote = usePartsQuoteWorkspace({
+    draft: currentDraft,
+    userId: agentWorkspace.session?.user?.id ?? null,
+    sessionLoading: agentWorkspace.sessionLoading,
+    projectId: agentWorkspace.project?.id ?? null,
+    runId: agentWorkspace.resultRunId,
+    agentQuote: agentWorkspace.result?.context.projectId === agentWorkspace.project?.id
+      ? agentWorkspace.displayQuote : null,
+    onSaveQuote: agentWorkspace.saveQuote,
+    blocked: agentWorkspace.running || agentWorkspace.busy,
+  });
+  const openPartsAssistant = () => { setAssistantMode('parts'); setAssistantOpen(true); };
+  const navigateEvidence = (target: NonNullable<Evidence['target']>) => {
+    // Historical parts evidence opens its quote without replacing the edited design.
+    if (target.view === 'parts') {
+      openPartsAssistant();
+      setPartsFocusRequest((value) => value + 1);
+      return;
+    }
+    if (target.designId != null && designById.has(target.designId)) setSelectedId(target.designId);
+    setFocusedParameterId(target.parameterId);
+    setView(target.view);
+  };
   const showcaseList = useMemo(
     () =>
       dataset?.summary.showcaseIds
@@ -250,6 +295,7 @@ export function DrawnApp() {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
+              <button type="button" onClick={() => setAssistantOpen((value) => !value)} aria-expanded={assistantOpen} aria-controls="design-assistant-panel" aria-label={assistantOpen ? '설계 도우미 AI 닫기' : '설계 도우미 AI 열기'} className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition ${assistantOpen ? 'bg-[#eff6ff] text-[#3182f6]' : 'bg-[#f5f5f7] text-[#3c3c43] hover:bg-[#ececee]'}`}><Bot className="size-4" /><span className="hidden sm:inline">설계 도우미 AI</span></button>
               <button
                 onClick={() => setView('guide')}
                 aria-current={view === 'guide' ? 'page' : undefined}
@@ -270,9 +316,10 @@ export function DrawnApp() {
                   <NearbyFlightSites />
                 </PopoverContent>
               </Popover>
-              <Link href="/packages" className="shrink-0 rounded-full bg-[#3182f6] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#1b64da]">
+              {/* Document navigation avoids the current Vinext production Link/prefetch export bug. */}
+              <a href="/packages" className="shrink-0 rounded-full bg-[#3182f6] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#1b64da]">
                 패키지 상품
-              </Link>
+              </a>
               <Badge variant="outline" className="hidden border-transparent bg-[#f5f5f7] text-[10px] text-[#6e6e73] sm:inline-flex">
                 파라메트릭 27,714개 · 원본 STL 12개
               </Badge>
@@ -305,7 +352,8 @@ export function DrawnApp() {
           </nav>
         </header>
 
-      <div className="mx-auto min-h-[calc(100vh-103px)] max-w-[1720px] min-w-0">
+      <div className="mx-auto flex max-w-[1720px] items-start">
+      <div className="min-h-[calc(100vh-103px)] min-w-0 flex-1">
           {workspaceNotice && <output className="m-4 flex items-start justify-between gap-4 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-3 text-xs text-[#1b64da]"><span>{workspaceNotice}</span><button type="button" onClick={() => setWorkspaceNotice('')} className="shrink-0 underline">닫기</button></output>}
           {error ? (
             <div className="m-6 rounded-2xl border border-rose-400/20 bg-rose-400/8 p-8 text-rose-200">
@@ -313,10 +361,12 @@ export function DrawnApp() {
               <p className="mt-2 text-sm text-rose-200/70">{error}</p>
             </div>
           ) : !dataset || showcaseList.length === 0 ? (
-            <LandingView
-              onStart={() => setView('explore')}
-              onOpenGuide={() => setView('guide')}
-            />
+            view === 'home' ? (
+              <LandingView
+                onStart={() => setView('explore')}
+                onOpenGuide={() => setView('guide')}
+              />
+            ) : <LoadingWorkspace />
           ) : (
             <>
               {view === 'explore' && (
@@ -333,20 +383,17 @@ export function DrawnApp() {
                   onOpenGuide={() => setView('guide')}
                 />
               )}
-              {view === 'simulator' && selectedDetail && (
+              {view === 'simulator' && selectedSummary && (
                 <SimulatorView
-                  designs={showcaseList}
-                  selected={selectedDetail}
+                  designs={labSelectorDesigns}
+                  selected={selectedSummary}
+                  referenceDesign={selectedDetail}
+                  draft={currentDraft}
+                  baseline={designWorkspace.baseline}
+                  loading={designWorkspace.loading}
+                  loadError={designWorkspace.loadError}
                   onSelect={setSelectedId}
                   onOpenLab={() => setView('lab')}
-                />
-              )}
-              {view === 'simulator' && !selectedDetail && (
-                <ShowcaseRequiredState
-                  title="성능 확인"
-                  selectedId={selectedId}
-                  defaultId={dataset.summary.defaultShowcaseId}
-                  onChoose={(id) => selectShowcaseAndOpen(id, 'simulator')}
                 />
               )}
               {view === 'lab' && selectedSummary && (
@@ -359,7 +406,8 @@ export function DrawnApp() {
                   onSelect={setSelectedId}
                   onOpenDatasetCompare={() => openCompareFromExplorer(selectedSummary.id)}
                   workspace={designWorkspace}
-                  onOpenParts={() => setView('parts')}
+                  focusedParameterId={focusedParameterId}
+                  onOpenParts={openPartsAssistant}
                 />
               )}
               {view === 'gallery' && (
@@ -370,15 +418,6 @@ export function DrawnApp() {
                   onReuse={reuseDesign}
                 />
               )}
-              <div hidden={view !== 'parts'}>
-                <PartsAgentView
-                  draft={designWorkspace.draft}
-                  disabled={designWorkspace.loading}
-                  selectedDesignId={selectedId}
-                  loadError={designWorkspace.loadError}
-                  onOpenDesign={() => setView('lab')}
-                />
-              </div>
               {view === 'guide' && <GuideView onBack={() => setView('explore')} />}
               {view === 'home' && (
                 <LandingView
@@ -390,6 +429,21 @@ export function DrawnApp() {
           )}
         </div>
 
+        <DesignAssistant
+          open={assistantOpen}
+          onOpenChange={setAssistantOpen}
+          mode={assistantMode}
+          onModeChange={setAssistantMode}
+          controller={agentWorkspace}
+          partsQuote={partsQuote}
+          partsFocusRequest={partsFocusRequest}
+          draftLoading={!dataset || designWorkspace.loading}
+          loadError={designWorkspace.loadError}
+          draft={currentDraft}
+          onNavigate={navigateEvidence}
+          onCompare={(id) => { if (selectedId != null) openCompare(selectedId, id); }}
+        />
+        </div>
         <Dialog open={compareDialogOpen && Boolean(dataset && comparePair)} onOpenChange={setCompareDialogOpen}>
           <DialogContent className="max-h-[92vh] overflow-y-auto border-[#e5e5ea] bg-[#f5f5f7] p-5 text-[#1d1d1f] sm:max-w-[1180px]">
             <DialogHeader>
@@ -426,36 +480,5 @@ function LoadingWorkspace() {
         </p>
       </div>
     </div>
-  );
-}
-
-function ShowcaseRequiredState({
-  title,
-  selectedId,
-  defaultId,
-  onChoose,
-}: {
-  title: string;
-  selectedId: number | null;
-  defaultId: number;
-  onChoose: (id: number) => void;
-}) {
-  return (
-    <section className="grid min-h-[calc(100vh-103px)] place-items-center px-6 text-center">
-      <div className="workspace-panel max-w-md rounded-2xl p-8">
-        <Boxes className="mx-auto mb-4 size-8 text-[#3182f6]" />
-        <h1 className="text-lg font-semibold text-[#1d1d1f]">{title}</h1>
-        <p className="mt-3 text-sm leading-6 text-[#6e6e73]">
-          Design #{selectedId ?? '—'}는 metadata-only 설계라 STL과 trim 곡선이
-          패키징되지 않았습니다.
-        </p>
-        <Button
-          onClick={() => onChoose(defaultId)}
-          className="mt-5 bg-[#3182f6] text-white hover:bg-[#1b64da]"
-        >
-          대표 설계 #{defaultId} 선택
-        </Button>
-      </div>
-    </section>
   );
 }

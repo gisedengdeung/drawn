@@ -1,7 +1,8 @@
 'use client';
 
+/* oxlint-disable next/no-html-link-for-pages -- Standard anchors avoid Vinext's production Link module export bug. */
+
 import { useState } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, Check, Package, Search, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { PackageContentsButton } from '@/components/package-contents-button';
@@ -77,8 +78,8 @@ export function PackageShop() {
     <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
       <header className="border-b border-[#e5e5ea] bg-white">
         <div className="mx-auto flex min-h-16 max-w-[1440px] flex-wrap items-center justify-between gap-3 px-5 py-3 lg:px-8">
-          <Link href="/" className="flex items-center gap-2 text-sm font-semibold"><Package className="size-6 text-[#3182f6]" /> Drawn <span className="ml-2 border-l pl-4 font-normal text-slate-500">패키지 스토어</span></Link>
-          <Link href="/" className="flex items-center gap-2 rounded-lg border border-[#e5e5ea] px-3 py-2 text-xs hover:bg-slate-50"><ArrowLeft className="size-4" /> 1–4단계로 돌아가기</Link>
+          <a href="/" className="flex items-center gap-2 text-sm font-semibold"><Package className="size-6 text-[#3182f6]" /> Drawn <span className="ml-2 border-l pl-4 font-normal text-slate-500">패키지 스토어</span></a>
+          <a href="/" className="flex items-center gap-2 rounded-lg border border-[#e5e5ea] px-3 py-2 text-xs hover:bg-slate-50"><ArrowLeft className="size-4" /> 1–4단계로 돌아가기</a>
         </div>
       </header>
       <div className="mx-auto max-w-[1440px] px-5 py-8 lg:px-8">
@@ -117,10 +118,10 @@ export function PackageShop() {
             ) : <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{filtered.map((product) => (
               <article key={product.id} className="overflow-hidden rounded-xl border border-[#e5e5ea] bg-white transition-shadow hover:shadow-md">
                 <div className="relative aspect-[4/3] bg-[#f5f5f7]">
-                  {product.id === 'mini' ? <Link href="/packages/mini" aria-label={`${product.name} 상세 보기`} className="block h-full"><Image src={miniDronePackage.image} alt="미니 드론과 조종기, 배터리로 구성한 패키지 예시" width={1254} height={1254} className="h-full w-full object-cover" /></Link> : <div className="h-full p-3"><PackageIllustration color={product.color} name={product.name} /></div>}
+                  {product.id === 'mini' ? <a href="/packages/mini" aria-label={`${product.name} 상세 보기`} className="block h-full"><Image src={miniDronePackage.image} alt="미니 드론과 조종기, 배터리로 구성한 패키지 예시" width={1254} height={1254} className="h-full w-full object-cover" /></a> : <div className="h-full p-3"><PackageIllustration color={product.color} name={product.name} /></div>}
                   <span className="pointer-events-none absolute left-3 top-3 rounded-md bg-[#3182f6] px-2 py-1 text-[11px] font-semibold text-white">{product.tag}</span><span className="pointer-events-none absolute bottom-2 right-3 rounded bg-white/85 px-1 text-[10px] text-slate-600">구성 예시 이미지</span>
                 </div>
-                <div className="p-5"><span className="rounded bg-[#eff6ff] px-2 py-1 text-[11px] font-medium text-[#3182f6]">{product.purpose}</span><h2 className="mt-3 text-base font-semibold tracking-tight">{product.id === 'mini' ? <Link href="/packages/mini" className="underline-offset-4 hover:text-[#3182f6] hover:underline">{product.name}</Link> : product.name}</h2><p className="mt-2 text-xs leading-5 text-slate-500">{product.description}</p>
+                <div className="p-5"><span className="rounded bg-[#eff6ff] px-2 py-1 text-[11px] font-medium text-[#3182f6]">{product.purpose}</span><h2 className="mt-3 text-base font-semibold tracking-tight">{product.id === 'mini' ? <a href="/packages/mini" className="underline-offset-4 hover:text-[#3182f6] hover:underline">{product.name}</a> : product.name}</h2><p className="mt-2 text-xs leading-5 text-slate-500">{product.description}</p>
                   <p className="mt-5 text-xs text-slate-400">개별 구매 합계 <del>{won(product.original)}</del></p><div className="mt-1 flex items-baseline gap-2"><span className="text-lg font-bold text-rose-600">{Math.round((1 - product.price / product.original) * 100)}%</span><strong className="text-2xl tracking-tight">{won(product.price)}</strong></div><p className="mt-1 text-xs font-medium text-[#3182f6]">패키지로 {won(product.original - product.price)} 절약</p>
                   <div className="mt-5 border-t border-[#e5e5ea] pt-3"><PackageContentsButton name={product.name} items={product.items} /></div>
                 </div>

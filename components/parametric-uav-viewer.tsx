@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 import { Button } from '@/components/ui/button';
 import type {
@@ -454,17 +455,28 @@ function buildAircraft(
   };
 
   const fuselage = draft.fuselage;
+  // The source geometry is a flat rounded box, not an ellipsoid. A sphere scaled
+  // to the same numbers reads as an egg and hides the wide, low proportion.
+  const bodyWidth = Math.max(fuselage.length * SCALE, 1.3);
+  const bodyHeight = Math.max(fuselage.verticalDiameter * SCALE, 0.68);
+  const bodyDepth = Math.max(fuselage.horizontalDiameter * SCALE, 1.56);
   const body = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 36, 22),
+    new RoundedBoxGeometry(
+      bodyWidth,
+      bodyHeight,
+      bodyDepth,
+      4,
+      Math.min(bodyWidth, bodyHeight, bodyDepth) * 0.24,
+    ),
     material('fuselage', 0.22),
   );
   body.name = 'fuselage';
-  body.scale.set(
-    Math.max(fuselage.length * SCALE * 0.5, 0.65),
-    Math.max(fuselage.verticalDiameter * SCALE * 0.5, 0.34),
-    Math.max(fuselage.horizontalDiameter * SCALE * 0.5, 0.78),
-  );
-  body.position.y = 0.42;
+  // Source STLs stack the craft as landing gear → rotors → arm deck → fuselage,
+  // with the fuselage floor meeting the arms exactly. Fixed constants used to
+  // flatten all of that into one plane regardless of the body's real height.
+  const deckY = Math.max(bodyHeight * 0.7, fuselage.floorHeight * SCALE * 3, 0.5);
+  const bodyCenterY = deckY + bodyHeight * 0.5;
+  body.position.y = bodyCenterY;
   group.add(body);
 
   const topologyCount = Math.max(
@@ -488,7 +500,7 @@ function buildAircraft(
     ),
     material('structure', 0.34),
   );
-  hub.position.y = 0.78;
+  hub.position.y = deckY;
   group.add(hub);
 
   const usableSegments = draft.segments.filter((segment) => segment.length > 0);
@@ -514,6 +526,7 @@ function buildAircraft(
   const armResult = buildHierarchicalArms(
     draft,
     fallbackLength,
+    deckY,
     (start, end, nodeType) => {
       const radius = /MountBracket/i.test(nodeType)
         ? 0.035
@@ -541,12 +554,12 @@ function buildAircraft(
     const length = Math.max(fallbackLength * SCALE, 1.45);
     const start = new THREE.Vector3(
       Math.cos(angle) * 0.25,
-      0.73,
+      deckY,
       Math.sin(angle) * 0.25,
     );
     const end = new THREE.Vector3(
       Math.cos(angle) * length,
-      0.76,
+      deckY,
       Math.sin(angle) * length,
     );
     group.add(cylinderBetween(start, end, 0.075, material('structure', 0.4)));
@@ -564,15 +577,33 @@ function buildAircraft(
       ),
       material('propulsion', 0.55),
     );
-    motor.position.copy(end).add(new THREE.Vector3(0, 0.15, 0));
+    // Motors hang below the arm end and the rotor disc sits under them, matching
+    // the source silhouette where the widest band is below the arm deck.
+    motor.position.copy(end).add(new THREE.Vector3(0, -0.14, 0));
     motor.name = `motor-${index + 1}`;
     group.add(motor);
 
     const { diameter, pitch } = propellerSize(propulsionGroup?.propellerType);
     const rotor = new THREE.Group();
     rotor.name = `propeller-${index + 1}`;
-    rotor.position.copy(end).add(new THREE.Vector3(0, 0.34, 0));
+    rotor.position.copy(end).add(new THREE.Vector3(0, -0.3, 0));
     const rotorRadius = diameter * 25.4 * SCALE * 0.5;
+    // Blades alone read as thin sticks. The swept disc restores the silhouette
+    // the source STL shows, where rotor discs dominate the top view.
+    const sweep = new THREE.Mesh(
+      new THREE.CylinderGeometry(rotorRadius, rotorRadius, 0.015, 44),
+      new THREE.MeshStandardMaterial({
+        color: ghost ? 0x7f96a2 : colors.propulsion,
+        transparent: true,
+        opacity: ghost ? 0.05 : 0.16,
+        depthWrite: false,
+        roughness: 0.65,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      }),
+    );
+    sweep.name = `propeller-sweep-${index + 1}`;
+    rotor.add(sweep);
     const hubCap = new THREE.Mesh(
       new THREE.CylinderGeometry(0.09, 0.11, 0.1, 18),
       material('propulsion', 0.3),
@@ -615,25 +646,28 @@ function buildAircraft(
       material('energy', 0.05),
     );
     battery.name = `battery-envelope-${index + 1}`;
+    // Batteries ride inside the fuselage, so they follow its centre height.
     battery.position.set(
       (index - (batteryTypes.length - 1) / 2) * 0.65,
-      0.45,
+      bodyCenterY,
       0,
     );
     group.add(battery);
   });
 
   if (draft.payload.mass > 0) {
+    const payloadHeight = 0.28 + Math.min(draft.payload.mass, 10) * 0.025;
     const payload = new THREE.Mesh(
-      new THREE.BoxGeometry(
-        0.52,
-        0.28 + Math.min(draft.payload.mass, 10) * 0.025,
-        0.4,
-      ),
+      new THREE.BoxGeometry(0.52, payloadHeight, 0.4),
       material('payload', 0.08),
     );
     payload.name = 'payload';
-    payload.position.set(0, -0.18, 0);
+    // Cargo hangs under the fuselage floor rather than at a fixed depth.
+    payload.position.set(
+      0,
+      bodyCenterY - bodyHeight * 0.5 - payloadHeight * 0.5,
+      0,
+    );
     group.add(payload);
   }
 
@@ -697,7 +731,11 @@ function buildAircraft(
         material('layout', 0.1),
       );
       sensor.name = `sensor-${name}`;
-      sensor.position.set(position.x * SCALE, 0.75, position.y * SCALE);
+      sensor.position.set(
+        position.x * SCALE,
+        bodyCenterY + bodyHeight * 0.5,
+        position.y * SCALE,
+      );
       group.add(sensor);
     });
 
@@ -768,6 +806,7 @@ export function analyzeParametricHierarchy(
 function buildHierarchicalArms(
   draft: DesignDraft,
   fallbackLength: number,
+  deckY: number,
   addArm: (start: THREE.Vector3, end: THREE.Vector3, nodeType: string) => void,
 ) {
   const graph = createHierarchyGraph(draft);
@@ -782,10 +821,15 @@ function buildHierarchicalArms(
   let maxReach = 0;
   let rootInstance = 0;
 
+  // `_Sym` hubs mirror every second copy instead of repeating one bend around
+  // the circle. Source STLs show three mirrored pairs, not six equal spokes.
+  const mirrored = /_Sym/i.test(draft.topology);
+
   const walk = (
     segment: DesignSegment,
     start: THREE.Vector3,
     direction: number,
+    mirror: number,
   ) => {
     const traced = traceSegment(
       segment,
@@ -793,6 +837,7 @@ function buildHierarchicalArms(
       direction,
       fallbackLength,
       addArm,
+      mirror,
     );
     maxReach = Math.max(maxReach, Math.hypot(traced.end.x, traced.end.z));
     if (isPropellerSegment(segment)) {
@@ -806,19 +851,33 @@ function buildHierarchicalArms(
     }
     const children = graph.children.get(segment.path) ?? [];
     childInstances(segment, children).forEach((child) => {
-      walk(child.segment, traced.end, traced.outgoing + child.angleOffset);
+      walk(
+        child.segment,
+        traced.end,
+        traced.outgoing + child.angleOffset * mirror,
+        mirror,
+      );
     });
   };
 
+  const step = (Math.PI * 2) / instanceCount;
+  const half = Math.ceil(instanceCount / 2);
+
   for (let rootIndex = 0; rootIndex < graph.roots.length; rootIndex += 1) {
     for (let copy = 0; copy < repetitions[rootIndex]; copy += 1) {
-      const direction = (rootInstance / instanceCount) * Math.PI * 2;
+      // A symmetric hub folds one half onto the other across a single axis, so
+      // the second half reuses the first half's slots with the bend reversed.
+      const side = !mirrored || rootInstance < half ? 1 : -1;
+      const slot = side === 1 ? rootInstance : rootInstance - half;
+      const direction = mirrored
+        ? side * (slot + 0.5) * step
+        : rootInstance * step;
       const start = new THREE.Vector3(
         Math.cos(direction) * 0.25,
-        0.73,
+        deckY,
         Math.sin(direction) * 0.25,
       );
-      walk(graph.roots[rootIndex], start, direction);
+      walk(graph.roots[rootIndex], start, direction, side);
       rootInstance += 1;
     }
   }
@@ -967,7 +1026,9 @@ function traceSegment(
   direction: number,
   fallbackLength: number,
   addArm: (start: THREE.Vector3, end: THREE.Vector3, nodeType: string) => void,
+  mirror = 1,
 ) {
+  const bendAngle = (segment.angle || 0) * mirror;
   const requestedLength = Math.max(
     (segment.length || fallbackLength) * SCALE,
     0.35,
@@ -990,7 +1051,7 @@ function traceSegment(
     );
     addArm(start, elbow, segment.nodeType);
     if (segment.nodeType === 'DoubleBendSegment') {
-      outgoing = direction + THREE.MathUtils.degToRad(segment.angle || 0);
+      outgoing = direction + THREE.MathUtils.degToRad(bendAngle);
       end = new THREE.Vector3(
         elbow.x + Math.cos(outgoing) * secondLength,
         elbow.y,
@@ -1015,7 +1076,7 @@ function traceSegment(
     );
     addArm(start, end, segment.nodeType);
     if (/^(?:BendSegment|SidewaysBendSegment)$/i.test(segment.nodeType)) {
-      outgoing = direction + THREE.MathUtils.degToRad(segment.angle || 0);
+      outgoing = direction + THREE.MathUtils.degToRad(bendAngle);
     }
   }
 

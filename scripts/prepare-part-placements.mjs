@@ -309,6 +309,57 @@ export function extractPlacements(stepPath) {
   return { parts, assemblies: assembly.size, placements: placement.size };
 }
 
+// ------------------------------------------------- 조립 그래프 · 부품 카탈로그
+
+/**
+ * `design_low_level.json`은 부품 사이의 실제 연결과 각 부품의 카탈로그 모델을
+ * 담고 있다. STEP의 조립 트리는 평평해서(모든 부품이 UAV_ASM의 직계 자식)
+ * "이 팔의 바깥쪽이 어디까지인가"를 알 수 없는데, 이 파일에는 그 답이 있다.
+ * 기하로 추측하면 가지가 갈라지는 설계에서 형제 가지를 서로 집어간다.
+ */
+function extractAssembly(lowLevelPath, parts, typeNames, modelNames) {
+  if (!fs.existsSync(lowLevelPath)) return null;
+  const low = JSON.parse(fs.readFileSync(lowLevelPath, 'utf8'));
+  if (!Array.isArray(low.connections) || !Array.isArray(low.components)) return null;
+
+  const indexOfName = new Map();
+  parts.forEach((part, index) => indexOfName.set(part.n.toUpperCase(), index));
+
+  // 연결은 부품 이름 대신 배열 인덱스로 적는다. 이름을 그대로 두면 27,714개
+  // 합계가 86MB인데, 인덱스로는 10MB 아래로 떨어진다.
+  const links = [];
+  const seen = new Set();
+  for (const edge of low.connections) {
+    const from = indexOfName.get(String(edge.from_ci ?? '').toUpperCase());
+    const to = indexOfName.get(String(edge.to_ci ?? '').toUpperCase());
+    if (from === undefined || to === undefined || from === to) continue;
+    const key = from < to ? `${from}:${to}` : `${to}:${from}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    links.push([from, to]);
+  }
+
+  // 부품 종류와 카탈로그 모델. 같은 값이 수없이 반복되므로 사전으로 빼고
+  // 부품마다 번호만 남긴다.
+  const types = new Array(parts.length).fill(-1);
+  const models = new Array(parts.length).fill(-1);
+  const idOf = (dictionary, value) => {
+    if (!value) return -1;
+    const existing = dictionary.get(value);
+    if (existing !== undefined) return existing;
+    const next = dictionary.size;
+    dictionary.set(value, next);
+    return next;
+  };
+  for (const component of low.components) {
+    const index = indexOfName.get(String(component.component_instance ?? '').toUpperCase());
+    if (index === undefined) continue;
+    types[index] = idOf(typeNames, component.component_type);
+    models[index] = idOf(modelNames, component.component_choice);
+  }
+  return { links, types, models };
+}
+
 // ---------------------------------------------------------------- 실행
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
@@ -320,6 +371,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
   console.log(`Designs to process: ${wanted.length.toLocaleString()}`);
 
   const stepPathOf = new Map();
+  const lowLevelPathOf = new Map();
+  const typeNames = new Map();
+  const modelNames = new Map();
+  let withAssembly = 0;
   for (const root of roots) {
     for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
       const match = entry.isDirectory() && entry.name.match(/^design_(\d+)$/);
@@ -327,7 +382,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
       const id = Number(match[1]);
       if (stepPathOf.has(id)) continue;
       const candidate = path.join(root, entry.name, 'Geom.stp');
-      if (fs.existsSync(candidate)) stepPathOf.set(id, candidate);
+      if (fs.existsSync(candidate)) {
+        stepPathOf.set(id, candidate);
+        lowLevelPathOf.set(id, path.join(root, entry.name, 'design_low_level.json'));
+      }
     }
   }
   console.log(`STEP files found: ${stepPathOf.size.toLocaleString()}`);
@@ -369,7 +427,17 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
       // 예전에는 한 칸 여유를 뒀는데, 딱 하나만 어긋난 설계 572개가 그 틈으로
       // 조용히 통과했다. 조립관계와 배치는 1:1이어야 한다.
       if (placements < assemblies) throw new Error(`placements ${placements} < assemblies ${assemblies}`);
-      group[id] = parts;
+      const assemblyGraph = extractAssembly(
+        lowLevelPathOf.get(id) ?? '',
+        parts,
+        typeNames,
+        modelNames,
+      );
+      if (assemblyGraph) withAssembly += 1;
+      // p=부품, c=연결(부품 인덱스 쌍), t=부품 종류, m=카탈로그 모델
+      group[id] = assemblyGraph
+        ? { p: parts, c: assemblyGraph.links, t: assemblyGraph.types, m: assemblyGraph.models }
+        : { p: parts };
       totalParts += parts.length;
       processed += 1;
     } catch (error) {
@@ -386,6 +454,25 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
   }
   flush();
 
+  // 부품 종류와 카탈로그 모델은 같은 값이 수없이 반복되므로 사전으로 빼둔다.
+  // 그룹 파일에는 번호만 남아 용량이 크게 줄고, 브라우저는 이 파일 하나만
+  // 더 받으면 된다.
+  const byIndex = (dictionary) => {
+    const list = new Array(dictionary.size);
+    for (const [name, index] of dictionary) list[index] = name;
+    return list;
+  };
+  const catalogPath = path.join(projectRoot, 'public', 'data', 'part-catalog.json');
+  fs.writeFileSync(
+    catalogPath,
+    JSON.stringify({ types: byIndex(typeNames), models: byIndex(modelNames) }),
+  );
+  console.log(
+    `
+Part catalog: ${typeNames.size} types · ${modelNames.size} models · ` +
+    `${(fs.statSync(catalogPath).size / 1024).toFixed(0)} KB`,
+  );
+
   const files = fs.readdirSync(outputDir).filter((f) => f.endsWith('.json'));
   const bytes = files.reduce((sum, f) => sum + fs.statSync(path.join(outputDir, f)).size, 0);
   console.log('');
@@ -393,6 +480,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
     `Wrote ${processed.toLocaleString()} designs · ${totalParts.toLocaleString()} parts · ` +
     `${files.length.toLocaleString()} files · ${(bytes / 1024 / 1024).toFixed(1)} MB`,
   );
+  console.log(`With assembly graph: ${withAssembly.toLocaleString()}`);
   if (missing) console.log(`Missing STEP files: ${missing.toLocaleString()}`);
   if (failed) console.log(`Failed to parse: ${failed.toLocaleString()}`);
   console.log(`Elapsed: ${((Date.now() - started) / 1000 / 60).toFixed(1)} min`);

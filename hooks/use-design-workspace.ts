@@ -3,14 +3,45 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type {
+  AssemblyInfo,
   ComponentCatalogs,
+  DesignAssembly,
   DesignDraft,
   DesignSummary,
-  PartPlacement,
+  PartCatalog,
   PartPlacementGroup,
   ShowcaseDesign,
 } from '@/lib/drawn-types';
 import { catalogsFromShowcases, cloneDraft, draftFromDesign, hydrateDraft } from '@/lib/design-draft';
+
+/**
+ * 저장 형식(인덱스 번호)을 뷰어가 쓰기 좋은 이름 기반 지도로 푼다.
+ * 연결은 양방향으로 넣는다 — 그래프를 어느 쪽으로도 걸을 수 있어야 한다.
+ */
+function resolveAssembly(
+  entry: DesignAssembly | undefined,
+  catalog: PartCatalog,
+): AssemblyInfo | null {
+  if (!entry?.p?.length) return null;
+  const placements = entry.p;
+  const neighbours = new Map<string, string[]>();
+  for (const [from, to] of entry.c ?? []) {
+    const a = placements[from]?.n;
+    const b = placements[to]?.n;
+    if (!a || !b) continue;
+    neighbours.set(a, [...(neighbours.get(a) ?? []), b]);
+    neighbours.set(b, [...(neighbours.get(b) ?? []), a]);
+  }
+  const typeOf = new Map<string, string>();
+  const modelOf = new Map<string, string>();
+  placements.forEach((part, index) => {
+    const type = catalog.types[entry.t?.[index] ?? -1];
+    const model = catalog.models[entry.m?.[index] ?? -1];
+    if (type) typeOf.set(part.n, type);
+    if (model) modelOf.set(part.n, model);
+  });
+  return { placements, neighbours, typeOf, modelOf };
+}
 
 /** prepare-part-placements.mjs가 설계 20개씩 한 파일로 묶는다. */
 const PLACEMENT_GROUP_SIZE = 20;
@@ -25,7 +56,7 @@ type LoadedWorkspace = {
   baseline: DesignDraft;
   draft: DesignDraft | null;
   catalogs: ComponentCatalogs;
-  placements: PartPlacement[] | null;
+  placements: AssemblyInfo | null;
   loadError: string | null;
 };
 
@@ -35,7 +66,7 @@ export type DesignWorkspace = {
   setDraft: Dispatch<SetStateAction<DesignDraft | null>>;
   catalogs: ComponentCatalogs;
   /** 원본 STEP 부품 배치. 없으면 뷰어가 기존 추정 배치로 되돌아간다. */
-  placements: PartPlacement[] | null;
+  placements: AssemblyInfo | null;
   loading: boolean;
   loadError: string | null;
 };
@@ -66,10 +97,15 @@ export function useDesignWorkspace(
     };
     const group = String(Math.floor(selected.id / PLACEMENT_GROUP_SIZE)).padStart(4, '0');
     // Placements only sharpen the preview, so a miss must not fail the whole load.
-    const readPlacements = read<PartPlacementGroup>(
-      `/data/part-placements/group-${group}.json`,
-      'placements',
-    ).then((groups) => groups[String(selected.id)] ?? null).catch(() => null);
+    // 조립 그래프와 부품 카탈로그를 함께 읽어 뷰어가 쓰는 형태로 푼다.
+    const readPlacements = Promise.all([
+      read<PartPlacementGroup>(`/data/part-placements/group-${group}.json`, 'placements'),
+      read<PartCatalog>('/data/part-catalog.json', 'part catalog').catch(
+        () => ({ types: [], models: [] }) as PartCatalog,
+      ),
+    ])
+      .then(([groups, catalog]) => resolveAssembly(groups[String(selected.id)], catalog))
+      .catch(() => null);
 
     void Promise.all([
       read<Record<string, DesignDraft>>(`/data/design-trees/shard-${shard}.json`, '설계 트리를 불러오지 못했습니다.'),

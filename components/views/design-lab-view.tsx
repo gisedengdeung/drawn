@@ -356,7 +356,7 @@ export function DesignLabView({
               {loading ? (
                 <div className="absolute inset-0 grid place-items-center text-sm text-[#6e6e73]">Design #{selected.id} 형상을 불러오는 중…</div>
               ) : draft && baseline && mode === 'parametric-preview' ? (
-                <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} placements={placements} />
+                <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} />
               ) : packagedReference ? (
                 <StlViewer src={packagedReference.modelPath} />
               ) : (

@@ -8,6 +8,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 
 import { Button } from '@/components/ui/button';
 import type {
+  AssemblyInfo,
   DesignDraft,
   DesignSegment,
   ParameterGroup,
@@ -40,8 +41,8 @@ type ParametricUavViewerProps = {
   forceVectors?: ForceVectors;
   showForces?: boolean;
   syncGroup?: string;
-  /** 원본 STEP 부품 배치. 주어지면 topology 추정 대신 이 좌표를 쓴다. */
-  placements?: PartPlacement[] | null;
+  /** 원본 STEP 부품 배치와 조립 그래프. 주어지면 topology 추정 대신 이것을 쓴다. */
+  assembly?: AssemblyInfo | null;
 };
 
 type ViewerRuntime = {
@@ -72,7 +73,7 @@ export function ParametricUavViewer({
   forceVectors,
   showForces = false,
   syncGroup,
-  placements = null,
+  assembly = null,
 }: ParametricUavViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ViewerRuntime | null>(null);
@@ -326,12 +327,12 @@ export function ParametricUavViewer({
         disposeObject(runtime.forces);
       }
 
-      runtime.model = buildAircraft(draft, changedGroup, false, placements, baseline);
+      runtime.model = buildAircraft(draft, changedGroup, false, assembly, baseline);
       runtime.model.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
       runtime.scene.add(runtime.model);
 
       if (showGhost && baseline) {
-        runtime.ghost = buildAircraft(baseline, null, true, placements);
+        runtime.ghost = buildAircraft(baseline, null, true, assembly);
         runtime.ghost.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
         runtime.scene.add(runtime.ghost);
       } else {
@@ -363,7 +364,7 @@ export function ParametricUavViewer({
     draft,
     forceVectors,
     pitchDegrees,
-    placements,
+    assembly,
     showForces,
     showGhost,
     retryKey,
@@ -466,11 +467,11 @@ function buildAircraft(
   draft: DesignDraft,
   changedGroup: ParameterGroup | null,
   ghost: boolean,
-  placements: PartPlacement[] | null = null,
+  assembly: AssemblyInfo | null = null,
   baseline: DesignDraft | null = null,
 ) {
-  if (placements?.length) {
-    return buildFromPlacements(draft, placements, changedGroup, ghost, baseline);
+  if (assembly?.placements.length) {
+    return buildFromPlacements(draft, assembly, changedGroup, ghost, baseline);
   }
 
   const group = new THREE.Group();
@@ -774,11 +775,12 @@ function buildAircraft(
  */
 function buildFromPlacements(
   draft: DesignDraft,
-  placements: PartPlacement[],
+  assembly: AssemblyInfo,
   changedGroup: ParameterGroup | null,
   ghost: boolean,
   baseline: DesignDraft | null = null,
 ) {
+  const { placements, neighbours } = assembly;
   const group = new THREE.Group();
   group.name = ghost ? 'baseline-ghost' : 'editable-aircraft';
   const makeMaterial = createMaterialFactory(changedGroup, ghost);
@@ -840,13 +842,10 @@ function buildFromPlacements(
     }
   });
 
-  // 길이 반영도 끝 세그먼트에만 건다. 중간 팔을 늘리면 그 바깥의 가지 전체가
-  // 따라 나가야 하는데 지금은 그걸 가릴 수 없어, 늘린 만큼 틈만 생긴다.
+  // 조립 그래프로 바깥쪽을 정확히 가릴 수 있게 되어, 중간 팔도 늘릴 수 있다.
   const lengthByKey = new Map(baseLengthByKey);
   for (const [index, key] of armIdOfSegment) {
-    if (draft.segments[index].motorType) {
-      lengthByKey.set(key, draft.segments[index].length);
-    }
+    lengthByKey.set(key, draft.segments[index].length);
   }
   const fallbackArmLength =
     draft.segments.reduce((sum, segment) => sum + segment.length, 0) /
@@ -872,10 +871,21 @@ function buildFromPlacements(
    * 오프셋 슬라이더가 기준에서 얼마나 움직였는지를 팔 축 둘레의 회전과
    * 축 방향 이동으로 옮긴다. 아래에서 채운다.
    */
-  const rotorAdjustment = new Map<
-    string,
-    { pivot: THREE.Vector3; spin: THREE.Quaternion; slide: THREE.Vector3 }
-  >();
+  type Adjustment = { pivot: THREE.Vector3; spin: THREE.Quaternion; slide: THREE.Vector3 };
+  const rotorAdjustment = new Map<string, Adjustment[]>();
+  /** 안쪽 보정부터 차례로 적용한다. 바깥 팔은 안쪽 팔을 따라 이미 움직인 상태다. */
+  const applyChain = (point: THREE.Vector3, chain: Adjustment[] | undefined) => {
+    if (!chain) return point;
+    for (const step of chain) {
+      point.sub(step.pivot).applyQuaternion(step.spin).add(step.pivot).add(step.slide);
+    }
+    return point;
+  };
+  const spinChain = (vector: THREE.Vector3, chain: Adjustment[] | undefined) => {
+    if (!chain) return vector;
+    for (const step of chain) vector.applyQuaternion(step.spin);
+    return vector;
+  };
 
   /**
    * 부품이 기록한 로컬 축 세 개를 장면 좌표로 돌려준다. STEP은 X축과 Z축만
@@ -883,28 +893,16 @@ function buildFromPlacements(
    * 대응하므로, 축 하나를 고르면 그 방향의 길이도 함께 알 수 있다.
    */
   const basisOf = (part: PartPlacement) => {
-    const spin = rotorAdjustment.get(part.n)?.spin;
-    const x = toDirection(part.x);
-    const z = toDirection(part.z);
-    if (spin) {
-      x.applyQuaternion(spin);
-      z.applyQuaternion(spin);
-    }
+    const chain = rotorAdjustment.get(part.n);
+    const x = spinChain(toDirection(part.x), chain);
+    const z = spinChain(toDirection(part.z), chain);
     const y = new THREE.Vector3().crossVectors(z, x).normalize();
     return [x, y, z] as const;
   };
 
   /** 보정이 걸린 부품은 회전 뒤 이동까지 적용한 자리에 놓인다. */
-  const placeOf = (part: PartPlacement) => {
-    const point = toScene(part.p);
-    const adjust = rotorAdjustment.get(part.n);
-    if (!adjust) return point;
-    return point
-      .sub(adjust.pivot)
-      .applyQuaternion(adjust.spin)
-      .add(adjust.pivot)
-      .add(adjust.slide);
-  };
+  const placeOf = (part: PartPlacement) =>
+    applyChain(toScene(part.p), rotorAdjustment.get(part.n));
 
   /** 부품의 로컬 축을 그대로 회전으로 옮긴다. 세 축이 직교하므로 항상 정회전이다. */
   const orientToBasis = (mesh: THREE.Object3D, part: PartPlacement) => {
@@ -974,30 +972,36 @@ function buildFromPlacements(
     );
   };
 
-  // 모터가 달린 끝 세그먼트만 다룬다. STEP 조립 트리가 평평해서 형제 가지를
-  // 가를 수 없고, 중간 세그먼트의 각도는 가지 전체를 돌려야 하므로 지금은
-  // 범위를 벗어난다. 끝의 로터 뭉치는 기하적으로 분명해 안전하게 옮길 수 있다.
-  const flangeParts = placements.filter((item) => /^FLANGE/i.test(item.n));
-  const motorParts = placements.filter((item) => /^MOTOR/i.test(item.n));
-  const propellerParts = placements.filter((item) => /^PROPELLER/i.test(item.n));
-  const nearestTo = (candidates: PartPlacement[], point: THREE.Vector3, reach: number) => {
-    let best: PartPlacement | null = null;
-    let nearest = reach * reach;
-    for (const candidate of candidates) {
-      const gap = toScene(candidate.p).distanceToSquared(point);
-      if (gap < nearest) {
-        nearest = gap;
-        best = candidate;
+  // 조립 그래프를 허브에서 바깥으로 걸어, 팔 하나의 "바깥쪽"이 어디까지인지
+  // 정확히 가린다. 예전에는 기하로 추측했는데 가지가 갈라지는 설계(전체의
+  // 59%)에서 형제 가지를 서로 집어갔다.
+  const hubName = placements.find((item) => /^MAINHUB/i.test(item.n))?.n;
+  const outboardOf = (armName: string) => {
+    const reached = new Set<string>([armName]);
+    if (hubName) reached.add(hubName);
+    const queue = [armName];
+    const found: string[] = [];
+    while (queue.length) {
+      const current = queue.pop() as string;
+      for (const next of neighbours.get(current) ?? []) {
+        if (reached.has(next)) continue;
+        reached.add(next);
+        found.push(next);
+        queue.push(next);
       }
     }
-    return best;
+    return found;
   };
 
-  const claimed = new Map<string, number>();
-  for (const [index, key] of armIdOfSegment) {
+  const byName = new Map(placements.map((item) => [item.n, item]));
+  // 안쪽 세그먼트부터 처리해야 바깥 팔의 회전축이 이미 움직인 자리에서 잡힌다.
+  const editedSegments = [...armIdOfSegment]
+    .filter(([index]) => reference.segments[index])
+    .sort((a, b) => (draft.segments[a[0]].depth ?? 0) - (draft.segments[b[0]].depth ?? 0));
+
+  for (const [index, key] of editedSegments) {
     const segment = draft.segments[index];
     const original = reference.segments[index];
-    if (!segment.motorType || !original) continue;
     const turn = THREE.MathUtils.degToRad(segment.angle - original.angle);
     const shift =
       (segment.offset - original.offset + (segment.length - original.length)) * SCALE;
@@ -1005,28 +1009,21 @@ function buildFromPlacements(
     const armPattern = new RegExp(`^(?:ROTATED|FIXEDROTATION)?ARM_${key}_`, 'i');
     for (const arm of placements) {
       if (!armPattern.test(arm.n)) continue;
-      const centre = toScene(arm.p);
-      const along = toDirection(arm.z);
-      // 팔 축의 두 방향 중 허브에서 멀어지는 쪽을 고른다.
+      const chain = rotorAdjustment.get(arm.n);
+      // 이 팔 자신이 안쪽 보정으로 이미 옮겨졌다면, 축과 피벗도 같이 옮긴다.
+      const centre = applyChain(toScene(arm.p), chain);
+      const along = spinChain(toDirection(arm.z), chain);
       if (along.dot(centre) < 0) along.negate();
       const half = ((arm.s?.[2] ?? baseLengthByKey.get(key) ?? 200) * SCALE) / 2;
       const end = centre.clone().addScaledVector(along, half);
-      const spin = new THREE.Quaternion().setFromAxisAngle(along, turn);
-      const slide = along.clone().multiplyScalar(shift);
-      const reach = half + 2;
-      const flange = nearestTo(flangeParts, end, reach);
-      const motor = nearestTo(motorParts, end, reach);
-      const propeller = motor
-        ? nearestTo(propellerParts, toScene(motor.p), 2)
-        : null;
-      if (!motor) continue;
-      // 팔 하나에 여러 로터가 잡히는 설계가 있어, 끝에서 더 가까운 팔이 이긴다.
-      const span = toScene(motor.p).distanceTo(end);
-      const held = claimed.get(motor.n);
-      if (held && held <= span) continue;
-      claimed.set(motor.n, span);
-      for (const moved of [flange, motor, propeller]) {
-        if (moved) rotorAdjustment.set(moved.n, { pivot: end, spin, slide });
+      const step: Adjustment = {
+        pivot: end,
+        spin: new THREE.Quaternion().setFromAxisAngle(along, turn),
+        slide: along.clone().multiplyScalar(shift),
+      };
+      for (const moved of outboardOf(arm.n)) {
+        if (!byName.has(moved)) continue;
+        rotorAdjustment.set(moved, [...(rotorAdjustment.get(moved) ?? []), step]);
       }
     }
   }

@@ -98,7 +98,13 @@ function discoverDataRoots() {
 
 // ---------------------------------------------------------------- STEP 파싱
 
-const refsOf = (text) => [...text.matchAll(/#(\d+)/g)].map((m) => Number(m[1]));
+// 엔티티 이름표에 `'Placement #30579'` 같은 문자열이 들어 있어서, 따옴표 안을
+// 가리지 않으면 그 숫자를 진짜 참조로 읽는다. 그 번호가 실재하는 조립관계와
+// 겹치면 배치가 엉뚱한 부품에게 넘어간다(27,714개 중 573개에서 발생).
+// STEP 문자열은 작은따옴표를 `''`로 이스케이프하므로 그 규칙대로 걷어낸다.
+const STEP_STRING = /'[^']*(?:''[^']*)*'/g;
+const refsOf = (text) =>
+  [...text.replace(STEP_STRING, "''").matchAll(/#(\d+)/g)].map((m) => Number(m[1]));
 
 function lastTuple(text) {
   const groups = text.match(/\(([^()]*)\)/g);
@@ -360,7 +366,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
     try {
       const { parts, assemblies, placements } = extractPlacements(stepPath);
       if (!parts.length) throw new Error('no parts extracted');
-      if (placements < assemblies - 1) throw new Error(`placements ${placements} < assemblies ${assemblies}`);
+      // 예전에는 한 칸 여유를 뒀는데, 딱 하나만 어긋난 설계 572개가 그 틈으로
+      // 조용히 통과했다. 조립관계와 배치는 1:1이어야 한다.
+      if (placements < assemblies) throw new Error(`placements ${placements} < assemblies ${assemblies}`);
       group[id] = parts;
       totalParts += parts.length;
       processed += 1;

@@ -800,11 +800,42 @@ function buildFromPlacements(
     new THREE.Vector3(v[0], v[2], -v[1]).normalize();
 
   // `ARM_55703_1`의 55703은 sourceParameters의 `Arm_55703_Length`와 같은 키다.
-  // 길이는 draft에서 읽으므로 슬라이더 편집이 그대로 반영된다.
-  const lengthByKey = new Map<string, number>();
+  const baseLengthByKey = new Map<string, number>();
   for (const [name, value] of draft.sourceParameters) {
     const key = name.match(/^(?:Rotated|FixedRotation)?Arm_(\d+)_Length$/i)?.[1];
-    if (key && typeof value === 'number') lengthByKey.set(key, value);
+    if (key && typeof value === 'number') baseLengthByKey.set(key, value);
+  }
+
+  // 팔 슬라이더는 draft.segments에 쓰는데 이 경로는 STEP 좌표를 그대로 써서
+  // 편집이 형상에 전혀 나타나지 않았다. 세그먼트를 팔 부품과 이어 준다.
+  // 기준 길이가 sourceParameters의 값과 같은 팔이 그 세그먼트의 팔이다.
+  const armIdOfSegment = new Map<number, string>();
+  const taken = new Set<string>();
+  draft.segments.forEach((_, index) => {
+    const original = (reference.segments[index] ?? draft.segments[index]).length;
+    let best: string | null = null;
+    let error = Infinity;
+    for (const [key, value] of baseLengthByKey) {
+      if (taken.has(key)) continue;
+      const gap = Math.abs(value - original);
+      if (gap < error) {
+        error = gap;
+        best = key;
+      }
+    }
+    if (best && error < Math.max(original * 0.02, 1)) {
+      armIdOfSegment.set(index, best);
+      taken.add(best);
+    }
+  });
+
+  // 길이 반영도 끝 세그먼트에만 건다. 중간 팔을 늘리면 그 바깥의 가지 전체가
+  // 따라 나가야 하는데 지금은 그걸 가릴 수 없어, 늘린 만큼 틈만 생긴다.
+  const lengthByKey = new Map(baseLengthByKey);
+  for (const [index, key] of armIdOfSegment) {
+    if (draft.segments[index].motorType) {
+      lengthByKey.set(key, draft.segments[index].length);
+    }
   }
   const fallbackArmLength =
     draft.segments.reduce((sum, segment) => sum + segment.length, 0) /
@@ -826,15 +857,42 @@ function buildFromPlacements(
     size ? Math.max(...size) : null;
 
   /**
+   * 팔 끝 로터 뭉치(플랜지·모터·프로펠러)에 적용할 보정. 장착 각도와 결합
+   * 오프셋 슬라이더가 기준에서 얼마나 움직였는지를 팔 축 둘레의 회전과
+   * 축 방향 이동으로 옮긴다. 아래에서 채운다.
+   */
+  const rotorAdjustment = new Map<
+    string,
+    { pivot: THREE.Vector3; spin: THREE.Quaternion; slide: THREE.Vector3 }
+  >();
+
+  /**
    * 부품이 기록한 로컬 축 세 개를 장면 좌표로 돌려준다. STEP은 X축과 Z축만
    * 적으므로 Y축은 외적으로 복원한다. 실측 치수 `s`는 이 순서와 같은 축에
    * 대응하므로, 축 하나를 고르면 그 방향의 길이도 함께 알 수 있다.
    */
   const basisOf = (part: PartPlacement) => {
+    const spin = rotorAdjustment.get(part.n)?.spin;
     const x = toDirection(part.x);
     const z = toDirection(part.z);
+    if (spin) {
+      x.applyQuaternion(spin);
+      z.applyQuaternion(spin);
+    }
     const y = new THREE.Vector3().crossVectors(z, x).normalize();
     return [x, y, z] as const;
+  };
+
+  /** 보정이 걸린 부품은 회전 뒤 이동까지 적용한 자리에 놓인다. */
+  const placeOf = (part: PartPlacement) => {
+    const point = toScene(part.p);
+    const adjust = rotorAdjustment.get(part.n);
+    if (!adjust) return point;
+    return point
+      .sub(adjust.pivot)
+      .applyQuaternion(adjust.spin)
+      .add(adjust.pivot)
+      .add(adjust.slide);
   };
 
   /**
@@ -916,11 +974,68 @@ function buildFromPlacements(
     );
   };
 
+  // 모터가 달린 끝 세그먼트만 다룬다. STEP 조립 트리가 평평해서 형제 가지를
+  // 가를 수 없고, 중간 세그먼트의 각도는 가지 전체를 돌려야 하므로 지금은
+  // 범위를 벗어난다. 끝의 로터 뭉치는 기하적으로 분명해 안전하게 옮길 수 있다.
+  const flangeParts = placements.filter((item) => /^FLANGE/i.test(item.n));
+  const motorParts = placements.filter((item) => /^MOTOR/i.test(item.n));
+  const propellerParts = placements.filter((item) => /^PROPELLER/i.test(item.n));
+  const nearestTo = (candidates: PartPlacement[], point: THREE.Vector3, reach: number) => {
+    let best: PartPlacement | null = null;
+    let nearest = reach * reach;
+    for (const candidate of candidates) {
+      const gap = toScene(candidate.p).distanceToSquared(point);
+      if (gap < nearest) {
+        nearest = gap;
+        best = candidate;
+      }
+    }
+    return best;
+  };
+
+  const claimed = new Map<string, number>();
+  for (const [index, key] of armIdOfSegment) {
+    const segment = draft.segments[index];
+    const original = reference.segments[index];
+    if (!segment.motorType || !original) continue;
+    const turn = THREE.MathUtils.degToRad(segment.angle - original.angle);
+    const shift =
+      (segment.offset - original.offset + (segment.length - original.length)) * SCALE;
+    if (!turn && !shift) continue;
+    const armPattern = new RegExp(`^(?:ROTATED|FIXEDROTATION)?ARM_${key}_`, 'i');
+    for (const arm of placements) {
+      if (!armPattern.test(arm.n)) continue;
+      const centre = toScene(arm.p);
+      const along = toDirection(arm.z);
+      // 팔 축의 두 방향 중 허브에서 멀어지는 쪽을 고른다.
+      if (along.dot(centre) < 0) along.negate();
+      const half = ((arm.s?.[2] ?? baseLengthByKey.get(key) ?? 200) * SCALE) / 2;
+      const end = centre.clone().addScaledVector(along, half);
+      const spin = new THREE.Quaternion().setFromAxisAngle(along, turn);
+      const slide = along.clone().multiplyScalar(shift);
+      const reach = half + 2;
+      const flange = nearestTo(flangeParts, end, reach);
+      const motor = nearestTo(motorParts, end, reach);
+      const propeller = motor
+        ? nearestTo(propellerParts, toScene(motor.p), 2)
+        : null;
+      if (!motor) continue;
+      // 팔 하나에 여러 로터가 잡히는 설계가 있어, 끝에서 더 가까운 팔이 이긴다.
+      const span = toScene(motor.p).distanceTo(end);
+      const held = claimed.get(motor.n);
+      if (held && held <= span) continue;
+      claimed.set(motor.n, span);
+      for (const moved of [flange, motor, propeller]) {
+        if (moved) rotorAdjustment.set(moved.n, { pivot: end, spin, slide });
+      }
+    }
+  }
+
   for (const part of placements) {
     const name = part.n.toUpperCase();
     if (name === 'UAV_ASM' || name === 'ORIENT') continue;
-    const position = toScene(part.p);
-    const axis = toDirection(part.z);
+    const position = placeOf(part);
+    const axis = basisOf(part)[2];
 
     if (name.startsWith('MOTOR')) {
       const size = measured(part);
@@ -1002,6 +1117,14 @@ function buildFromPlacements(
         material('structure', 0.4),
       );
       bar.position.copy(position);
+      // 좌표가 형상의 중심이라 길이를 늘리면 허브 쪽으로도 자란다. 뿌리를
+      // 그대로 두고 바깥으로만 뻗도록 늘어난 만큼의 절반을 밀어 준다.
+      const grown = length - (baseLengthByKey.get(key) ?? length / SCALE) * SCALE;
+      if (grown) {
+        const outward = axis.clone();
+        if (outward.dot(position) < 0) outward.negate();
+        bar.position.addScaledVector(outward, grown / 2);
+      }
       orient(bar, axis);
       bar.name = part.n;
       group.add(bar);

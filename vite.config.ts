@@ -12,9 +12,20 @@ const { d1, r2 } = hostingConfig;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
-const localDataDirectory = fileURLToPath(new URL('./data', import.meta.url))
-  .replaceAll('\\', '/')
-  .replace(/\/$/, '');
+const normalizeDirectory = (relative: string) =>
+  fileURLToPath(new URL(relative, import.meta.url))
+    .replaceAll('\\', '/')
+    .replace(/\/$/, '');
+
+const localDataDirectory = normalizeDirectory('./data');
+// Generated web assets change only when a preprocessing script runs, but they
+// outnumber the source files by more than forty to one. Watching them slowed
+// dev startup and HMR without ever producing a useful reload.
+const generatedAssetDirectories = [
+  normalizeDirectory('./public/data'),
+  normalizeDirectory('./public/models'),
+];
+const unwatchedDirectories = [localDataDirectory, ...generatedAssetDirectories];
 
 const localBindingConfig = {
   main: 'vinext/server/fetch-handler',
@@ -56,12 +67,14 @@ export default defineConfig(async () => {
     css: { postcss: { plugins: [tailwindcss()] } },
     server: {
       watch: {
-        // Raw datasets and local caches must not enter the development watcher.
+        // Raw datasets, local caches and generated web assets must not enter
+        // the development watcher.
         ignored: (filePath: string) => {
           const normalized = filePath.replaceAll('\\', '/');
-          return (
-            normalized === localDataDirectory ||
-            normalized.startsWith(`${localDataDirectory}/`)
+          return unwatchedDirectories.some(
+            (directory) =>
+              normalized === directory ||
+              normalized.startsWith(`${directory}/`),
           );
         },
         ...(isCodexSeatbeltSandbox

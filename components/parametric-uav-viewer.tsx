@@ -11,6 +11,7 @@ import type {
   DesignDraft,
   DesignSegment,
   ParameterGroup,
+  PartPlacement,
 } from '@/lib/drawn-types';
 
 export type ForceVectors = {
@@ -39,6 +40,8 @@ type ParametricUavViewerProps = {
   forceVectors?: ForceVectors;
   showForces?: boolean;
   syncGroup?: string;
+  /** 원본 STEP 부품 배치. 주어지면 topology 추정 대신 이 좌표를 쓴다. */
+  placements?: PartPlacement[] | null;
 };
 
 type ViewerRuntime = {
@@ -69,6 +72,7 @@ export function ParametricUavViewer({
   forceVectors,
   showForces = false,
   syncGroup,
+  placements = null,
 }: ParametricUavViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ViewerRuntime | null>(null);
@@ -322,12 +326,12 @@ export function ParametricUavViewer({
         disposeObject(runtime.forces);
       }
 
-      runtime.model = buildAircraft(draft, changedGroup, false);
+      runtime.model = buildAircraft(draft, changedGroup, false, placements);
       runtime.model.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
       runtime.scene.add(runtime.model);
 
       if (showGhost && baseline) {
-        runtime.ghost = buildAircraft(baseline, null, true);
+        runtime.ghost = buildAircraft(baseline, null, true, placements);
         runtime.ghost.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
         runtime.scene.add(runtime.ghost);
       } else {
@@ -359,6 +363,7 @@ export function ParametricUavViewer({
     draft,
     forceVectors,
     pitchDegrees,
+    placements,
     showForces,
     showGhost,
     retryKey,
@@ -422,37 +427,56 @@ export function ParametricUavViewer({
   );
 }
 
-function buildAircraft(
-  draft: DesignDraft,
+const COLORS = {
+  structure: 0x167f91,
+  fuselage: 0xe7eef1,
+  propulsion: 0x233a49,
+  energy: 0x6d5bd0,
+  wing: 0x82c4ce,
+  payload: 0xe7a33e,
+  layout: 0x1c9b62,
+} as const;
+
+type MaterialFactory = (
+  kind: keyof typeof COLORS,
+  metalness?: number,
+) => THREE.MeshStandardMaterial;
+
+function createMaterialFactory(
   changedGroup: ParameterGroup | null,
   ghost: boolean,
-) {
-  const group = new THREE.Group();
-  group.name = ghost ? 'baseline-ghost' : 'editable-aircraft';
-
-  const colors = {
-    structure: 0x167f91,
-    fuselage: 0xe7eef1,
-    propulsion: 0x233a49,
-    energy: 0x6d5bd0,
-    wing: 0x82c4ce,
-    payload: 0xe7a33e,
-    layout: 0x1c9b62,
-  } as const;
-  const material = (kind: keyof typeof colors, metalness = 0.12) => {
+): MaterialFactory {
+  return (kind, metalness = 0.12) => {
     const active = changedGroup === kind;
     return new THREE.MeshStandardMaterial({
-      color: ghost ? 0x7f96a2 : colors[kind],
+      color: ghost ? 0x7f96a2 : COLORS[kind],
       roughness: ghost ? 0.8 : 0.48,
       metalness: ghost ? 0 : metalness,
       transparent: ghost,
       opacity: ghost ? 0.16 : 1,
       depthWrite: !ghost,
-      emissive: !ghost && active ? colors[kind] : 0x000000,
+      emissive: !ghost && active ? COLORS[kind] : 0x000000,
       emissiveIntensity: !ghost && active ? 0.28 : 0,
       side: THREE.DoubleSide,
     });
   };
+}
+
+function buildAircraft(
+  draft: DesignDraft,
+  changedGroup: ParameterGroup | null,
+  ghost: boolean,
+  placements: PartPlacement[] | null = null,
+) {
+  if (placements?.length) {
+    return buildFromPlacements(draft, placements, changedGroup, ghost);
+  }
+
+  const group = new THREE.Group();
+  group.name = ghost ? 'baseline-ghost' : 'editable-aircraft';
+
+  const colors = COLORS;
+  const material = createMaterialFactory(changedGroup, ghost);
 
   const fuselage = draft.fuselage;
   // The source geometry is a flat rounded box, not an ellipsoid. A sphere scaled
@@ -738,6 +762,297 @@ function buildAircraft(
       );
       group.add(sensor);
     });
+
+  return group;
+}
+
+/**
+ * 원본 STEP 좌표로 기체를 조립한다. 부품 이름과 위치·방향이 모두 주어지므로
+ * topology 문자열로 배치를 추정하던 경로(buildAircraft의 나머지)를 대신한다.
+ * STEP은 Z가 높이인 mm 좌표계라 Three.js 축(Y가 높이)으로 바꿔 넣는다.
+ */
+function buildFromPlacements(
+  draft: DesignDraft,
+  placements: PartPlacement[],
+  changedGroup: ParameterGroup | null,
+  ghost: boolean,
+) {
+  const group = new THREE.Group();
+  group.name = ghost ? 'baseline-ghost' : 'editable-aircraft';
+  const makeMaterial = createMaterialFactory(changedGroup, ghost);
+  // A design carries up to 126 parts. Building one material per part pushed
+  // hundreds of shader programs at the GPU and made the viewer sluggish.
+  const materialCache = new Map<string, THREE.MeshStandardMaterial>();
+  const material: MaterialFactory = (kind, metalness = 0.12) => {
+    const key = `${kind}:${metalness}`;
+    const cached = materialCache.get(key);
+    if (cached) return cached;
+    const created = makeMaterial(kind, metalness);
+    materialCache.set(key, created);
+    return created;
+  };
+
+  const toScene = (v: readonly number[]) =>
+    new THREE.Vector3(v[0] * SCALE, v[2] * SCALE, -v[1] * SCALE);
+  const toDirection = (v: readonly number[]) =>
+    new THREE.Vector3(v[0], v[2], -v[1]).normalize();
+
+  // `ARM_55703_1`의 55703은 sourceParameters의 `Arm_55703_Length`와 같은 키다.
+  // 길이는 draft에서 읽으므로 슬라이더 편집이 그대로 반영된다.
+  const lengthByKey = new Map<string, number>();
+  for (const [name, value] of draft.sourceParameters) {
+    const key = name.match(/^(?:Rotated|FixedRotation)?Arm_(\d+)_Length$/i)?.[1];
+    if (key && typeof value === 'number') lengthByKey.set(key, value);
+  }
+  const fallbackArmLength =
+    draft.segments.reduce((sum, segment) => sum + segment.length, 0) /
+      Math.max(draft.segments.length, 1) || 300;
+
+  const orient = (mesh: THREE.Object3D, axis: THREE.Vector3) => {
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
+  };
+
+  const propeller = propellerSize(draft.propulsionGroups[0]?.propellerType);
+  const catalogRotorRadius = (propeller.diameter * 25.4 * SCALE) / 2;
+  const catalogMotorRadius = motorRadius(draft.propulsionGroups[0]?.motorType);
+  const wingGeometry = draft.wings[0];
+  // 실측 치수가 있으면 그것을 쓴다. 같은 설계 안에서도 프로펠러 지름이
+  // 부품마다 다르므로 카탈로그 문자열 하나로는 맞출 수 없다.
+  const measured = (part: PartPlacement) =>
+    part.s ? (part.s.map((v) => v * SCALE) as [number, number, number]) : null;
+  const largestOf = (size: [number, number, number] | null) =>
+    size ? Math.max(...size) : null;
+
+  /** 실측 상자에서 가장 긴 변이 놓인 축을 장면 좌표로 돌려준다. */
+  const spanAxisOf = (part: PartPlacement) => {
+    const x = toDirection(part.x);
+    const z = toDirection(part.z);
+    if (!part.s) return x;
+    const longest = part.s.indexOf(Math.max(...part.s));
+    if (longest === 2) return z;
+    // 로컬 Y축은 나머지 두 축의 외적으로 얻는다.
+    if (longest === 1) return new THREE.Vector3().crossVectors(z, x).normalize();
+    return x;
+  };
+
+  for (const part of placements) {
+    const name = part.n.toUpperCase();
+    if (name === 'UAV_ASM' || name === 'ORIENT') continue;
+    const position = toScene(part.p);
+    const axis = toDirection(part.z);
+
+    if (name.startsWith('MOTOR')) {
+      const size = measured(part);
+      const radius = size
+        ? Math.max(size[0], size[1]) / 2
+        : catalogMotorRadius;
+      const height = size ? Math.max(size[2], 0.1) : 0.28;
+      const motor = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius * 0.93, height, 24),
+        material('propulsion', 0.55),
+      );
+      motor.position.copy(position);
+      motor.name = part.n;
+      group.add(motor);
+      continue;
+    }
+
+    if (name.startsWith('PROPELLER')) {
+      const size = measured(part);
+      // 프로펠러는 회전면이 납작한 원판이라 가장 긴 변이 지름이다.
+      const rotorRadius = (largestOf(size) ?? catalogRotorRadius * 2) / 2;
+      const rotor = new THREE.Group();
+      rotor.name = part.n;
+      rotor.position.copy(position);
+      orient(rotor, axis);
+      rotor.add(
+        new THREE.Mesh(
+          new THREE.CylinderGeometry(rotorRadius, rotorRadius, 0.015, 44),
+          new THREE.MeshStandardMaterial({
+            color: ghost ? 0x7f96a2 : COLORS.propulsion,
+            transparent: true,
+            opacity: ghost ? 0.05 : 0.16,
+            depthWrite: false,
+            roughness: 0.65,
+            metalness: 0,
+            side: THREE.DoubleSide,
+          }),
+        ),
+      );
+      for (let blade = 0; blade < 2; blade += 1) {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(
+            rotorRadius * 1.84,
+            0.035 + propeller.pitch * 0.0015,
+            Math.max(0.085, rotorRadius * 0.17),
+          ),
+          material('propulsion', 0.18),
+        );
+        mesh.rotation.y = blade === 0 ? 0.07 : Math.PI / 2 - 0.07;
+        rotor.add(mesh);
+      }
+      group.add(rotor);
+      continue;
+    }
+
+    if (/^(?:ROTATEDARM|FIXEDROTATIONARM|ARM)_/.test(name)) {
+      const key = part.n.match(/_(\d+)_/)?.[1] ?? '';
+      const length = (lengthByKey.get(key) ?? fallbackArmLength) * SCALE;
+      const bar = new THREE.Mesh(
+        new THREE.BoxGeometry(0.1, Math.max(length, 0.2), 0.05),
+        material('structure', 0.4),
+      );
+      bar.position.copy(position);
+      orient(bar, axis);
+      bar.name = part.n;
+      group.add(bar);
+      continue;
+    }
+
+    if (/^(?:BEND|BRANCH|CROSS|FLANGE)/.test(name)) {
+      const joint = new THREE.Mesh(
+        new THREE.BoxGeometry(0.13, 0.13, 0.13),
+        material('structure', 0.34),
+      );
+      joint.position.copy(position);
+      joint.name = part.n;
+      group.add(joint);
+      continue;
+    }
+
+    if (name.startsWith('MAINHUB')) {
+      const hub = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.34, 0.24, 18),
+        material('structure', 0.34),
+      );
+      hub.position.copy(position);
+      hub.name = part.n;
+      group.add(hub);
+      continue;
+    }
+
+    if (name.startsWith('FUSELAGE')) {
+      const size = measured(part);
+      const width = size ? size[0] : Math.max(draft.fuselage.length * SCALE, 0.4);
+      const height = size ? size[2] : Math.max(draft.fuselage.verticalDiameter * SCALE, 0.25);
+      const depth = size ? size[1] : Math.max(draft.fuselage.horizontalDiameter * SCALE, 0.5);
+      const body = new THREE.Mesh(
+        new RoundedBoxGeometry(width, height, depth, 4, Math.min(width, height, depth) * 0.24),
+        material('fuselage', 0.22),
+      );
+      body.position.copy(position);
+      body.name = part.n;
+      group.add(body);
+      continue;
+    }
+
+    if (name.startsWith('BATTERY')) {
+      const scale = THREE.MathUtils.clamp(
+        Math.cbrt(batteryInfo(draft.energy.batteryTypes[0]).capacity / 5000),
+        0.7,
+        1.7,
+      );
+      const battery = new THREE.Mesh(
+        new THREE.BoxGeometry(0.9 * scale, 0.32 * scale, 0.5 * scale),
+        material('energy', 0.05),
+      );
+      battery.position.copy(position);
+      battery.name = part.n;
+      group.add(battery);
+      continue;
+    }
+
+    if (name === 'CARGOCASE') {
+      // The source splits the centre body into fuselage plus this case. Skipping
+      // it left the middle visibly thinner than the STL.
+      const size = measured(part);
+      const width = size ? size[0] : Math.max(draft.fuselage.length * SCALE * 0.8, 0.35);
+      const height = size ? size[2] : Math.max(draft.fuselage.verticalDiameter * SCALE * 0.5, 0.2);
+      const depth = size ? size[1] : Math.max(draft.fuselage.horizontalDiameter * SCALE * 0.55, 0.4);
+      const caseMesh = new THREE.Mesh(
+        new RoundedBoxGeometry(width, height, depth, 3, Math.min(width, height, depth) * 0.2),
+        material('payload', 0.1),
+      );
+      caseMesh.position.copy(position);
+      caseMesh.name = part.n;
+      group.add(caseMesh);
+      continue;
+    }
+
+    if (name.startsWith('CARGO')) {
+      const size = 0.28 + Math.min(draft.payload.mass, 10) * 0.025;
+      const cargo = new THREE.Mesh(
+        new THREE.BoxGeometry(0.52, size, 0.4),
+        material('payload', 0.08),
+      );
+      cargo.position.copy(position);
+      cargo.name = part.n;
+      group.add(cargo);
+      continue;
+    }
+
+    if (name.startsWith('WING')) {
+      // 이름은 `WING_<파라미터ID>_<인스턴스>` 꼴이라 draft.wings와 이어지는
+      // 것은 마지막 인스턴스 번호다. 앞 번호를 쓰면 배열 밖을 가리킨다.
+      const wingIndex = Number(part.n.match(/_(\d+)$/)?.[1] ?? 1) - 1;
+      const wingData = draft.wings[wingIndex] ?? wingGeometry;
+      const size = measured(part);
+      // 실측 상자의 가장 긴 변이 날개 길이, 가장 짧은 변은 두께다. 카탈로그
+      // span은 좌우 합산이라 한쪽 날개에 그대로 쓰면 두 배로 길어졌다.
+      const span = size
+        ? Math.max(...size)
+        : Math.max((wingData?.span ?? 900) * SCALE * 0.5, 0.6);
+      const chord = size
+        ? [...size].sort((a, b) => a - b)[1]
+        : Math.max((wingData?.chordInner ?? 200) * SCALE, 0.3);
+      const root = size ? chord : Math.max((wingData?.chordInner ?? 200) * SCALE, 0.3);
+      const tip = size
+        ? chord * 0.45
+        : Math.max((wingData?.chordOuter ?? 150) * SCALE, 0.2);
+      // 좌표가 부품 형상의 중심이므로 양쪽으로 절반씩 펼친다.
+      const half = span / 2;
+      // 좌우 날개는 뻗는 축이 정반대라, 넓은 뿌리를 한쪽으로 고정하면 한 장은
+      // 뿌리가 바깥을 향한다. 기체 중심에 가까운 끝을 뿌리로 잡는다.
+      const spanAxis = spanAxisOf(part);
+      const towardCentre = position.lengthSq() > 0
+        ? position.clone().negate().normalize()
+        : new THREE.Vector3(1, 0, 0);
+      const rootAtPositive = spanAxis.dot(towardCentre) > 0;
+      const rootX = rootAtPositive ? half : -half;
+      const tipX = rootAtPositive ? -half : half;
+      const shape = new THREE.BufferGeometry();
+      shape.setAttribute(
+        'position',
+        new THREE.BufferAttribute(
+          new Float32Array([
+            rootX, 0, -root * 0.5, rootX, 0, root * 0.5,
+            tipX, 0, tip * 0.5, tipX, 0, -tip * 0.5,
+          ]),
+          3,
+        ),
+      );
+      shape.setIndex([0, 1, 2, 0, 2, 3]);
+      shape.computeVertexNormals();
+      const wing = new THREE.Mesh(shape, material('wing', 0.18));
+      wing.position.copy(position);
+      // 날개가 뻗는 방향은 실측 상자에서 가장 긴 축이다. X축으로 고정하면
+      // 길이가 Z축에 있는 날개가 통째로 다른 방향을 향한다.
+      wing.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), spanAxis);
+      wing.name = part.n;
+      group.add(wing);
+      continue;
+    }
+
+    if (name.startsWith('SERVO') || name.startsWith('SENSOR')) {
+      const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(0.055, 10, 8),
+        material('layout', 0.1),
+      );
+      marker.position.copy(position);
+      marker.name = part.n;
+      group.add(marker);
+    }
+  }
 
   return group;
 }

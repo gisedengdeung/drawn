@@ -103,7 +103,7 @@ export function DesignLabView({
   onOpenParts: () => void;
   workspace: DesignWorkspace;
 }) {
-  const { baseline, draft, setDraft, catalogs, loading, loadError } = workspace;
+  const { baseline, draft, setDraft, catalogs, placements, loading, loadError } = workspace;
   const [mode, setMode] = useState<DraftGeometryMode>('parametric-preview');
   const [showGhost, setShowGhost] = useState(false);
   const [changedGroup, setChangedGroup] = useState<ParameterGroup | null>(null);
@@ -356,7 +356,7 @@ export function DesignLabView({
               {loading ? (
                 <div className="absolute inset-0 grid place-items-center text-sm text-[#6e6e73]">Design #{selected.id} 형상을 불러오는 중…</div>
               ) : draft && baseline && mode === 'parametric-preview' ? (
-                <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} />
+                <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} placements={placements} />
               ) : packagedReference ? (
                 <StlViewer src={packagedReference.modelPath} />
               ) : (

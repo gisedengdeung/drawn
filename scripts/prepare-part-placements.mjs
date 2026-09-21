@@ -192,6 +192,70 @@ export function extractPlacements(stepPath) {
     });
   }
 
+  // 부품의 실제 치수. 없으면 렌더러가 카탈로그 문자열로 크기를 추정해야 하는데,
+  // 같은 설계 안에서도 프로펠러 지름이 제각각이라 그 추정은 자주 빗나간다.
+  const shapeOfDefinition = new Map();
+  for (const [, body] of entities) {
+    if (!body.startsWith('SHAPE_DEFINITION_REPRESENTATION(')) continue;
+    const [shapeId, representationId] = refsOf(body);
+    const shape = entities.get(shapeId) ?? '';
+    if (!shape.startsWith('PRODUCT_DEFINITION_SHAPE(')) continue;
+    const definition = refsOf(shape).find((ref) => partName.has(ref));
+    if (definition !== undefined) shapeOfDefinition.set(definition, representationId);
+  }
+
+  // 형상의 실제 꼭짓점(VERTEX_POINT)만 센다. 도달 가능한 CARTESIAN_POINT를 모두
+  // 모으면 부품이 놓이는 기준 좌표계(AXIS2_PLACEMENT_3D)까지 딸려와 치수가
+  // 몇 배로 부푼다. 예: 250mm 화물칸이 902mm로 잡혔다.
+  const measure = (representationId, verticesOnly) => {
+    const seen = new Set();
+    const stack = [representationId];
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    let found = 0;
+    const take = (pointId) => {
+      const [x, y, z] = lastTuple(entities.get(pointId) ?? '');
+      if (![x, y, z].every(Number.isFinite)) return;
+      found += 1;
+      [x, y, z].forEach((value, axis) => {
+        if (value < lo[axis]) lo[axis] = value;
+        if (value > hi[axis]) hi[axis] = value;
+      });
+    };
+    while (stack.length) {
+      const id = stack.pop();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const body = entities.get(id);
+      if (!body) continue;
+      if (body.startsWith('VERTEX_POINT(')) {
+        take(refsOf(body)[0]);
+        if (verticesOnly) continue;
+      }
+      if (body.startsWith('CARTESIAN_POINT(')) {
+        if (!verticesOnly) take(id);
+        continue;
+      }
+      if (body.startsWith('AXIS2_PLACEMENT_3D(')) continue;
+      for (const next of refsOf(body)) stack.push(next);
+    }
+    if (found <= 1) return null;
+    return {
+      size: hi.map((value, axis) => value - lo[axis]),
+      // 로컬 원점은 부품의 끝에 있을 수 있다. 날개처럼 원점이 한쪽에 치우친
+      // 부품은 인스턴스마다 회전이 다르면 원점이 제각각으로 흩어져, 실제로는
+      // 대칭인 배치가 비대칭으로 기록된 것처럼 보인다.
+      centre: hi.map((value, axis) => (value + lo[axis]) / 2),
+    };
+  };
+
+  const shapeOf = new Map();
+  for (const [definition, representationId] of shapeOfDefinition) {
+    // 원통·평면처럼 꼭짓점이 없는 부품은 배치 좌표계를 뺀 측정으로 되돌린다.
+    const measured = measure(representationId, true) ?? measure(representationId, false);
+    if (measured) shapeOf.set(definition, measured);
+  }
+
   const childrenOf = new Map();
   for (const [id, { parent, child }] of assembly) {
     childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), { assemblyId: id, child }]);
@@ -204,15 +268,29 @@ export function extractPlacements(stepPath) {
   const round = (value) => Math.round(value * 10) / 10;
   const round3 = (value) => Math.round(value * 1000) / 1000;
 
+  const applyTo = (matrix, point) => [0, 1, 2].map(
+    (row) =>
+      matrix[row * 4] * point[0] +
+      matrix[row * 4 + 1] * point[1] +
+      matrix[row * 4 + 2] * point[2] +
+      matrix[row * 4 + 3],
+  );
+
   const walk = (definition, matrix) => {
     const name = partName.get(definition);
     if (name) {
+      const shape = shapeOf.get(definition);
+      // 원점이 아니라 형상 중심을 배치 좌표로 쓴다. 원점은 부품 끝에 있을 수
+      // 있어서, 같은 부품이라도 회전이 다르면 서로 다른 곳을 가리킨다.
+      const placed = shape ? applyTo(matrix, shape.centre) : [matrix[3], matrix[7], matrix[11]];
       parts.push({
         n: name,
         // 위치(mm)와 부품 로컬 축의 방향. 렌더러가 회전까지 재현할 수 있습니다.
-        p: [round(matrix[3]), round(matrix[7]), round(matrix[11])],
+        p: placed.map(round),
         x: [round3(matrix[0]), round3(matrix[4]), round3(matrix[8])],
         z: [round3(matrix[2]), round3(matrix[6]), round3(matrix[10])],
+        // 부품 로컬 좌표계 기준 실측 치수(mm).
+        ...(shape ? { s: shape.size.map(round) } : {}),
       });
     }
     for (const { assemblyId, child } of childrenOf.get(definition) ?? []) {

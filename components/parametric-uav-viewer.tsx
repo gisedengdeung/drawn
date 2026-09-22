@@ -63,15 +63,46 @@ type ViewerRuntime = {
   ghost: THREE.Group | null;
   forces: THREE.Group | null;
   grid: THREE.GridHelper;
-  fitCamera: (radius: number, force?: boolean) => void;
+  fitCamera: (points: THREE.Vector3[], force?: boolean) => void;
   radius: number;
+  /** 마지막으로 맞춘 모델 바깥 점들. 창 크기가 바뀔 때 같은 곳을 다시 잡는다. */
+  hull: THREE.Vector3[];
   lastFittedRadius: number;
   topology: string;
   syncing: boolean;
 };
 
 const SCALE = 0.01;
+const UP = new THREE.Vector3(0, 1, 0);
 const VIEWER_SYNC_GROUPS = new Map<string, Set<ViewerRuntime>>();
+
+/**
+ * 모델을 감쌀 때 실제로 바깥에 있는 점들. 부품마다 제 상자의 여덟 꼭짓점을
+ * 월드 좌표로 옮겨 모은다.
+ *
+ * 모델 전체의 AABB 꼭짓점을 쓰면 안 된다. 그 꼭짓점은 서로 다른 부품의 극값을
+ * 조합한 자리라 아무 부품도 거기 없고, 대각선으로 뻗은 기체일수록 실제보다
+ * 훨씬 크게 잡혀 카메라가 필요 이상으로 물러난다.
+ */
+function hullPointsOf(model: THREE.Object3D) {
+  const points: THREE.Vector3[] = [];
+  model.updateWorldMatrix(true, true);
+  model.traverse((node) => {
+    const mesh = node as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    const local = mesh.geometry.boundingBox;
+    if (!local) return;
+    for (const x of [local.min.x, local.max.x]) {
+      for (const y of [local.min.y, local.max.y]) {
+        for (const z of [local.min.z, local.max.z]) {
+          points.push(new THREE.Vector3(x, y, z).applyMatrix4(mesh.matrixWorld));
+        }
+      }
+    }
+  });
+  return points;
+}
 
 export function ParametricUavViewer({
   draft,
@@ -265,9 +296,12 @@ export function ParametricUavViewer({
     let lastWidth = 0;
     let lastHeight = 0;
 
-    const fitCamera = (radius: number, force = false) => {
+    const fitCamera = (points: THREE.Vector3[], force = false) => {
       const runtime = runtimeRef.current;
-      if (!runtime || radius <= 0) return;
+      if (!runtime || !points.length) return;
+      const box = new THREE.Box3().setFromPoints(points);
+      const centre = box.getCenter(new THREE.Vector3());
+      const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 2.5);
       const previous = runtime.lastFittedRadius;
       runtime.radius = radius;
       const changedMaterially =
@@ -280,15 +314,55 @@ export function ParametricUavViewer({
       const verticalFov = THREE.MathUtils.degToRad(camera.fov);
       const horizontalFov =
         2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
-      const limitingFov = Math.max(Math.min(verticalFov, horizontalFov), 0.1);
-      const distance = (radius / Math.sin(limitingFov / 2)) * 1.12;
-      camera.position.copy(
-        new THREE.Vector3(1.12, 0.88, 1.2).normalize().multiplyScalar(distance),
-      );
+      // 바운딩 "구"를 화면에 맞추면 항공기처럼 납작한 형상은 구의 빈 공간만큼
+      // 작아져, 화면 가로의 35%밖에 쓰지 못했다. 시선 기준 가로·세로 축으로
+      // 실제 부품 꼭짓점을 재서 맞춘다.
+      const view = new THREE.Vector3(1.12, 0.88, 1.2).normalize();
+      const right = new THREE.Vector3().crossVectors(view, UP).normalize();
+      const up = new THREE.Vector3().crossVectors(right, view);
+      // 점 하나가 화면에 들어오려면 |가로| ≤ (거리 − 깊이)·tan(시야/2) 여야
+      // 한다. 카메라 쪽으로 튀어나온 점일수록 더 물러나야 하므로, 각 점이
+      // 요구하는 거리 중 가장 큰 값을 쓴다. 그다음 실제로 찍힌 자리의 한가운데를
+      // 보도록 시선을 옮기고 다시 잰다 — 상자 중심과 투영 중심은 원근 때문에
+      // 어긋나서, 한 번만 재면 모델이 한쪽으로 쏠린다.
+      const spanWide = Math.tan(horizontalFov / 2);
+      const spanHigh = Math.tan(verticalFov / 2);
+      let distance = 0;
+      for (let pass = 0; pass < 4; pass += 1) {
+        distance = 0;
+        for (const point of points) {
+          const local = point.clone().sub(centre);
+          const depth = local.dot(view);
+          distance = Math.max(
+            distance,
+            Math.abs(local.dot(right)) / spanWide + depth,
+            Math.abs(local.dot(up)) / spanHigh + depth,
+          );
+        }
+        distance = Math.max(distance * 1.06, radius * 0.6);
+        let minWide = Infinity, maxWide = -Infinity;
+        let minHigh = Infinity, maxHigh = -Infinity;
+        for (const point of points) {
+          const local = point.clone().sub(centre);
+          const depth = Math.max(distance - local.dot(view), 1e-4);
+          const across = local.dot(right) / depth;
+          const above = local.dot(up) / depth;
+          minWide = Math.min(minWide, across); maxWide = Math.max(maxWide, across);
+          minHigh = Math.min(minHigh, above); maxHigh = Math.max(maxHigh, above);
+        }
+        const shiftWide = ((minWide + maxWide) / 2) * distance;
+        const shiftHigh = ((minHigh + maxHigh) / 2) * distance;
+        if (Math.hypot(shiftWide, shiftHigh) < radius * 0.004) break;
+        centre.addScaledVector(right, shiftWide).addScaledVector(up, shiftHigh);
+      }
+      // 예전에는 늘 원점을 보았는데, 부품 중심이 원점에 있는 설계는 절반도
+      // 되지 않는다. 팔이 한쪽으로만 뻗은 기체는 화면 구석으로 밀려났다.
+      camera.position.copy(view.clone().multiplyScalar(distance).add(centre));
       camera.near = Math.max(radius / 100, 0.02);
       camera.far = Math.max(distance + radius * 10, 100);
       camera.updateProjectionMatrix();
-      controls.target.set(0, 0.35, 0);
+      controls.target.copy(centre);
+      runtime.hull = points;
       controls.minDistance = Math.max(radius * 0.55, 1.5);
       controls.maxDistance = Math.max(radius * 8, 12);
       controls.update();
@@ -307,6 +381,7 @@ export function ParametricUavViewer({
       grid,
       fitCamera,
       radius: 0,
+      hull: [],
       lastFittedRadius: 0,
       topology: '',
       syncing: false,
@@ -346,7 +421,7 @@ export function ParametricUavViewer({
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       const runtime = runtimeRef.current;
-      if (runtime?.radius) runtime.fitCamera(runtime.radius, true);
+      if (runtime?.radius) runtime.fitCamera(runtime.hull, true);
     };
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(resizeFrame);
@@ -421,12 +496,15 @@ export function ParametricUavViewer({
       }
 
       runtime.model = buildAircraft(draft, changedGroup, false, assembly, baseline, selectedParts, bladeCount);
-      runtime.model.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
+      // STL 뷰어와 같은 범위로 자른다. 학습 모델은 -67°까지도 내놓는데(예측의
+      // 20%가 ±45°를 넘는다) 그대로 기울이면 기체가 뒤집힌 것처럼 보인다.
+      const pitch = THREE.MathUtils.clamp(pitchDegrees, -45, 45);
+      runtime.model.rotation.z = THREE.MathUtils.degToRad(pitch);
       runtime.scene.add(runtime.model);
 
       if (showGhost && baseline) {
         runtime.ghost = buildAircraft(baseline, null, true, assembly, null, null, bladeCount);
-        runtime.ghost.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
+        runtime.ghost.rotation.z = THREE.MathUtils.degToRad(pitch);
         runtime.scene.add(runtime.ghost);
       } else {
         runtime.ghost = null;
@@ -435,10 +513,8 @@ export function ParametricUavViewer({
       runtime.forces = showForces ? buildForceVectors(forceVectors) : null;
       if (runtime.forces) runtime.scene.add(runtime.forces);
 
-      const box = new THREE.Box3().setFromObject(runtime.model);
-      const sphere = box.getBoundingSphere(new THREE.Sphere());
       runtime.fitCamera(
-        Math.max(sphere.radius, 2.5),
+        hullPointsOf(runtime.model),
         topologyChanged || runtime.radius === 0,
       );
       window.queueMicrotask(() => {
@@ -1043,11 +1119,19 @@ function buildFromPlacements(
       ? THREE.MathUtils.clamp(Math.cbrt(current / original), 0.4, 2.5)
       : 1;
 
-  // `ARM_55703_1`의 55703은 sourceParameters의 `Arm_55703_Length`와 같은 키다.
+  // `ARM_55703_1`은 sourceParameters의 `Arm_55703_Length`와 짝이다.
+  //
+  // 접두사까지 키에 넣어야 한다. 한 설계에 `Arm_5_Length`와
+  // `RotatedArm_5_Length`가 같이 있는데 숫자만 키로 쓰면 뒤엣것이 앞엣것을
+  // 덮어써, 팔이 남의 길이로 그려진다. 설계 #1에서는 425mm 팔이 50mm로
+  // 줄어 관절까지 닿지 못하고 끊어져 보였다(전체 8개 설계에서 발생).
+  const armKeyOf = (prefix: string, index: string) => `${prefix.toUpperCase()}_${index}`;
   const baseLengthByKey = new Map<string, number>();
   for (const [name, value] of draft.sourceParameters) {
-    const key = name.match(/^(?:Rotated|FixedRotation)?Arm_(\d+)_Length$/i)?.[1];
-    if (key && typeof value === 'number') baseLengthByKey.set(key, value);
+    const match = name.match(/^((?:Rotated|FixedRotation)?Arm)_(\d+)_Length$/i);
+    if (match && typeof value === 'number') {
+      baseLengthByKey.set(armKeyOf(match[1], match[2]), value);
+    }
   }
 
   // 팔 슬라이더는 draft.segments에 쓰는데 이 경로는 STEP 좌표를 그대로 써서
@@ -1237,7 +1321,8 @@ function buildFromPlacements(
     const shift =
       (segment.offset - original.offset + (segment.length - original.length)) * SCALE;
     if (!turn && !shift) continue;
-    const armPattern = new RegExp(`^(?:ROTATED|FIXEDROTATION)?ARM_${key}_`, 'i');
+    // 키가 이미 `ROTATEDARM_5` 꼴이라 접두사를 다시 붙이지 않는다.
+    const armPattern = new RegExp(`^${key}_`, 'i');
     for (const arm of placements) {
       if (!armPattern.test(arm.n)) continue;
       const chain = rotorAdjustment.get(arm.n);
@@ -1347,7 +1432,8 @@ function buildFromPlacements(
     }
 
     if (/^(?:ROTATEDARM|FIXEDROTATIONARM|ARM)_/.test(name)) {
-      const key = part.n.match(/_(\d+)_/)?.[1] ?? '';
+      const named = part.n.match(/^(ROTATEDARM|FIXEDROTATIONARM|ARM)_(\d+)_/i);
+      const key = named ? armKeyOf(named[1], named[2]) : '';
       const length = (lengthByKey.get(key) ?? fallbackArmLength) * SCALE;
       // 팔은 10×5mm 각재가 아니라 지름 10mm 원통이다. 카탈로그에 튜브 모델이
       // `0394OD_para_tube` 하나뿐이고 0.394인치 외경이 10mm로, 실측 s[0]과

@@ -4,6 +4,8 @@ import type { ReactNode } from 'react';
 import { Box, Info } from 'lucide-react';
 
 import { StlViewer } from '@/components/stl-viewer';
+import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
+import { useDesignPreview } from '@/hooks/use-design-preview';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -243,25 +245,53 @@ export function ModelStage({
             showForceVectors={showForceVectors}
           />
         </>
+      ) : emptyDesignId ? (
+        <ParametricStage designId={emptyDesignId} label={label} />
       ) : (
         <div className="absolute inset-0 grid place-items-center p-8 text-center">
           <div>
             <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl border border-[#e5e5ea] bg-white">
               <Box className="size-5 text-[#86868b]" />
             </div>
-            <p className="text-sm font-medium text-[#1d1d1f]">
-              {emptyDesignId
-                ? `Design #${emptyDesignId}는 metadata-only입니다`
-                : '3D asset not packaged'}
-            </p>
-            <p className="mt-2 max-w-sm text-xs leading-5 text-[#6e6e73]">
-              원본 STL이 없는 설계도 파라메트릭 Design Studio에서 개념 형상으로
-              편집할 수 있습니다.
-            </p>
+            <p className="text-sm font-medium text-[#1d1d1f]">3D asset not packaged</p>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * 원본 STL이 배포되지 않은 설계(27,714개 중 27,702개)를 개념 형상으로 보여준다.
+ * 예전에는 "metadata-only입니다" 안내만 띄웠는데, 파라메트릭 형상이 STEP 부품
+ * 좌표까지 쓰게 된 뒤로는 빈 화면을 둘 이유가 없다.
+ */
+function ParametricStage({ designId, label }: { designId: number; label: boolean }) {
+  const preview = useDesignPreview(designId);
+  if (!preview) {
+    return (
+      <div className="absolute inset-0 grid place-items-center text-xs font-semibold tracking-[0.12em] text-[#6e6e73]">
+        개념 형상 준비 중
+      </div>
+    );
+  }
+  return (
+    <>
+      {label && (
+        <div className="absolute left-4 top-4 z-20 flex gap-2">
+          <Badge variant="outline" className="border-transparent bg-white/85 text-[#1d1d1f] backdrop-blur">
+            개념 형상 · DESIGN #{designId}
+          </Badge>
+          <Badge variant="outline" className="border-transparent bg-white/85 text-[#1d1d1f] backdrop-blur">
+            프로펠러 {preview.draft.numPropellers}개
+          </Badge>
+        </div>
+      )}
+      <ParametricUavViewer draft={preview.draft} assembly={preview.assembly} />
+      <p className="pointer-events-none absolute bottom-3 left-4 z-20 rounded-lg bg-white/85 px-2 py-1 text-[10px] text-[#6e6e73] backdrop-blur">
+        원본 STL이 배포되지 않은 설계입니다 · 제조용 CAD 아님
+      </p>
+    </>
   );
 }
 

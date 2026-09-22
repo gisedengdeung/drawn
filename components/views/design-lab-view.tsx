@@ -307,8 +307,8 @@ export function DesignLabView({
                           팔 {index + 1}<span className="font-normal text-[#6e6e73]">{formatComponent(segment.nodeType)}</span>
                         </p>
                         <NumberSlider label="팔 길이" unit="mm" min={50} max={520} step={1} value={segment.length} baseline={baseline.segments[index]?.length ?? segment.length} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].length = value; })} />
-                        <NumberSlider label="장착 각도" unit="°" min={-135} max={360} step={1} value={segment.angle} baseline={baseline.segments[index]?.angle ?? segment.angle} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].angle = value; })} />
-                        <NumberSlider label="결합 위치 오프셋" unit="mm" min={-50} max={50} step={1} value={segment.offset} baseline={baseline.segments[index]?.offset ?? segment.offset} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].offset = value; })} />
+                        <NumberSlider label="장착 각도" unit="°" min={-135} max={360} step={1} value={segment.angle} baseline={baseline.segments[index]?.angle ?? segment.angle} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].angle = value; })} geometryOnly />
+                        <NumberSlider label="결합 위치 오프셋" unit="mm" min={-50} max={50} step={1} value={segment.offset} baseline={baseline.segments[index]?.offset ?? segment.offset} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].offset = value; })} geometryOnly />
                       </div>
                     ))}
                   </ParameterSection>
@@ -319,7 +319,7 @@ export function DesignLabView({
                     <NumberSlider label="길이" unit="mm" min={84} max={559} step={1} value={draft.fuselage.length} baseline={baseline.fuselage.length} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.length = value; })} />
                     <NumberSlider label="가로 지름" unit="mm" min={120} max={805} step={1} value={draft.fuselage.horizontalDiameter} baseline={baseline.fuselage.horizontalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.horizontalDiameter = value; })} />
                     <NumberSlider label="세로 지름" unit="mm" min={51} max={354} step={1} value={draft.fuselage.verticalDiameter} baseline={baseline.fuselage.verticalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.verticalDiameter = value; })} />
-                    <NumberSlider label="바닥 높이" unit="mm" min={8} max={60} step={0.5} value={draft.fuselage.floorHeight} baseline={baseline.fuselage.floorHeight} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.floorHeight = value; })} />
+                    <NumberSlider label="바닥 높이" unit="mm" min={8} max={60} step={0.5} value={draft.fuselage.floorHeight} baseline={baseline.fuselage.floorHeight} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.floorHeight = value; })} geometryOnly />
                   </ParameterSection>
                 )}
 
@@ -354,7 +354,7 @@ export function DesignLabView({
 
                 {groupVisible('payload', ['payload', 'cargo', '탑재', '중량']) && (
                   <ParameterSection value="payload" icon={<Weight />} title="탑재 중량" count={1} advanced hint={GROUP_HINTS.payload}>
-                    <NumberSlider label="탑재 화물 질량" unit="kg" min={0} max={20} step={0.1} value={draft.payload.mass} baseline={baseline.payload.mass} onChange={(value) => mutateDraft('payload', (next) => { next.payload.mass = value; })} />
+                    <NumberSlider label="탑재 화물 질량" unit="kg" min={0} max={20} step={0.1} value={draft.payload.mass} baseline={baseline.payload.mass} onChange={(value) => mutateDraft('payload', (next) => { next.payload.mass = value; })} geometryOnly />
                   </ParameterSection>
                 )}
 
@@ -363,8 +363,8 @@ export function DesignLabView({
                     {Object.entries(draft.layout).map(([name, position]) => (
                       <div key={name} className="rounded-xl bg-[#f5f5f7] p-3">
                         <p className="mb-2 text-xs font-semibold capitalize text-[#3c3c43]">{formatComponent(name)}</p>
-                        <NumberSlider label="X 위치" unit="mm" min={-280} max={280} step={1} value={position.x} baseline={baseline.layout[name]?.x ?? position.x} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].x = value; }, false)} />
-                        <NumberSlider label="Y 위치" unit="mm" min={-280} max={280} step={1} value={position.y} baseline={baseline.layout[name]?.y ?? position.y} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].y = value; }, false)} />
+                        <NumberSlider label="X 위치" unit="mm" min={-280} max={280} step={1} value={position.x} baseline={baseline.layout[name]?.x ?? position.x} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].x = value; }, false)} geometryOnly />
+                        <NumberSlider label="Y 위치" unit="mm" min={-280} max={280} step={1} value={position.y} baseline={baseline.layout[name]?.y ?? position.y} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].y = value; }, false)} geometryOnly />
                       </div>
                     ))}
                   </ParameterSection>
@@ -614,7 +614,15 @@ function ParameterSection({ value, icon, title, count, advanced = false, hint, c
   );
 }
 
-function NumberSlider({ label, unit, min, max, step, value, baseline, onChange }: { label: string; unit: string; min: number; max: number; step: number; value: number; baseline: number; onChange: (value: number) => void }) {
+/**
+ * `geometryOnly`는 3D 형상에만 반영되고 AI 성능 예측에는 쓰이지 않는 값이다.
+ * 어느 값이 그런지는 backend/app/performance_features.py 의
+ * `unsupported_changes()`가 정한다. 예측 응답의 `unsupportedInputs`에도 같은
+ * 키가 실려 오므로, 예측 패널의 안내와 이 배지가 어긋나면 둘 중 하나가
+ * 낡은 것이다. 지금 대상은 암 각도·오프셋, 동체 바닥 높이, 탑재 중량,
+ * 내부 배치, 날개 회전·조종면·튜브 오프셋이다.
+ */
+function NumberSlider({ label, unit, min, max, step, value, baseline, onChange, geometryOnly = false }: { label: string; unit: string; min: number; max: number; step: number; value: number; baseline: number; onChange: (value: number) => void; geometryOnly?: boolean }) {
   const changed = Math.abs(value - baseline) > Math.max(step / 2, 0.0001);
   const safeMin = Math.min(min, Math.floor(baseline), Math.floor(value));
   const safeMax = Math.max(max, Math.ceil(baseline), Math.ceil(value));
@@ -638,7 +646,17 @@ function NumberSlider({ label, unit, min, max, step, value, baseline, onChange }
   return (
     <div className="mb-3 last:mb-0">
       <div className="mb-2 flex items-center justify-between gap-2 text-[11px]">
-        <span className="text-[#6e6e73]">{label}</span>
+        <span className="flex items-center gap-1 text-[#6e6e73]">
+          {label}
+          {geometryOnly && (
+            <span
+              title="이 값은 3D 형상에만 반영되고 AI 성능 예측에는 쓰이지 않습니다."
+              className="rounded bg-[#f0f0f2] px-1 py-px text-[9px] font-medium text-[#86868b]"
+            >
+              형상만
+            </span>
+          )}
+        </span>
         <span className="flex items-center gap-1.5">
           {changed && <button onClick={() => onChange(baseline)} aria-label={`${label} 초기화`} className="rounded p-0.5 text-[#86868b] hover:bg-[#e5e5ea] hover:text-[#3c3c43]"><RotateCcw className="size-3" /></button>}
           <span className="flex items-center gap-1">
@@ -760,10 +778,10 @@ function WingControls({ wing, baseline, nacaOptions, onChange }: { wing: WingPar
       <NumberSlider label="날개 폭 (Span)" unit="mm" min={200} max={2000} step={1} value={wing.span} baseline={baseline.span} onChange={(value) => onChange((next) => { next.span = value; })} />
       <NumberSlider label="안쪽 날개 깊이" unit="mm" min={100} max={500} step={1} value={wing.chordInner} baseline={baseline.chordInner} onChange={(value) => onChange((next) => { next.chordInner = value; if (next.chordOuter > value) next.chordOuter = value; })} />
       <NumberSlider label="바깥쪽 날개 깊이" unit="mm" min={50} max={Math.max(50, wing.chordInner)} step={1} value={Math.min(wing.chordOuter, wing.chordInner)} baseline={Math.min(baseline.chordOuter, wing.chordInner)} onChange={(value) => onChange((next) => { next.chordOuter = value; })} />
-      <NumberSlider label="장착 각도" unit="°" min={0} max={360} step={1} value={wing.rotation} baseline={baseline.rotation} onChange={(value) => onChange((next) => { next.rotation = value; })} />
-      <NumberSlider label="결합 튜브 오프셋" unit="mm" min={-100} max={160} step={1} value={wing.tubeOffset} baseline={baseline.tubeOffset} onChange={(value) => onChange((next) => { next.tubeOffset = value; })} />
-      <NumberSlider label="에일러론 비율" unit="" min={0.1} max={1} step={0.01} value={wing.aileronBias} baseline={baseline.aileronBias} onChange={(value) => onChange((next) => { next.aileronBias = value; })} />
-      <NumberSlider label="플랩 비율" unit="" min={0.1} max={1} step={0.01} value={wing.flapBias} baseline={baseline.flapBias} onChange={(value) => onChange((next) => { next.flapBias = value; })} />
+      <NumberSlider label="장착 각도" unit="°" min={0} max={360} step={1} value={wing.rotation} baseline={baseline.rotation} onChange={(value) => onChange((next) => { next.rotation = value; })} geometryOnly />
+      <NumberSlider label="결합 튜브 오프셋" unit="mm" min={-100} max={160} step={1} value={wing.tubeOffset} baseline={baseline.tubeOffset} onChange={(value) => onChange((next) => { next.tubeOffset = value; })} geometryOnly />
+      <NumberSlider label="에일러론 비율" unit="" min={0.1} max={1} step={0.01} value={wing.aileronBias} baseline={baseline.aileronBias} onChange={(value) => onChange((next) => { next.aileronBias = value; })} geometryOnly />
+      <NumberSlider label="플랩 비율" unit="" min={0.1} max={1} step={0.01} value={wing.flapBias} baseline={baseline.flapBias} onChange={(value) => onChange((next) => { next.flapBias = value; })} geometryOnly />
     </div>
   );
 }

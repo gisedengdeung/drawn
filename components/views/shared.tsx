@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { Box, Info } from 'lucide-react';
 
+import { useState } from 'react';
 import { StlViewer } from '@/components/stl-viewer';
 import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
 import { useDesignPreview } from '@/hooks/use-design-preview';
@@ -268,6 +269,8 @@ export function ModelStage({
  */
 function ParametricStage({ designId, label }: { designId: number; label: boolean }) {
   const preview = useDesignPreview(designId);
+  // 개발 PC에 원본이 있으면 실제 형상과 나란히 놓고 볼 수 있다.
+  const [sideBySide, setSideBySide] = useState(false);
   if (!preview) {
     return (
       <div className="absolute inset-0 grid place-items-center text-xs font-semibold tracking-[0.12em] text-[#6e6e73]">
@@ -287,10 +290,34 @@ function ParametricStage({ designId, label }: { designId: number; label: boolean
           </Badge>
         </div>
       )}
-      <ParametricUavViewer draft={preview.draft} assembly={preview.assembly} />
-      <p className="pointer-events-none absolute bottom-3 left-4 z-20 rounded-lg bg-white/85 px-2 py-1 text-[10px] text-[#6e6e73] backdrop-blur">
-        원본 STL이 배포되지 않은 설계입니다 · 제조용 CAD 아님
-      </p>
+      {sideBySide ? (
+        <div className="absolute inset-0 grid grid-cols-2 divide-x divide-[#e5e5ea]">
+          <div className="relative">
+            <ParametricUavViewer draft={preview.draft} assembly={preview.assembly} syncGroup={`stage-${designId}`} />
+            <span className="pointer-events-none absolute bottom-3 left-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#3182f6] backdrop-blur">개념 형상</span>
+          </div>
+          <div className="relative">
+            <StlViewer key={designId} src={`/local-model/${designId}`} />
+            <span className="pointer-events-none absolute bottom-3 left-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#6e6e73] backdrop-blur">원본 STL</span>
+          </div>
+        </div>
+      ) : (
+        <ParametricUavViewer draft={preview.draft} assembly={preview.assembly} />
+      )}
+      <button
+        type="button"
+        onClick={() => setSideBySide((value) => !value)}
+        aria-pressed={sideBySide}
+        title="개발 PC에 AircraftVerse 원본이 있을 때만 오른쪽에 표시됩니다"
+        className={`absolute bottom-3 right-3 z-20 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium shadow-sm backdrop-blur ${sideBySide ? 'border-[#3182f6] bg-[#3182f6] text-white' : 'border-[#e5e5ea] bg-white/90 text-[#3c3c43] hover:bg-white'}`}
+      >
+        원본과 나란히
+      </button>
+      {!sideBySide && (
+        <p className="pointer-events-none absolute bottom-3 left-4 z-20 rounded-lg bg-white/85 px-2 py-1 text-[10px] text-[#6e6e73] backdrop-blur">
+          원본 STL이 배포되지 않은 설계입니다 · 제조용 CAD 아님
+        </p>
+      )}
     </>
   );
 }

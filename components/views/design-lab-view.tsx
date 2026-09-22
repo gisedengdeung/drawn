@@ -113,6 +113,11 @@ export function DesignLabView({
   const [openTypes, setOpenTypes] = useState<string[]>([]);
   /** 프로펠러 날개 수는 데이터에 없어 보는 사람이 고르는 표시 설정이다. */
   const [bladeCount, setBladeCount] = useState<2 | 4>(2);
+  /**
+   * 개념 형상과 원본 STL을 나란히 둔다. 겹쳐 그리면 회색끼리 묻혀서 어느 쪽이
+   * 무엇인지 읽기 어려웠다. 원본은 로컬에 있을 때만 뜬다.
+   */
+  const [sideBySide, setSideBySide] = useState(false);
   /** 왼쪽 패널 탭. 부품 목록이 파라미터 아코디언에 끼면 매번 밀려 내려간다. */
   const [panelTab, setPanelTab] = useState<'parameters' | 'parts'>('parameters');
   const [estimateState, setEstimateState] = useState<'ready' | 'calculating'>('ready');
@@ -120,6 +125,8 @@ export function DesignLabView({
   const highlightTimeoutRef = useRef<number | null>(null);
   const estimateTimeoutRef = useRef<number | null>(null);
   const packagedReference = referenceDesign ?? ('modelPath' in selected ? selected as ShowcaseDesign : null);
+  // 배포된 STL이 없어도 개발 PC의 원본에서 받아올 수 있다.
+  const originalStlUrl = packagedReference?.modelPath ?? `/local-model/${selected.id}`;
 
   const focusedParameter = draft?.parameterDefinitions.find((definition) => definition.id === focusedParameterId || definition.path === focusedParameterId);
   const focusId = focusedParameter?.id;
@@ -402,7 +409,8 @@ export function DesignLabView({
             <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e5ea] bg-white px-3 py-2.5">
               <div className="flex rounded-lg bg-[#f5f5f7] p-1">
                 <ModeButton active={mode === 'parametric-preview'} onClick={() => setMode('parametric-preview')}>설계 미리보기</ModeButton>
-                <ModeButton active={mode === 'exact-stl'} onClick={() => packagedReference && setMode('exact-stl')} disabled={!packagedReference}>원본 STL</ModeButton>
+                <ModeButton active={mode === 'exact-stl'} onClick={() => setMode('exact-stl')}>원본 STL</ModeButton>
+                <ModeButton active={sideBySide} onClick={() => setSideBySide((value) => !value)}>나란히</ModeButton>
               </div>
               <Badge variant="outline" className={mode === 'parametric-preview' ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1b64da]' : 'border-[#e5e5ea] bg-white text-[#6e6e73]'}>
                 {mode === 'parametric-preview' ? '개념 형상 · 제조용 CAD 아님' : `AircraftVerse #${selected.id}`}
@@ -415,12 +423,21 @@ export function DesignLabView({
             <div className="relative min-h-0 flex-1">
               {loading ? (
                 <div className="absolute inset-0 grid place-items-center text-sm text-[#6e6e73]">Design #{selected.id} 형상을 불러오는 중…</div>
+              ) : draft && baseline && sideBySide ? (
+                <div className="absolute inset-0 grid grid-cols-2 divide-x divide-[#e5e5ea]">
+                  <div className="relative">
+                    <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} syncGroup={`compare-${selected.id}`} />
+                    <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#3182f6] backdrop-blur">개념 형상</span>
+                  </div>
+                  <div className="relative">
+                    <StlViewer key={originalStlUrl} src={originalStlUrl} />
+                    <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#6e6e73] backdrop-blur">원본 STL</span>
+                  </div>
+                </div>
               ) : draft && baseline && mode === 'parametric-preview' ? (
                 <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} />
-              ) : packagedReference ? (
-                <StlViewer src={packagedReference.modelPath} />
               ) : (
-                <div className="absolute inset-0 grid place-items-center text-sm text-[#6e6e73]">이 설계에는 배포된 원본 STL이 없습니다.</div>
+                <StlViewer key={originalStlUrl} src={originalStlUrl} />
               )}
               {mode === 'parametric-preview' && <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-[#e5e5ea] bg-white/90 px-3 py-2 text-[11px] text-[#6e6e73] shadow-sm backdrop-blur">
                 <MousePointer2 className="size-3" /> 드래그 회전 · 스크롤 확대

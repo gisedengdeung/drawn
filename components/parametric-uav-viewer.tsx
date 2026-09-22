@@ -161,7 +161,7 @@ export function ParametricUavViewer({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.15;
     Object.assign(renderer.domElement.style, {
       display: 'block',
       width: '100%',
@@ -238,13 +238,15 @@ export function ParametricUavViewer({
     renderer.domElement.addEventListener('pointerdown', handlePointerDown);
     renderer.domElement.addEventListener('pointerup', handlePointerUp);
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x91a9b6, 2.7));
-    const key = new THREE.DirectionalLight(0xffffff, 3.3);
-    key.position.set(8, 12, 7);
+    // 원본 STL 뷰어와 같은 조명이라야 나란히 놓았을 때 명암이 같게 보인다.
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x91a9b6, 2.6));
+    const key = new THREE.DirectionalLight(0xffffff, 3.6);
+    key.position.set(4, 7, 5);
     scene.add(key);
-    const fill = new THREE.DirectionalLight(0x9ee8ec, 1.8);
-    fill.position.set(-7, 5, -8);
-    scene.add(fill);
+    // 반대편 림 라이트가 윤곽을 살려 준다. 이게 없으면 형태가 평평해 보인다.
+    const rim = new THREE.DirectionalLight(0x86d8df, 2.2);
+    rim.position.set(-5, 2, -4);
+    scene.add(rim);
 
     const grid = new THREE.GridHelper(30, 30, 0x9cb3bd, 0xd4e0e5);
     const gridMaterials = Array.isArray(grid.material)
@@ -571,10 +573,11 @@ const COLORS = {
 } as const;
 
 /**
- * 기본 상태의 부품 색. 처음에는 전체를 무채색으로 두고, 부품 탭에서 고른
- * 것에만 색을 입힌다. 전부 색칠해 두면 무엇을 보고 있는지 오히려 묻힌다.
+ * 기본 상태의 부품 색. 원본 STL 뷰어와 같은 민트 톤을 쓴다. 무채색으로 두니
+ * 나란히 놓았을 때 왼쪽만 유독 흐릿해 형태가 읽히지 않았다. 부품 탭에서
+ * 고른 것에만 종류별 색이 입혀지는 규칙은 그대로다.
  */
-const NEUTRAL_COLOR = 0xcfd8dd;
+const NEUTRAL_COLOR = 0x93d4dc;
 
 /**
  * `design_low_level.json`의 component_type별 색. 부품 탭에서 골랐을 때만
@@ -600,6 +603,38 @@ export const TYPE_COLORS: Record<string, number> = {
   Orient: 0x9aa7ad,
 };
 
+/**
+ * NACA 4자리 익형의 단면 좌표. `2712`면 최대 캠버 2%, 위치 70%, 두께 12%다.
+ * 실제 날개는 앞이 둥글고 뒤로 갈수록 뾰족한데, 직육면체로 그리면 옆에서 봤을
+ * 때 각진 판으로 보여 원본과 확연히 달랐다.
+ * 시위 1 기준의 (x, y)를 앞전 → 윗면 → 뒷전 → 아랫면 순서로 돌려준다.
+ */
+function nacaSection(profile: string, steps = 16) {
+  const code = String(profile).padStart(4, '0');
+  const camber = Number(code[0]) / 100;
+  const position = Number(code[1]) / 10;
+  const thickness = Number(code.slice(2)) / 100 || 0.12;
+  const half = (x: number) =>
+    5 * thickness *
+    (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1015 * x ** 4);
+  const mid = (x: number) => {
+    if (!camber || !position) return 0;
+    return x < position
+      ? (camber / position ** 2) * (2 * position * x - x * x)
+      : (camber / (1 - position) ** 2) * (1 - 2 * position + 2 * position * x - x * x);
+  };
+  const upper: [number, number][] = [];
+  const lower: [number, number][] = [];
+  for (let i = 0; i <= steps; i += 1) {
+    // 앞전 쪽을 촘촘히 잡아야 둥근 코가 살아난다.
+    const x = (1 - Math.cos((i / steps) * Math.PI)) / 2;
+    upper.push([x, mid(x) + half(x)]);
+    lower.push([x, mid(x) - half(x)]);
+  }
+  // 앞전에서 윗면을 따라 뒷전까지, 다시 아랫면을 따라 돌아온다.
+  return [...upper, ...lower.slice(1, -1).reverse()];
+}
+
 type MaterialFactory = (
   kind: keyof typeof COLORS,
   metalness?: number,
@@ -613,10 +648,12 @@ function createMaterialFactory(
 ): MaterialFactory {
   return (kind, metalness = 0.12, color?: number) => {
     const active = changedGroup === kind;
+    const plain = color === NEUTRAL_COLOR;
     return new THREE.MeshStandardMaterial({
       color: ghost ? 0x7f96a2 : color ?? COLORS[kind],
-      roughness: ghost ? 0.8 : 0.48,
-      metalness: ghost ? 0 : metalness,
+      // 기본 상태에서는 원본 STL과 같은 재질값을 쓴다.
+      roughness: ghost ? 0.8 : plain ? 0.44 : 0.48,
+      metalness: ghost ? 0 : plain ? 0.24 : metalness,
       transparent: ghost,
       opacity: ghost ? 0.16 : 1,
       depthWrite: !ghost,
@@ -1312,8 +1349,12 @@ function buildFromPlacements(
     if (/^(?:ROTATEDARM|FIXEDROTATIONARM|ARM)_/.test(name)) {
       const key = part.n.match(/_(\d+)_/)?.[1] ?? '';
       const length = (lengthByKey.get(key) ?? fallbackArmLength) * SCALE;
+      // 팔은 10×5mm 각재가 아니라 지름 10mm 원통이다. 카탈로그에 튜브 모델이
+      // `0394OD_para_tube` 하나뿐이고 0.394인치 외경이 10mm로, 실측 s[0]과
+      // 같다. 부품 수의 26%를 차지해 형태 차이가 화면에 크게 남는다.
+      const radius = (part.s ? Math.max(part.s[0], part.s[1]) / 2 : 5) * SCALE;
       const bar = new THREE.Mesh(
-        new THREE.BoxGeometry(0.1, Math.max(length, 0.2), 0.05),
+        new THREE.CylinderGeometry(radius, radius, Math.max(length, 0.2), 14),
         partMaterial(part, 'structure', 0.4),
       );
       bar.position.copy(position);
@@ -1375,7 +1416,14 @@ function buildFromPlacements(
       // 폭·깊이는 27,713개 전부 정확한데 높이만 예외 없이 실제의 0.47배로
       // 나와, 두꺼운 선체가 납작한 판이 되고 안에 들어가야 할 배터리가
       // 밖으로 비어져 나왔다. 셋 다 파라미터에서 읽는다.
-      let width = Math.max(draft.fuselage.length * SCALE, 0.05);
+      // `length`는 캡슐 원통부(FUSE_CYL_LENGTH)이고 양 끝에 반지름
+      // verticalDiameter/2 인 반구가 더 붙는다. 그래서 전체 길이는
+      // length + verticalDiameter다. 원본 STL 122개와 대조해 중앙값 1.00,
+      // ±8% 적중 60%로 맞았다(그냥 length면 0.62, 적중 1%).
+      let width = Math.max(
+        (draft.fuselage.length + draft.fuselage.verticalDiameter) * SCALE,
+        0.05,
+      );
       const height = Math.max(draft.fuselage.verticalDiameter * SCALE, 0.05);
       let depth = Math.max(draft.fuselage.horizontalDiameter * SCALE, 0.05);
       // length는 캡슐 원통부의 길이라(FUSE_CYL_LENGTH) 둥근 끝단만큼 실제보다
@@ -1480,9 +1528,6 @@ function buildFromPlacements(
       const span = Math.max((wingData?.span ?? 900) * SCALE, 0.3);
       const root = Math.max((wingData?.chordInner ?? 220) * SCALE, 0.08);
       const tip = Math.max((wingData?.chordOuter ?? 140) * SCALE, 0.04);
-      // NACA 네 자리의 끝 두 자리가 시위 대비 두께 비율(%)이다.
-      const profileThickness =
-        Number(String(wingData?.nacaProfile ?? '').slice(-2)) / 100 || 0.12;
 
       // 어느 로컬 축으로 뻗는지는 실측 치수가 span과 가장 가까운 축으로 고른다.
       // 단순히 가장 긴 축을 쓰면 19,716장 중 4.7%가 엉뚱한 축을 향했다.
@@ -1505,34 +1550,32 @@ function buildFromPlacements(
       const rootFront = -root / 2;
       // taperOffset이면 앞전을 일직선으로 두어 뒤쪽만 좁아진다.
       const tipFront = wingData?.taperOffset ? rootFront : -tip / 2;
-      const tipBack = tipFront + tip;
-      const rootHalfThickness = (root * profileThickness) / 2;
-      const tipHalfThickness = (tip * profileThickness) / 2;
+      // 뿌리와 끝단 단면을 NACA 익형으로 깎고 그 사이를 잇는다.
+      const section = nacaSection(wingData?.nacaProfile ?? '0012');
+      const count = section.length;
+      const vertices: number[] = [];
+      for (const [side, chord, front] of [
+        [half, root, rootFront],
+        [-half, tip, tipFront],
+      ] as const) {
+        for (const [cx, cy] of section) {
+          vertices.push(side, cy * chord, front + cx * chord);
+        }
+      }
       const shape = new THREE.BufferGeometry();
-      shape.setAttribute(
-        'position',
-        new THREE.BufferAttribute(
-          new Float32Array([
-            half, rootHalfThickness, rootFront,
-            half, rootHalfThickness, root / 2,
-            half, -rootHalfThickness, root / 2,
-            half, -rootHalfThickness, rootFront,
-            -half, tipHalfThickness, tipFront,
-            -half, tipHalfThickness, tipBack,
-            -half, -tipHalfThickness, tipBack,
-            -half, -tipHalfThickness, tipFront,
-          ]),
-          3,
-        ),
-      );
-      shape.setIndex([
-        0, 1, 2, 0, 2, 3, // 뿌리 단면
-        4, 7, 6, 4, 6, 5, // 끝단 단면
-        0, 4, 5, 0, 5, 1, // 윗면
-        3, 2, 6, 3, 6, 7, // 아랫면
-        0, 3, 7, 0, 7, 4, // 앞전
-        1, 5, 6, 1, 6, 2, // 뒷전
-      ]);
+      shape.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+      const index: number[] = [];
+      // 옆면: 뿌리 단면과 끝단 단면을 띠로 잇는다.
+      for (let i = 0; i < count; i += 1) {
+        const j = (i + 1) % count;
+        index.push(i, count + i, count + j, i, count + j, j);
+      }
+      // 단면 두 장은 부채꼴로 메운다.
+      for (let i = 1; i < count - 1; i += 1) {
+        index.push(0, i + 1, i);
+        index.push(count, count + i, count + i + 1);
+      }
+      shape.setIndex(index);
       // 꼭짓점을 공유한 채 법선을 구하면 모서리가 뭉개지므로 면마다 분리한다.
       const solid = shape.toNonIndexed();
       solid.computeVertexNormals();

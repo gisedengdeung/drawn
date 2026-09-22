@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   BatteryCharging,
@@ -73,14 +73,27 @@ export function SimulatorView({ designs, selected, referenceDesign, draft, basel
   onOpenLab: () => void;
 }) {
   const [speed, setSpeed] = useState(20);
+  // AI가 예측한 자세. 원본 STL이 없는 설계는 이 값으로 기체를 기울인다.
+  const [predictedPitch, setPredictedPitch] = useState<number | null>(null);
+  const handlePitch = useCallback((value: number | null) => setPredictedPitch(value), []);
   return (
     <section className="px-4 py-4 lg:px-6">
       <SectionHeading eyebrow={`3단계 · 성능 확인 / Design #${selected.id}`} title="속도별 비행성능" description="현재 편집 설계의 AI 예측과 기준 설계의 원본 시뮬레이션을 구분해 확인하세요." actions={<><DesignSelector designs={designs} value={selected.id} onChange={onSelect} /><Button onClick={onOpenLab} className="bg-[#3182f6] text-white hover:bg-[#1b64da]"><ArrowLeft /> 파라미터 편집</Button></>} />
-      <PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} speed={speed} onSpeedChange={setSpeed} />
+      <PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} speed={speed} onSpeedChange={setSpeed} onPitchChange={handlePitch} />
       {referenceDesign ? <DatasetSimulation selected={referenceDesign} speed={speed} onSpeedChange={setSpeed} /> : (
         <div className="mt-4 overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white">
           <p className="p-4 text-xs text-[#6e6e73]">이 설계의 원본 STL·trim 곡선은 배포되지 않았습니다. 현재 편집 형상과 위 AI 예측을 확인할 수 있습니다.</p>
-          <div className="relative h-[440px]">{draft && baseline && <ParametricUavViewer draft={draft} baseline={baseline} />}</div>
+          <div className="relative h-[440px]">
+            {draft && baseline && (
+              <ParametricUavViewer draft={draft} baseline={baseline} pitchDegrees={predictedPitch ?? 0} />
+            )}
+            {predictedPitch != null && (
+              // 원본 시뮬레이션 값이 아니라 추정값이라는 것을 화면에서 구분한다.
+              <div className="absolute left-4 top-4 z-20 rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-medium text-[#1b64da] backdrop-blur">
+                AI 추정 자세 · {speed} m/s · {predictedPitch.toFixed(1)}°
+              </div>
+            )}
+          </div>
         </div>
       )}
     </section>

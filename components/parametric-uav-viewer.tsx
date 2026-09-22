@@ -1443,10 +1443,17 @@ function buildFromPlacements(
         width = Math.max(width, (Math.abs(centre.x - position.x) + reach('x')) * 2 + clearance);
         depth = Math.max(depth, (Math.abs(centre.z - position.z) + reach('z')) * 2 + clearance);
       }
-      const body = new THREE.Mesh(
-        new RoundedBoxGeometry(width, height, depth, 4, Math.min(width, height, depth) * 0.24),
-        partMaterial(part, 'fuselage', 0.22),
-      );
+      // 실제 부품은 `capsule_fuselage`, 즉 원통 양 끝에 반구가 붙은 캡슐이다.
+      // 둥근 상자로 그리면 끝 모서리가 반구 밖으로 튀어나와, 길이를 제대로
+      // 맞춘 뒤 오히려 동체 오차가 커졌다. 단면이 가로·세로로 다르므로
+      // 반지름 1짜리 캡슐을 만들어 축마다 늘린다.
+      const capRadius = Math.min(height, depth) / 2;
+      const barrel = Math.max(width - capRadius * 2, 0.001);
+      const capsule = new THREE.CapsuleGeometry(capRadius, barrel, 8, 24);
+      // CapsuleGeometry는 Y축을 따라 서 있다. 동체는 X축으로 눕는다.
+      capsule.rotateZ(Math.PI / 2);
+      capsule.scale(1, height / (capRadius * 2), depth / (capRadius * 2));
+      const body = new THREE.Mesh(capsule, partMaterial(part, 'fuselage', 0.22));
       body.position.copy(position);
       // 실측 상자는 선체의 윗절반만 잡으므로 윗면 높이는 맞다. 윗면을 그대로
       // 두고 아래로만 늘린다. 번들 STL 12개와 대조해 평균 오차 7mm.
@@ -1600,11 +1607,17 @@ function buildFromPlacements(
     }
 
     if (name.startsWith('SERVO') || name.startsWith('SENSOR')) {
+      // 지름 11mm 구슬로 고정해 두었는데 실제는 28~84mm라, 동체 안이 비어
+      // 보이고 실제 형상을 덮지 못했다. 센서·서보는 대부분 납작한 상자다.
+      const size = measured(part);
       const marker = new THREE.Mesh(
-        new THREE.SphereGeometry(0.055, 10, 8),
+        size
+          ? new THREE.BoxGeometry(size[0], size[1], size[2])
+          : new THREE.SphereGeometry(0.055, 10, 8),
         partMaterial(part, 'layout', 0.1),
       );
       marker.position.copy(position);
+      if (size) orientToBasis(marker, part);
       marker.name = part.n;
       group.add(marker);
     }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
+  ArrowLeft,
   BatteryCharging,
   Box,
   Boxes,
@@ -60,6 +61,7 @@ import type {
   DesignDraft,
   DesignSummary,
   DraftGeometryMode,
+  EditorTool,
   ParameterDefinition,
   ParameterGroup,
   PartPlacement,
@@ -106,6 +108,8 @@ export function DesignLabView({
   onOpenParts,
   workspace,
   focusedParameterId,
+  activeTool = 'parameters',
+  onCloseTool,
 }: {
   selected: DesignSummary;
   referenceDesign?: ShowcaseDesign | null;
@@ -116,6 +120,8 @@ export function DesignLabView({
   onOpenParts: () => void;
   workspace: DesignWorkspace;
   focusedParameterId?: string | null;
+  activeTool?: EditorTool;
+  onCloseTool?: () => void;
 }) {
   const { baseline, draft, setDraft, catalogs, placements, loading, loadError } = workspace;
   const [mode, setMode] = useState<DraftGeometryMode>('parametric-preview');
@@ -237,10 +243,17 @@ export function DesignLabView({
     || GROUP_LABELS[group].toLocaleLowerCase('ko-KR').includes(query)
     || terms.some((term) => term.toLocaleLowerCase('ko-KR').includes(query));
 
+  const showLeftPanel = activeTool === 'design' || activeTool === 'parameters';
+  const showPerformancePanel = activeTool === 'performance';
+  const showViewerControls = showLeftPanel || showPerformancePanel;
+  const effectivePanelTab = activeTool === 'design'
+    ? 'design'
+    : panelTab === 'design' ? 'parameters' : panelTab;
+
   return (
     // 3D를 바닥에 깔고 패널을 그 위에 띄운다. 예전에는 3칸 그리드라 뷰어가
     // 가로의 절반도 쓰지 못했다.
-    <section className="@container/lab relative h-[calc(100vh-var(--studio-chrome,140px))] min-h-[560px] overflow-hidden">
+    <section className="@container/lab relative h-full min-h-[560px] overflow-hidden">
       <div className="mb-3 hidden">
         {([
           ['parameters', '파라미터', SlidersHorizontal],
@@ -254,13 +267,22 @@ export function DesignLabView({
       </div>
 
       <div className="h-full">
-        <aside
-          className={`absolute left-3 top-3 bottom-3 z-20 flex w-[310px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur transition-[max-height] ${
-            leftOpen ? '' : 'bottom-auto max-h-11'
+        {showLeftPanel && <aside
+          // bottom-3로 고정 스트레치하지 않고 max-height만 준다 — 섹션 콘텐츠가 짧으면
+          // 패널도 그만큼만 차지하고, 길면 이 상한에서 꺾여 안에서 스크롤된다.
+          className={`absolute left-3 top-3 z-20 flex w-[310px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur transition-[max-height] ${
+            leftOpen
+              ? activeTool === 'parameters' ? 'bottom-3' : 'max-h-[calc(100%-24px)]'
+              : 'max-h-11'
           }`}
         >
           <div className="border-b border-[#e5e5ea] p-4">
             <div className="flex items-start justify-between gap-3">
+              {onCloseTool && (
+                <Button size="icon-sm" variant="ghost" onClick={onCloseTool} aria-label="작업 패널 닫기" className="shrink-0 text-[#6e6e73]">
+                  <ArrowLeft />
+                </Button>
+              )}
               <button
                 type="button"
                 onClick={() => setLeftOpen((open) => !open)}
@@ -283,7 +305,7 @@ export function DesignLabView({
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#86868b]" />
               <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="파라미터 검색" className="h-9 border-[#e5e5ea] bg-[#f5f5f7] pl-8 text-xs" />
             </div>
-            {leftOpen && panelTab === 'parameters' && (
+            {leftOpen && effectivePanelTab === 'parameters' && (
               <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-[#f5f5f7] px-3 py-2">
                 <div>
                   <p className="text-xs font-medium text-[#6e6e73]">전문가 모드</p>
@@ -298,15 +320,18 @@ export function DesignLabView({
                   ['design', '설계', Boxes],
                   ['parameters', '파라미터', SlidersHorizontal],
                   ['parts', '부품', Package],
-                ] as const).filter(([id]) => id !== 'parts' || placements).map(([id, label, Icon]) => (
+                ] as const)
+                  .filter(([id]) => activeTool === 'design' ? id === 'design' : id !== 'design')
+                  .filter(([id]) => id !== 'parts' || placements)
+                  .map(([id, label, Icon]) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => setPanelTab(id)}
-                    aria-pressed={panelTab === id}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${panelTab === id ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}
+                    aria-pressed={effectivePanelTab === id}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${effectivePanelTab === id ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}
                   >
-                    <Icon className={`size-3.5 ${panelTab === id ? 'text-[#3182f6]' : ''}`} />
+                    <Icon className={`size-3.5 ${effectivePanelTab === id ? 'text-[#3182f6]' : ''}`} />
                     {label}
                     {id === 'parts' && selectedParts.length > 0 && (
                       <span className="rounded-full bg-[#3182f6] px-1.5 text-[10px] text-white">{selectedParts.length}</span>
@@ -317,7 +342,7 @@ export function DesignLabView({
             )}
           </div>
 
-          {panelTab === 'design' ? (
+          {effectivePanelTab === 'design' ? (
             <div className="min-h-0 flex-1">
               <DesignPicker
                 designs={datasetDesigns}
@@ -330,7 +355,7 @@ export function DesignLabView({
           <ScrollArea className="min-h-0 flex-1">
             {loading || !draft || !baseline ? (
               <div className="grid h-80 place-items-center text-xs text-[#6e6e73]">설계 파라미터를 준비하고 있습니다…</div>
-            ) : panelTab === 'parts' && placements ? (
+            ) : effectivePanelTab === 'parts' && placements ? (
               <PartsPanel
                 assembly={placements}
                 selected={selectedParts}
@@ -442,12 +467,12 @@ export function DesignLabView({
             )}
           </ScrollArea>
           )}
-        </aside>
+        </aside>}
 
         <div className="absolute inset-0 z-0 bg-[#f5f5f7]">
           <div className="flex h-full flex-col">
             {/* 모드 전환은 3D 위에 떠 있는 작은 섬으로 둔다. */}
-            <div className="pointer-events-none absolute left-1/2 top-3 z-20 flex max-w-[calc(100%-660px)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-xl border border-[#e5e5ea] bg-white/92 px-3 py-2 shadow-lg backdrop-blur [&>*]:pointer-events-auto">
+            {(activeTool === 'design' || activeTool === 'parameters' || activeTool === 'performance') && <div className="pointer-events-none absolute right-3 top-3 z-20 flex max-w-[min(720px,calc(100%-180px))] flex-wrap items-center justify-center gap-2 rounded-xl border border-[#e5e5ea] bg-white/92 px-3 py-2 shadow-lg backdrop-blur [&>*]:pointer-events-auto">
               <div className="flex rounded-lg bg-[#f5f5f7] p-1">
                 <ModeButton active={mode === 'parametric-preview'} onClick={() => setMode('parametric-preview')}>설계 미리보기</ModeButton>
                 <ModeButton active={mode === 'exact-stl'} onClick={() => setMode('exact-stl')}>원본 STL</ModeButton>
@@ -460,7 +485,7 @@ export function DesignLabView({
                 <Switch aria-label="기준 설계 Ghost 표시" checked={showGhost} onCheckedChange={setShowGhost} size="sm" disabled={mode === 'exact-stl'} />
                 <span>기준 Ghost</span>
               </div>
-            </div>
+            </div>}
             <div className="relative min-h-0 flex-1">
               {loading ? (
                 <div className="absolute inset-0 grid place-items-center text-sm text-[#6e6e73]">Design #{selected.id} 형상을 불러오는 중…</div>
@@ -480,10 +505,10 @@ export function DesignLabView({
               ) : (
                 <StlViewer key={originalStlUrl} src={originalStlUrl} />
               )}
-              {mode === 'parametric-preview' && <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-[#e5e5ea] bg-white/90 px-3 py-2 text-[11px] text-[#6e6e73] shadow-sm backdrop-blur">
+              {showViewerControls && mode === 'parametric-preview' && <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-[#e5e5ea] bg-white/90 px-3 py-2 text-[11px] text-[#6e6e73] shadow-sm backdrop-blur">
                 <MousePointer2 className="size-3" /> 드래그 회전 · 스크롤 확대
               </div>}
-              {mode === 'parametric-preview' && (
+              {showViewerControls && mode === 'parametric-preview' && (
                 <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-[#e5e5ea] bg-white/90 p-1 text-[11px] shadow-sm backdrop-blur">
                   <span className="px-1.5 text-[#86868b]">프로펠러</span>
                   {([2, 4] as const).map((count) => (
@@ -500,41 +525,38 @@ export function DesignLabView({
                 </div>
               )}
               {changedGroup && (
-                <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-lg bg-[#3182f6] px-3 py-2 text-xs font-semibold text-white shadow-sm">
+                <div className="pointer-events-none absolute right-3 top-[72px] z-20 rounded-lg bg-[#3182f6] px-3 py-2 text-xs font-semibold text-white shadow-sm">
                   {GROUP_LABELS[changedGroup]} 반영됨
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-3 border-t border-[#e5e5ea] bg-white text-center text-xs">
-              <ViewerStat label="팔 전체 폭" value={`${formatMetric(maxArmSpan(draft), 0)} mm`} />
-              <ViewerStat label="동체 길이" value={draft ? `${formatMetric(draft.fuselage.length, 0)} mm` : '—'} />
-              <ViewerStat label="날개 수" value={draft ? `${draft.numWings || draft.wings.length}개` : '—'} />
-            </div>
           </div>
         </div>
 
-        <aside
-          className={`absolute right-3 top-3 z-20 flex w-[300px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur ${
+        {showPerformancePanel && <aside
+          className={`absolute right-3 top-[72px] z-20 flex w-[300px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur ${
             rightOpen ? 'bottom-3' : 'max-h-11'
           }`}
         >
-          <button
-            type="button"
-            onClick={() => setRightOpen((open) => !open)}
-            aria-expanded={rightOpen}
-            className="flex w-full shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3 py-3 text-left"
-          >
-            <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${rightOpen ? '' : '-rotate-90'}`} />
-            <span className="text-sm font-semibold text-[#1d1d1f]">성능</span>
+          <div className="flex w-full shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3 py-2">
+            {onCloseTool && (
+              <Button size="icon-sm" variant="ghost" onClick={onCloseTool} aria-label="성능 패널 닫기" className="shrink-0 text-[#6e6e73]">
+                <ArrowLeft />
+              </Button>
+            )}
+            <button type="button" onClick={() => setRightOpen((open) => !open)} aria-expanded={rightOpen} className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left">
+              <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${rightOpen ? '' : '-rotate-90'}`} />
+              <span className="text-sm font-semibold text-[#1d1d1f]">성능</span>
+            </button>
             <Button
               size="sm"
-              onClick={(event) => { event.stopPropagation(); onOpenParts(); }}
+              onClick={onOpenParts}
               disabled={loading || !draft}
-              className="ml-auto h-7 bg-[#3182f6] px-2 text-[11px] text-white hover:bg-[#1b64da]"
+              className="h-7 shrink-0 bg-[#3182f6] px-2 text-[11px] text-white hover:bg-[#1b64da]"
             >
               <ShoppingBag className="size-3" />부품 찾기
             </Button>
-          </button>
+          </div>
           <ScrollArea className={`min-h-0 flex-1 ${rightOpen ? '' : 'hidden'}`}>
             <div className="p-4">
               <div className="mb-5"><PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} speed={speed} onSpeedChange={setSpeed} compact /></div>
@@ -586,10 +608,10 @@ export function DesignLabView({
               <DataDisclaimer compact />
             </div>
           </ScrollArea>
-        </aside>
+        </aside>}
 
-        <div
-          className={`absolute bottom-3 left-[330px] right-[320px] z-20 flex flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur transition-[max-height] ${
+        {showPerformancePanel && <div
+          className={`absolute bottom-[72px] left-3 right-[320px] z-20 flex flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur transition-[max-height] ${
             chartsOpen ? 'max-h-[440px]' : 'max-h-11'
           }`}
         >
@@ -612,7 +634,7 @@ export function DesignLabView({
               )}
             </div>
           </ScrollArea>
-        </div>
+        </div>}
       </div>
 
       {loadError && (
@@ -1048,10 +1070,6 @@ function ModeButton({ active, onClick, children, disabled = false }: { active: b
   return <button onClick={onClick} disabled={disabled} className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${active ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73] hover:text-[#3c3c43]'}`}>{children}</button>;
 }
 
-function ViewerStat({ label, value }: { label: string; value: string }) {
-  return <div className="border-r border-[#e5e5ea] px-2 py-2.5 last:border-r-0"><span className="block text-[9px] uppercase tracking-[0.08em] text-[#86868b]">{label}</span><strong className="mt-0.5 block font-mono text-[11px] text-[#3c3c43]">{value}</strong></div>;
-}
-
 function EstimateRow({ icon, label, before, after, unit, better }: { icon: React.ReactNode; label: string; before: number; after: number; unit: string; better: 'up' | 'down' }) {
   const change = percentChange(before, after);
   const improved = change != null && (better === 'up' ? change >= 0 : change <= 0);
@@ -1181,19 +1199,6 @@ function draftDifferences(baseline: DesignDraft, draft: DesignDraft) {
   add('Cargo mass', baseline.payload.mass, draft.payload.mass, 'kg');
   return rows;
 }
-
-function maxArmSpan(draft: DesignDraft | null) {
-  if (!draft) return 0;
-  const distanceByPath = new Map<string, number>();
-  const ordered = [...draft.segments].sort((left, right) => left.path.split('.').length - right.path.split('.').length);
-  for (const segment of ordered) {
-    const parentDistance = segment.parentPath ? distanceByPath.get(segment.parentPath) ?? 0 : 0;
-    distanceByPath.set(segment.path, parentDistance + segment.length);
-  }
-  return Math.max(...distanceByPath.values(), ...draft.segments.map((segment) => segment.length), 0) * 2;
-}
-
-
 
 /**
  * 부품 탭. 종류별로 묶어 보여주고, 고르면 3D에서 그 부품만 제 색으로 남고

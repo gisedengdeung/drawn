@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import {
   Activity,
+  ArrowLeft,
   Beaker,
   Bot,
   Boxes,
@@ -19,10 +20,8 @@ import {
 import { DrawnLogo } from '@/components/drawn-logo';
 import { CompareView } from '@/components/views/compare-view';
 import { DesignLabView } from '@/components/views/design-lab-view';
-import { ExplorerView } from '@/components/views/explorer-view';
 import { GuideView } from '@/components/views/guide-view';
 import { LandingView } from '@/components/views/landing-view';
-import { SimulatorView } from '@/components/views/simulator-view';
 import { useDesignWorkspace } from '@/hooks/use-design-workspace';
 import { useAgentWorkspace } from '@/hooks/use-agent-workspace';
 import { usePartsQuoteWorkspace } from '@/hooks/use-parts-quote-workspace';
@@ -51,15 +50,16 @@ import type {
   DatasetIndex,
   DesignDraft,
   DesignSummary,
+  EditorTool,
   ShowcaseMap,
   WorkspaceView,
 } from '@/lib/drawn-types';
 
-const navItems = [
-  { id: 'explore' as const, step: 1, label: '설계 선택', short: '탐색', icon: Boxes },
-  { id: 'lab' as const, step: 2, label: '파라미터 편집', short: '편집', icon: Beaker },
-  { id: 'simulator' as const, step: 3, label: '성능 확인', short: '성능', icon: Activity },
-  { id: 'gallery' as const, step: 4, label: '공유 갤러리', short: '공유', icon: Share2 },
+const editorTools = [
+  { id: 'design' as const, label: '설계 선택', description: '필터·추천·즐겨찾기에서 기준 설계를 고릅니다.', icon: Boxes },
+  { id: 'parameters' as const, label: '파라미터 편집', description: '형상과 부품 수치를 조정해 나만의 기체를 만듭니다.', icon: Beaker },
+  { id: 'performance' as const, label: '성능 확인', description: '속도별 예측과 원본 시뮬레이션 곡선을 확인합니다.', icon: Activity },
+  { id: 'gallery' as const, label: '공유 갤러리', description: '설계를 게시하거나 다른 설계를 가져옵니다.', icon: Share2 },
 ];
 
 export function DrawnApp() {
@@ -83,6 +83,14 @@ export function DrawnApp() {
   const [focusedParameterId, setFocusedParameterId] = useState<string | undefined>();
   const [chromeOpen, setChromeOpen] = useState(true);
   const [heroDesignId, setHeroDesignId] = useState<number | null>(null);
+  const [editorTool, setEditorTool] = useState<EditorTool>('menu');
+  const [toolNavigationOpen, setToolNavigationOpen] = useState(true);
+
+  const openEditor = useCallback((tool: EditorTool = 'menu') => {
+    setEditorTool(tool);
+    setToolNavigationOpen(true);
+    setView('lab');
+  }, []);
 
   const saveWorkspace = useCallback((snapshot: WorkspaceSnapshot) => {
     setWorkspace(snapshot);
@@ -104,7 +112,7 @@ export function DrawnApp() {
     saveWorkspace({ draft: hydrateDraft(post.draft), sourceId: post.id });
     setSelectedId(post.baselineId);
     setImportVersion((value) => value + 1);
-    setView('lab');
+    openEditor('parameters');
     setWorkspaceNotice(`“${post.title}” 설계를 가져왔습니다. 복사본을 편집 중이며 원본 게시물은 유지됩니다.`);
   };
 
@@ -150,8 +158,8 @@ export function DrawnApp() {
         } catch { setWorkspaceNotice('이전에 저장한 편집 내용을 읽지 못해 기본 설계로 열었습니다.'); }
         const urlParams = new URLSearchParams(window.location.search);
         const sharedId = urlParams.get('gallery');
-        if (sharedId) { setInitialPostId(sharedId); setView('gallery'); }
-        else if (urlParams.get('view') === 'gallery') setView('gallery');
+        if (sharedId) { setInitialPostId(sharedId); setEditorTool('gallery'); setView('lab'); }
+        else if (urlParams.get('view') === 'gallery') { setEditorTool('gallery'); setView('lab'); }
         setComparePair({ aId: index.summary.defaultShowcaseId, bId: secondId });
       })
       .catch((reason: unknown) => {
@@ -206,10 +214,10 @@ export function DrawnApp() {
     saveWorkspace({ draft: hydrateDraft(project.draft), sourceId: project.sourceId });
     setSelectedId(project.draft.baselineId);
     setImportVersion((value) => value + 1);
-    setView('lab');
+    openEditor('parameters');
     setFocusedParameterId(undefined);
     setWorkspaceNotice(`「${project.title}」 v${project.revision}을 열었습니다.`);
-  }, [dataset, saveWorkspace]);
+  }, [dataset, openEditor, saveWorkspace]);
   const agentWorkspace = useAgentWorkspace({
     draft: currentDraft,
     sourceId: activeWorkspace?.sourceId ?? null,
@@ -236,7 +244,11 @@ export function DrawnApp() {
     }
     if (target.designId != null && designById.has(target.designId)) setSelectedId(target.designId);
     setFocusedParameterId(target.parameterId);
-    setView(target.view);
+    if (target.view === 'explore') openEditor('design');
+    else if (target.view === 'simulator') openEditor('performance');
+    else if (target.view === 'gallery') openEditor('gallery');
+    else if (target.view === 'lab') openEditor('parameters');
+    else setView(target.view);
   };
   const showcaseList = useMemo(
     () =>
@@ -245,20 +257,6 @@ export function DrawnApp() {
         .filter((design) => Boolean(design)) ?? [],
     [dataset, showcases],
   );
-  const labSelectorDesigns = useMemo(() => {
-    if (
-      !selectedSummary ||
-      showcaseList.some((design) => design.id === selectedSummary.id)
-    )
-      return showcaseList;
-    return [selectedSummary, ...showcaseList];
-  }, [selectedSummary, showcaseList]);
-
-  const selectShowcaseAndOpen = (id: number, nextView: WorkspaceView) => {
-    setSelectedId(id);
-    setView(nextView);
-  };
-
   const openCompare = (aId: number, bId: number) => {
     if (!designById.has(aId) || !designById.has(bId)) return;
     setComparePair({ aId, bId });
@@ -279,7 +277,7 @@ export function DrawnApp() {
   return (
     <TooltipProvider delay={200}>
       <main className="workspace-light min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
-        {view !== 'home' && (
+        {view === 'guide' && (
         <header className="sticky top-3 z-50 mx-3 mb-3 lg:mx-4">
           <div className="mx-auto max-w-[1720px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur-xl">
             <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
@@ -354,39 +352,12 @@ export function DrawnApp() {
                 </button>
               </div>
             </div>
-
-            {chromeOpen && (
-              <nav className="px-2 pb-2.5 lg:px-4" aria-label="설계 작업 단계">
-                <div className="flex items-center gap-0.5 overflow-x-auto rounded-xl bg-[#f5f5f7] p-1">
-                  {navItems.map((item) => {
-                    const Icon = item.icon;
-                    const active = item.id === view;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => setView(item.id)}
-                        aria-current={active ? 'page' : undefined}
-                        className={`flex min-w-fit flex-1 items-center justify-center gap-1.5 rounded-[10px] px-2 py-1.5 text-xs font-medium transition sm:px-3 lg:text-sm ${
-                          active
-                            ? 'bg-white text-[#1d1d1f] shadow-sm'
-                            : 'text-[#6e6e73] hover:text-[#1d1d1f]'
-                        }`}
-                      >
-                        <Icon className={`size-3.5 ${active ? 'text-[#3182f6]' : ''}`} />
-                        <span className="hidden sm:inline">{item.label}</span>
-                        <span className="sm:hidden">{item.short}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </nav>
-            )}
           </div>
         </header>
         )}
 
-      <div className="mx-auto flex max-w-[1720px] items-start">
-      <div className={`min-w-0 flex-1 ${view === 'home' ? 'min-h-screen' : 'min-h-[calc(100vh-127px)]'}`}>
+      <div className={`flex items-start ${view === 'lab' ? 'w-full max-w-none' : 'mx-auto max-w-[1720px]'}`}>
+      <div className={`min-w-0 flex-1 ${view === 'home' || view === 'lab' ? 'min-h-screen' : 'min-h-[calc(100vh-72px)]'}`}>
           {workspaceNotice && <output className="m-4 flex items-start justify-between gap-4 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-3 text-xs text-[#1b64da]"><span>{workspaceNotice}</span><button type="button" onClick={() => setWorkspaceNotice('')} className="shrink-0 underline">닫기</button></output>}
           {error ? (
             <div className="m-6 rounded-2xl border border-rose-400/20 bg-rose-400/8 p-8 text-rose-200">
@@ -396,66 +367,63 @@ export function DrawnApp() {
           ) : !dataset || showcaseList.length === 0 ? (
             view === 'home' ? (
               <LandingView
-                onStart={() => setView('explore')}
+                onStart={() => openEditor('menu')}
                 onOpenGuide={() => setView('guide')}
               />
             ) : <LoadingWorkspace />
           ) : (
             <>
-              {view === 'explore' && (
-                <ExplorerView
-                  dataset={dataset}
-                  showcases={showcases}
-                  selected={selectedSummary}
-                  onSelect={setSelectedId}
-                  onOpenLab={(id) => selectShowcaseAndOpen(id, 'lab')}
-                  onOpenSimulator={(id) =>
-                    selectShowcaseAndOpen(id, 'simulator')
-                  }
-                  onOpenCompare={openCompareFromExplorer}
-                  onOpenGuide={() => setView('guide')}
-                />
-              )}
-              {view === 'simulator' && selectedSummary && (
-                <SimulatorView
-                  designs={labSelectorDesigns}
-                  selected={selectedSummary}
-                  referenceDesign={selectedDetail}
-                  draft={currentDraft}
-                  baseline={designWorkspace.baseline}
-                  loading={designWorkspace.loading}
-                  loadError={designWorkspace.loadError}
-                  onSelect={setSelectedId}
-                  onOpenLab={() => setView('lab')}
-                />
-              )}
               {view === 'lab' && selectedSummary && (
-                <DesignLabView
-                  key={`${selectedSummary.id}-${importVersion}`}
-                  selected={selectedSummary}
-                  referenceDesign={selectedDetail}
-                  datasetDesigns={dataset.designs}
-                  showcases={showcases}
-                  onSelect={setSelectedId}
-                  onOpenDatasetCompare={() => openCompareFromExplorer(selectedSummary.id)}
-                  workspace={designWorkspace}
-                  focusedParameterId={focusedParameterId}
-                  onOpenParts={openPartsAssistant}
-                />
+                <div className="relative h-screen min-h-[560px] overflow-hidden">
+                  <DesignLabView
+                    key={`${selectedSummary.id}-${importVersion}`}
+                    selected={selectedSummary}
+                    referenceDesign={selectedDetail}
+                    datasetDesigns={dataset.designs}
+                    showcases={showcases}
+                    onSelect={setSelectedId}
+                    onOpenDatasetCompare={() => openCompareFromExplorer(selectedSummary.id)}
+                    workspace={designWorkspace}
+                    focusedParameterId={focusedParameterId}
+                    onOpenParts={openPartsAssistant}
+                    activeTool={editorTool}
+                    onCloseTool={() => {
+                      setEditorTool('menu');
+                      setToolNavigationOpen(true);
+                    }}
+                  />
+
+                  <EditorToolNavigation
+                    active={editorTool}
+                    open={toolNavigationOpen}
+                    onOpenChange={setToolNavigationOpen}
+                    onSelect={(tool) => {
+                      setEditorTool((current) => current === tool ? 'menu' : tool);
+                    }}
+                    onHome={() => setView('home')}
+                    onOpenAssistant={() => setAssistantOpen(true)}
+                  />
+
+                  {editorTool === 'gallery' && (
+                    <div className="absolute inset-0 z-30 overflow-y-auto bg-[#f5f5f7]/96 backdrop-blur-xl">
+                      <button type="button" onClick={() => { setEditorTool('menu'); setToolNavigationOpen(true); }} className="fixed left-3 top-3 z-40 flex items-center gap-1.5 rounded-xl border border-[#e5e5ea] bg-white/94 px-3 py-2 text-xs font-semibold text-[#3c3c43] shadow-lg backdrop-blur-xl hover:bg-white">
+                        <ArrowLeft className="size-4" /> 갤러리 닫기
+                      </button>
+                      <GalleryView
+                        current={selectedSummary}
+                        workspace={activeWorkspace}
+                        initialPostId={initialPostId}
+                        onReuse={reuseDesign}
+                      />
+                    </div>
+                  )}
+                </div>
               )}
-              {view === 'gallery' && (
-                <GalleryView
-                  current={selectedSummary ?? designById.get(dataset.summary.defaultShowcaseId)!}
-                  workspace={activeWorkspace}
-                  initialPostId={initialPostId}
-                  onReuse={reuseDesign}
-                />
-              )}
-              {view === 'guide' && <GuideView onBack={() => setView('explore')} />}
+              {view === 'guide' && <GuideView onBack={() => setView('home')} />}
               {view === 'home' && (
                 <LandingView
                   heroDesign={heroDesign}
-                  onStart={() => setView('explore')}
+                  onStart={() => openEditor('menu')}
                   onOpenGuide={() => setView('guide')}
                 />
               )}
@@ -496,6 +464,58 @@ export function DrawnApp() {
         </Dialog>
       </main>
     </TooltipProvider>
+  );
+}
+
+function EditorToolNavigation({
+  active,
+  open,
+  onOpenChange,
+  onSelect,
+  onHome,
+  onOpenAssistant,
+}: {
+  active: EditorTool;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (tool: EditorTool) => void;
+  onHome: () => void;
+  onOpenAssistant: () => void;
+}) {
+  if (!open) {
+    return (
+      <button type="button" onClick={() => onOpenChange(true)} aria-label="편집 메뉴 펼치기" className="absolute bottom-3 left-1/2 z-50 grid size-10 -translate-x-1/2 place-items-center rounded-full border border-[#e5e5ea] bg-white/94 text-[#3182f6] shadow-lg backdrop-blur-xl hover:bg-white">
+        <ChevronDown className="size-4 rotate-180" />
+      </button>
+    );
+  }
+
+  return (
+    <nav aria-label="편집 도구" className="absolute bottom-3 left-1/2 z-50 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-2xl border border-[#e5e5ea] bg-white/94 p-1.5 shadow-xl backdrop-blur-xl">
+      <button type="button" onClick={onHome} aria-label="랜딩으로 돌아가기" className="grid size-9 shrink-0 place-items-center rounded-xl hover:bg-[#f5f5f7]">
+        <DrawnLogo className="size-7 rounded-lg" />
+      </button>
+      <span className="mx-1 h-5 w-px shrink-0 bg-[#e5e5ea]" />
+      {editorTools.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onSelect(id)}
+          aria-current={active === id ? 'page' : undefined}
+          className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${active === id ? 'bg-[#1d1d1f] text-white shadow-sm' : 'text-[#6e6e73] hover:bg-[#f5f5f7] hover:text-[#1d1d1f]'}`}
+        >
+          <Icon className={`size-3.5 ${active === id ? 'text-[#60a5fa]' : ''}`} />
+          {label}
+        </button>
+      ))}
+      <span className="mx-1 h-5 w-px shrink-0 bg-[#e5e5ea]" />
+      <button type="button" onClick={onOpenAssistant} className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-[#3182f6] hover:bg-[#eff6ff]">
+        <Bot className="size-3.5" /> AI 도우미
+      </button>
+      <button type="button" onClick={() => onOpenChange(false)} aria-label="편집 메뉴 접기" className="grid size-9 shrink-0 place-items-center rounded-xl text-[#6e6e73] hover:bg-[#f5f5f7] hover:text-[#1d1d1f]">
+        <ChevronDown className="size-4" />
+      </button>
+    </nav>
   );
 }
 

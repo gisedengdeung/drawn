@@ -57,3 +57,6 @@ next-env.d.ts
 
 # Local ML environment only; model sources, archives and bundles remain trackable.
 /ml/.venv
+
+# 로컬 확인용 STL. 배포하지 않습니다 (scripts/prepare-local-stl.mjs 가 만듭니다).
+/public/models/local/

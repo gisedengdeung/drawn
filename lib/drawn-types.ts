@@ -76,6 +76,59 @@ export type ParametricNode = {
   parameters: Record<string, number | string | boolean | null>;
 };
 
+/**
+ * 원본 Geom.stp에서 추출한 부품 배치. 이름(`MOTOR_3`, `ARM_55703_1` 등)과
+ * 허브 원점 기준 좌표를 담으므로 topology 문자열로 배치를 추측할 필요가 없다.
+ * 좌표는 STEP 축(Z가 높이, 단위 mm)이며 뷰어에서 Three.js 축으로 변환한다.
+ */
+export type PartPlacement = {
+  /** 부품 이름 */
+  n: string;
+  /** 위치 [x, y, z] */
+  p: [number, number, number];
+  /** 부품 로컬 X축 방향 */
+  x: [number, number, number];
+  /** 부품 로컬 Z축 방향 */
+  z: [number, number, number];
+  /** 부품 로컬 좌표계 기준 실측 치수 [가로, 세로, 높이] (mm) */
+  s?: [number, number, number];
+};
+
+/**
+ * 부품 사이의 실제 조립 연결과 카탈로그 정보. `design_low_level.json`에서
+ * 가져온다. STEP 조립 트리는 평평해서 "이 팔의 바깥쪽이 어디까지인가"를 알 수
+ * 없는데, 이 그래프에는 그 답이 있다.
+ */
+export type DesignAssembly = {
+  /** 부품 배치 */
+  p: PartPlacement[];
+  /** 연결된 부품 쌍. 값은 `p` 배열의 인덱스다. */
+  c?: [number, number][];
+  /** 부품별 종류 번호. `part-catalog.json`의 `types`를 가리킨다. (-1 = 없음) */
+  t?: number[];
+  /** 부품별 카탈로그 모델 번호. `part-catalog.json`의 `models`를 가리킨다. */
+  m?: number[];
+};
+
+export type PartPlacementGroup = Record<string, DesignAssembly>;
+
+/** 종류·모델 이름 사전. 같은 값이 반복되므로 따로 받는다. */
+export type PartCatalog = {
+  types: string[];
+  models: string[];
+};
+
+/** 뷰어가 쓰는 형태로 푼 조립 정보. */
+export type AssemblyInfo = {
+  placements: PartPlacement[];
+  /** 부품 이름 → 직접 연결된 부품 이름들 */
+  neighbours: Map<string, string[]>;
+  /** 부품 이름 → 종류 (예: `Tube`, `Motor`) */
+  typeOf: Map<string, string>;
+  /** 부품 이름 → 카탈로그 모델 (예: `0394OD_para_tube`) */
+  modelOf: Map<string, string>;
+};
+
 export type WingParameters = {
   id: string;
   path: string;

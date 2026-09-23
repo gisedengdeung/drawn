@@ -25,9 +25,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Slider } from '@/components/ui/slider';
+import {
+  DIRECTION_GROUPS,
+  EMPTY_SHAPE_FILTERS,
+  WING_PRESENCES,
+  describeShape,
+  matchesShape,
+  shapeFacetCounts,
+  shapeFilterCount,
+  type ShapeFilters,
+} from '@/lib/design-shape';
+import { useShapeClasses } from '@/hooks/use-shape-classes';
+import { ShapeIcon, WingIcon } from '@/components/shape-icon';
 import { Switch } from '@/components/ui/switch';
 import type {
-  AirframeKind,
   DatasetIndex,
   DesignSummary,
   ShowcaseMap,
@@ -60,14 +71,9 @@ const RECENT_STORAGE_KEY = 'drawn:recent-designs';
 const ONBOARDING_STORAGE_KEY = 'drawn:onboarding-dismissed';
 const RECENT_LIMIT = 8;
 
-const AIRFRAME_KIND_OPTIONS: { value: 'all' | AirframeKind; label: string }[] = [
-  { value: 'all', label: '전체 형태' },
-  { value: 'quad', label: '쿼드콥터' },
-  { value: 'hexa', label: '헥사콥터' },
-  { value: 'octo', label: '옥토콥터' },
-  { value: 'multi', label: '멀티콥터' },
-  { value: 'wing', label: '고정익·복합익' },
-];
+/** 한 번에 보여줄 결과 수. 바닥에 닿으면 이만큼씩 더 붙인다. */
+const LIST_PAGE = 60;
+
 
 const PRESET_ICONS: Record<string, typeof PackageCheck> = {
   Delivery: PackageCheck,
@@ -85,6 +91,59 @@ function readStoredIds(key: string): number[] {
   } catch {
     return [];
   }
+}
+
+function toggle<T>(list: T[], value: T): T[] {
+  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+}
+
+/**
+ * 생김새 트리 한 단. 옆 숫자는 "이걸 고르면 몇 개가 남는가"이며, 고르기 전에
+ * 보이므로 눌렀다가 0개가 되는 일이 없습니다.
+ */
+function ShapeLevel<T extends string>({
+  label,
+  options,
+  selected,
+  onToggle,
+  wide = false,
+}: {
+  label: string;
+  options: { value: T; label: string; hint?: string; note?: string; count: number; icon?: React.ReactNode }[];
+  selected: T[];
+  onToggle: (value: T) => void;
+  wide?: boolean;
+}) {
+  return (
+    <div className="mb-3">
+      <p className="mb-1.5 text-[10px] font-medium text-[#6e6e73]">{label}</p>
+      <div className={wide ? 'grid grid-cols-2 gap-1.5' : 'grid grid-cols-4 gap-1.5'}>
+        {options.map((option) => {
+          const active = selected.includes(option.value);
+          const disabled = option.count === 0 && !active;
+          return (
+            <button
+              key={option.value}
+              onClick={() => onToggle(option.value)}
+              aria-pressed={active}
+              disabled={disabled}
+              title={option.hint}
+              className={`flex flex-col items-center gap-0.5 rounded-lg border px-1 py-1.5 transition disabled:opacity-30 ${
+                active
+                  ? 'border-[#93c5fd] bg-[#eff6ff] text-[#1b64da]'
+                  : 'border-[#e5e5ea] bg-white text-[#6e6e73] hover:bg-[#f5f5f7]'
+              }`}
+            >
+              {option.icon}
+              <span className="text-[10px] font-medium leading-tight">{option.label}</span>
+              {option.note && <span className="text-[9px] opacity-70">({option.note})</span>}
+              <span className="font-mono text-[9px] opacity-70">{option.count.toLocaleString()}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function writeStoredIds(key: string, ids: number[]) {
@@ -115,10 +174,15 @@ export function ExplorerView({
   onOpenGuide: () => void;
 }) {
   const [mode, setMode] = useState<SearchMode>('filter');
-  const [airframeKind, setAirframeKind] = useState<'all' | AirframeKind>('all');
-  const [massMax, setMassMax] = useState(15);
-  const [feasibleOnly, setFeasibleOnly] = useState(true);
-  const [viewerOnly, setViewerOnly] = useState(true);
+  const [shape, setShape] = useState<ShapeFilters>(EMPTY_SHAPE_FILTERS);
+  // 슬라이더는 30kg까지만 눈금을 두고, 31은 "제한 없음"이다. 최대 질량이
+  // 240,029kg인 이상치가 있어 상한을 그냥 열면 눈금이 쓸모없어진다.
+  const MASS_ANY = 31;
+  const [massMax, setMassMax] = useState(MASS_ANY);
+  const [feasibleOnly, setFeasibleOnly] = useState(false);
+  const [viewerOnly, setViewerOnly] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(LIST_PAGE);
+  const { classes: shapeClasses } = useShapeClasses();
   const [favorites, setFavorites] = useState<number[]>([]);
   const [recent, setRecent] = useState<number[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -167,19 +231,41 @@ export function ExplorerView({
     });
   };
 
-  const filtered = useMemo(() => {
-    return dataset.designs
-      .filter((design) => {
+  // 생김새가 아닌 조건을 먼저 적용한다. 생김새 각 단의 개수 표시는 이 결과를
+  // 모집단으로 삼아야 실제로 눌렀을 때와 맞는다.
+  const shapePool = useMemo(
+    () =>
+      dataset.designs.filter((design) => {
         if (viewerOnly && !showcases[String(design.id)]) return false;
         if (feasibleOnly && !design.feasible) return false;
-        if (design.mass > massMax) return false;
-        if (airframeKind !== 'all' && classifyAirframe(design).kind !== airframeKind) return false;
+        if (massMax < MASS_ANY && design.mass > massMax) return false;
         return true;
-      })
-      .sort((a, b) => b.maxDistance - a.maxDistance || a.id - b.id);
-  }, [airframeKind, dataset.designs, feasibleOnly, massMax, showcases, viewerOnly]);
+      }),
+    [dataset.designs, feasibleOnly, massMax, showcases, viewerOnly],
+  );
 
-  const visibleResults = filtered.slice(0, 60);
+  const facets = useMemo(
+    () => shapeFacetCounts(shapePool, shapeClasses, shape),
+    [shape, shapeClasses, shapePool],
+  );
+
+  const filtered = useMemo(
+    () =>
+      shapePool
+        .filter((design) => matchesShape(design, shapeClasses[String(design.id)], shape))
+        .sort((a, b) => b.maxDistance - a.maxDistance || a.id - b.id),
+    [shape, shapeClasses, shapePool],
+  );
+
+  // 조건이 바뀌면 처음부터 다시 센다. 예전의 60개 상한과 달리 끝까지 볼 수 있다.
+  const filterKey = `${viewerOnly}|${feasibleOnly}|${massMax}|${JSON.stringify(shape)}`;
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (lastFilterKey !== filterKey) {
+    setLastFilterKey(filterKey);
+    setVisibleCount(LIST_PAGE);
+  }
+
+  const visibleResults = filtered.slice(0, visibleCount);
   const current = selected ?? visibleResults[0] ?? dataset.designs[0];
   const currentId = current.id;
   const currentDetail = showcases[String(currentId)] ?? null;
@@ -281,44 +367,63 @@ export function ExplorerView({
 
             {mode === 'filter' ? (
               <>
-                <div className="mb-3 grid grid-cols-2 rounded-lg bg-[#f5f5f7] p-1 text-[11px] font-medium">
-                  <button
-                    onClick={() => setViewerOnly(true)}
-                    className={`rounded-md px-2 py-2 transition ${viewerOnly ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73]'}`}
-                  >
-                    원본 STL · 12
-                  </button>
-                  <button
-                    onClick={() => setViewerOnly(false)}
-                    className={`rounded-md px-2 py-2 transition ${!viewerOnly ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73]'}`}
-                  >
-                    프리뷰 · 27,714
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {AIRFRAME_KIND_OPTIONS.map((option) => (
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#3c3c43]">생김새로 고르기</p>
+                  {shapeFilterCount(shape) > 0 && (
                     <button
-                      key={option.value}
-                      onClick={() => setAirframeKind(option.value)}
-                      className={`rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition ${
-                        airframeKind === option.value
-                          ? 'border-[#93c5fd] bg-[#eff6ff] text-[#1b64da]'
-                          : 'border-[#e5e5ea] bg-white text-[#6e6e73] hover:bg-[#f5f5f7]'
-                      }`}
+                      onClick={() => setShape(EMPTY_SHAPE_FILTERS)}
+                      className="rounded-full px-2 py-0.5 text-[10px] font-medium text-[#1b64da] hover:bg-[#eff6ff]"
                     >
-                      {option.label}
+                      조건 지우기
                     </button>
-                  ))}
+                  )}
                 </div>
+                {shapeFilterCount(shape) > 0 && (
+                  <p className="mb-2 rounded-lg bg-[#eff6ff] px-2.5 py-1.5 text-[11px] font-medium text-[#1b64da]">
+                    {describeShape(shape)}
+                  </p>
+                )}
+
+                <ShapeLevel
+                  label="프로펠러가 이루는 도형"
+                  options={DIRECTION_GROUPS.map((item) => ({
+                    value: item.value,
+                    label: item.label,
+                    note: item.note,
+                    count: facets.directions[item.value] ?? 0,
+                    icon: <ShapeIcon directions={item.icon} />,
+                  }))}
+                  selected={shape.directions}
+                  onToggle={(value) =>
+                    setShape((previous) => ({ ...previous, directions: toggle(previous.directions, value) }))
+                  }
+                />
+
+                <ShapeLevel
+                  label="날개"
+                  options={WING_PRESENCES.map((item) => ({
+                    value: item.value,
+                    label: item.label,
+                    count: facets.wings[item.value] ?? 0,
+                    icon: <WingIcon present={item.value === 'wings'} />,
+                  }))}
+                  selected={shape.wings}
+                  onToggle={(value) =>
+                    setShape((previous) => ({ ...previous, wings: toggle(previous.wings, value) }))
+                  }
+                />
 
                 <div className="mt-4">
                   <div className="mb-2 flex justify-between text-xs text-[#6e6e73]">
-                    <span>최대 질량</span><span className="font-mono font-medium text-[#3c3c43]">≤ {massMax} kg</span>
+                    <span>최대 질량</span>
+                    <span className="font-mono font-medium text-[#3c3c43]">
+                      {massMax >= MASS_ANY ? '제한 없음' : `≤ ${massMax} kg`}
+                    </span>
                   </div>
                   <Slider
                     value={[massMax]}
                     min={2}
-                    max={30}
+                    max={MASS_ANY}
                     step={1}
                     onValueChange={(value) => setMassMax(Number(Array.isArray(value) ? value[0] : value))}
                     className="[&_[data-slot=slider-range]]:bg-[#3182f6]"
@@ -326,11 +431,18 @@ export function ExplorerView({
                   />
                 </div>
 
-                <div className="mt-4 rounded-lg bg-[#f5f5f7] p-3">
+                <div className="mt-4 space-y-2 rounded-lg bg-[#f5f5f7] p-3">
                   <div className="flex items-center justify-between gap-3 text-xs text-[#6e6e73]">
-                    비행거리 계산 가능한 설계도
-                    <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="비행거리 계산 가능한 설계도" />
+                    원본 STL 있는 설계만
+                    <Switch checked={viewerOnly} onCheckedChange={setViewerOnly} aria-label="원본 STL 있는 설계만" />
                   </div>
+                  <div className="flex items-center justify-between gap-3 text-xs text-[#6e6e73]">
+                    비행 해석된 설계만
+                    <Switch checked={feasibleOnly} onCheckedChange={setFeasibleOnly} aria-label="비행 해석된 설계만" />
+                  </div>
+                  <p className="text-[10px] leading-4 text-[#86868b]">
+                    비행 해석은 전체의 38.7%만 성공했습니다. 켜면 16,977개가 빠집니다.
+                  </p>
                 </div>
               </>
             ) : (
@@ -438,10 +550,23 @@ export function ExplorerView({
           {mode === 'filter' ? (
             <>
               <div className="flex items-center justify-between border-b border-[#e5e5ea] px-3.5 py-2.5 text-xs">
-                <span className="text-[#6e6e73]">검색 결과 <small className="ml-1 text-[10px]">(최대 60개 표시)</small></span>
-                <span className="font-mono font-medium text-[#3c3c43]">{filtered.length.toLocaleString()}</span>
+                <span className="text-[#6e6e73]">
+                  설계 <span className="font-mono font-medium text-[#3c3c43]">{filtered.length.toLocaleString()}</span>
+                  <small className="ml-1 text-[10px] text-[#86868b]">/ {dataset.designs.length.toLocaleString()}</small>
+                </span>
+                {visibleCount < filtered.length && (
+                  <span className="text-[10px] text-[#86868b]">{visibleCount.toLocaleString()}개 표시</span>
+                )}
               </div>
-              <div className="max-h-[430px] divide-y divide-[#e5e5ea] overflow-y-auto">
+              <div
+                className="max-h-[430px] divide-y divide-[#e5e5ea] overflow-y-auto"
+                onScroll={(event) => {
+                  const box = event.currentTarget;
+                  if (box.scrollTop + box.clientHeight >= box.scrollHeight - 160) {
+                    setVisibleCount((count) => Math.min(count + LIST_PAGE, filtered.length));
+                  }
+                }}
+              >
                 {visibleResults.length ? (
                   visibleResults.map((design) => {
                     const isFavorite = favorites.includes(design.id);

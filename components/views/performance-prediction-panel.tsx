@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { BrainCircuit, LoaderCircle, RotateCcw } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import type { DesignDraft } from '../../lib/drawn-types';
@@ -54,6 +54,7 @@ export function PerformancePredictionPanel({
   compact = false,
   speed: controlledSpeed,
   onSpeedChange,
+  onPitchChange,
 }: {
   designId: number;
   draft: DesignDraft | null;
@@ -62,6 +63,8 @@ export function PerformancePredictionPanel({
   compact?: boolean;
   speed?: number;
   onSpeedChange?: (speed: number) => void;
+  /** 선택한 속도의 예측 피치각. 3D 기체를 그만큼 기울이는 데 쓴다. */
+  onPitchChange?: (pitchDegrees: number | null) => void;
 }) {
   const id = useId();
   const [localSpeed, setLocalSpeed] = useState(20);
@@ -76,6 +79,13 @@ export function PerformancePredictionPanel({
     [metric]: { label: `${selectedMetric.label} (${selectedMetric.unit})`, color: '#3182f6' },
   }), [metric, selectedMetric.label, selectedMetric.unit]);
   const warnings = [...new Set([...(result?.warnings ?? []), ...(row?.warnings ?? [])])];
+
+  // 예측이 바뀌면 바깥의 3D 기체 자세도 따라가게 알린다. 예측이 없거나 실패한
+  // 동안은 null을 보내, 옛 각도로 기울어진 채 남지 않게 한다.
+  const pitch = typeof row?.pitch === 'number' ? row.pitch : null;
+  useEffect(() => {
+    onPitchChange?.(pitch);
+  }, [onPitchChange, pitch]);
 
   return (
     <section aria-labelledby={`${id}-title`} className="min-w-0 rounded-2xl border border-[#bfdbfe] bg-white p-4">

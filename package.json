@@ -10,6 +10,7 @@
     "build": "vinext build",
     "start": "vinext start",
     "data:prepare": "node scripts/prepare-aircraftverse.mjs",
+    "data:placements": "node scripts/prepare-part-placements.mjs",
     "data:prepare-drone-zones": "node scripts/prepare-drone-zones.mjs",
     "data:validate": "node scripts/validate-generated-data.mjs",
     "test": "node --test tests/*.test.mjs",

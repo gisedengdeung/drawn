@@ -1,15 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 import { Button } from '@/components/ui/button';
 import type {
+  AssemblyInfo,
   DesignDraft,
   DesignSegment,
   ParameterGroup,
+  PartPlacement,
 } from '@/lib/drawn-types';
 
 export type ForceVectors = {
@@ -38,6 +41,17 @@ type ParametricUavViewerProps = {
   forceVectors?: ForceVectors;
   showForces?: boolean;
   syncGroup?: string;
+  /** 원본 STEP 부품 배치와 조립 그래프. 주어지면 topology 추정 대신 이것을 쓴다. */
+  assembly?: AssemblyInfo | null;
+  /**
+   * 프로펠러 날개 수. 카탈로그 이름(`apc_propellers_15x5_5MR`)에는 날개 수가
+   * 없어 데이터로 알 수 없다. 보는 사람이 고르는 표시 설정이다.
+   */
+  bladeCount?: 2 | 4;
+  /** 강조할 부품 이름들. 비어 있으면 평소 색으로 그린다. */
+  selection?: string[];
+  /** 3D에서 부품을 클릭했을 때. 주면 선택 상태를 바깥에서 관리한다. */
+  onSelectionChange?: (names: string[]) => void;
 };
 
 type ViewerRuntime = {
@@ -49,15 +63,46 @@ type ViewerRuntime = {
   ghost: THREE.Group | null;
   forces: THREE.Group | null;
   grid: THREE.GridHelper;
-  fitCamera: (radius: number, force?: boolean) => void;
+  fitCamera: (points: THREE.Vector3[], force?: boolean) => void;
   radius: number;
+  /** 마지막으로 맞춘 모델 바깥 점들. 창 크기가 바뀔 때 같은 곳을 다시 잡는다. */
+  hull: THREE.Vector3[];
   lastFittedRadius: number;
   topology: string;
   syncing: boolean;
 };
 
 const SCALE = 0.01;
+const UP = new THREE.Vector3(0, 1, 0);
 const VIEWER_SYNC_GROUPS = new Map<string, Set<ViewerRuntime>>();
+
+/**
+ * 모델을 감쌀 때 실제로 바깥에 있는 점들. 부품마다 제 상자의 여덟 꼭짓점을
+ * 월드 좌표로 옮겨 모은다.
+ *
+ * 모델 전체의 AABB 꼭짓점을 쓰면 안 된다. 그 꼭짓점은 서로 다른 부품의 극값을
+ * 조합한 자리라 아무 부품도 거기 없고, 대각선으로 뻗은 기체일수록 실제보다
+ * 훨씬 크게 잡혀 카메라가 필요 이상으로 물러난다.
+ */
+function hullPointsOf(model: THREE.Object3D) {
+  const points: THREE.Vector3[] = [];
+  model.updateWorldMatrix(true, true);
+  model.traverse((node) => {
+    const mesh = node as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    const local = mesh.geometry.boundingBox;
+    if (!local) return;
+    for (const x of [local.min.x, local.max.x]) {
+      for (const y of [local.min.y, local.max.y]) {
+        for (const z of [local.min.z, local.max.z]) {
+          points.push(new THREE.Vector3(x, y, z).applyMatrix4(mesh.matrixWorld));
+        }
+      }
+    }
+  });
+  return points;
+}
 
 export function ParametricUavViewer({
   draft,
@@ -68,6 +113,10 @@ export function ParametricUavViewer({
   forceVectors,
   showForces = false,
   syncGroup,
+  assembly = null,
+  bladeCount = 2,
+  selection,
+  onSelectionChange,
 }: ParametricUavViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ViewerRuntime | null>(null);
@@ -76,6 +125,43 @@ export function ParametricUavViewer({
   );
   const [errorMessage, setErrorMessage] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  // 바깥에서 선택을 넘겨주면 그것을 따르고, 아니면 혼자 들고 있는다.
+  const [ownPicked, setOwnPicked] = useState<string[]>([]);
+  const picked = selection ?? ownPicked;
+  const setPicked = useCallback(
+    (next: string[] | ((current: string[]) => string[])) => {
+      const resolve = (current: string[]) =>
+        typeof next === 'function' ? next(current) : next;
+      if (onSelectionChange) onSelectionChange(resolve(picked));
+      else setOwnPicked(resolve);
+    },
+    [onSelectionChange, picked],
+  );
+  // 장면을 만드는 useEffect는 선택이 바뀔 때마다 다시 돌면 안 된다. 최신
+  // 핸들러를 ref로 들고 있어 의존성에서 빼 둔다.
+  const pickRef = useRef(setPicked);
+  useEffect(() => {
+    pickRef.current = setPicked;
+  }, [setPicked]);
+  const selectedParts = useMemo(
+    () => (picked.length ? new Set(picked) : null),
+    [picked],
+  );
+  const pickedInfo = useMemo(() => {
+    if (!assembly || !picked.length) return null;
+    const last = picked[picked.length - 1];
+    const part = assembly.placements.find((item) => item.n === last);
+    if (!part) return null;
+    const types = [...new Set(picked.map((name) => assembly.typeOf.get(name)).filter(Boolean))];
+    return {
+      name: part.n,
+      type: assembly.typeOf.get(part.n) ?? null,
+      model: assembly.modelOf.get(part.n) ?? null,
+      size: part.s ?? null,
+      count: picked.length,
+      types: types as string[],
+    };
+  }, [assembly, picked]);
   const hierarchyDiagnostics = useMemo(
     () => analyzeParametricHierarchy(draft),
     [draft],
@@ -106,7 +192,7 @@ export function ParametricUavViewer({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.15;
     Object.assign(renderer.domElement.style, {
       display: 'block',
       width: '100%',
@@ -143,13 +229,55 @@ export function ParametricUavViewer({
     };
     renderer.domElement.addEventListener('keydown', handleKeyboard);
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x91a9b6, 2.7));
-    const key = new THREE.DirectionalLight(0xffffff, 3.3);
-    key.position.set(8, 12, 7);
+    // 클릭으로 부품 고르기. 화면을 돌리려고 드래그한 것과 구분하려면 누른
+    // 자리에서 거의 움직이지 않았을 때만 선택으로 친다.
+    const raycaster = new THREE.Raycaster();
+    let pressedAt: { x: number; y: number } | null = null;
+    const handlePointerDown = (event: PointerEvent) => {
+      pressedAt = { x: event.clientX, y: event.clientY };
+    };
+    const handlePointerUp = (event: PointerEvent) => {
+      const start = pressedAt;
+      pressedAt = null;
+      if (!start) return;
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
+      const model = runtimeRef.current?.model;
+      if (!model) return;
+      const bounds = renderer.domElement.getBoundingClientRect();
+      raycaster.setFromCamera(
+        new THREE.Vector2(
+          ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
+          -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
+        ),
+        camera,
+      );
+      const hit = raycaster.intersectObjects(model.children, true)[0];
+      // 프로펠러처럼 여러 조각으로 이뤄진 부품은 이름이 부모 그룹에 있다.
+      let node: THREE.Object3D | null = hit?.object ?? null;
+      while (node && !node.name && node !== model) node = node.parent;
+      const name = node && node !== model ? node.name : '';
+      // 빈 공간을 눌렀다고 선택을 지우지 않는다. 화면을 돌리려다 빗맞히면
+      // 애써 고른 것이 한 번에 날아간다. 해제는 목록의 버튼이나 ✕로 한다.
+      if (!name) return;
+      pickRef.current((current) =>
+        // 이미 고른 것을 다시 누르면 빼고, 아니면 더한다. 목록과 같은 방식이다.
+        current.includes(name)
+          ? current.filter((item) => item !== name)
+          : [...current, name],
+      );
+    };
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown);
+    renderer.domElement.addEventListener('pointerup', handlePointerUp);
+
+    // 원본 STL 뷰어와 같은 조명이라야 나란히 놓았을 때 명암이 같게 보인다.
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x91a9b6, 2.6));
+    const key = new THREE.DirectionalLight(0xffffff, 3.6);
+    key.position.set(4, 7, 5);
     scene.add(key);
-    const fill = new THREE.DirectionalLight(0x9ee8ec, 1.8);
-    fill.position.set(-7, 5, -8);
-    scene.add(fill);
+    // 반대편 림 라이트가 윤곽을 살려 준다. 이게 없으면 형태가 평평해 보인다.
+    const rim = new THREE.DirectionalLight(0x86d8df, 2.2);
+    rim.position.set(-5, 2, -4);
+    scene.add(rim);
 
     const grid = new THREE.GridHelper(30, 30, 0x9cb3bd, 0xd4e0e5);
     const gridMaterials = Array.isArray(grid.material)
@@ -168,9 +296,12 @@ export function ParametricUavViewer({
     let lastWidth = 0;
     let lastHeight = 0;
 
-    const fitCamera = (radius: number, force = false) => {
+    const fitCamera = (points: THREE.Vector3[], force = false) => {
       const runtime = runtimeRef.current;
-      if (!runtime || radius <= 0) return;
+      if (!runtime || !points.length) return;
+      const box = new THREE.Box3().setFromPoints(points);
+      const centre = box.getCenter(new THREE.Vector3());
+      const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 2.5);
       const previous = runtime.lastFittedRadius;
       runtime.radius = radius;
       const changedMaterially =
@@ -183,15 +314,55 @@ export function ParametricUavViewer({
       const verticalFov = THREE.MathUtils.degToRad(camera.fov);
       const horizontalFov =
         2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
-      const limitingFov = Math.max(Math.min(verticalFov, horizontalFov), 0.1);
-      const distance = (radius / Math.sin(limitingFov / 2)) * 1.12;
-      camera.position.copy(
-        new THREE.Vector3(1.12, 0.88, 1.2).normalize().multiplyScalar(distance),
-      );
+      // 바운딩 "구"를 화면에 맞추면 항공기처럼 납작한 형상은 구의 빈 공간만큼
+      // 작아져, 화면 가로의 35%밖에 쓰지 못했다. 시선 기준 가로·세로 축으로
+      // 실제 부품 꼭짓점을 재서 맞춘다.
+      const view = new THREE.Vector3(1.12, 0.88, 1.2).normalize();
+      const right = new THREE.Vector3().crossVectors(view, UP).normalize();
+      const up = new THREE.Vector3().crossVectors(right, view);
+      // 점 하나가 화면에 들어오려면 |가로| ≤ (거리 − 깊이)·tan(시야/2) 여야
+      // 한다. 카메라 쪽으로 튀어나온 점일수록 더 물러나야 하므로, 각 점이
+      // 요구하는 거리 중 가장 큰 값을 쓴다. 그다음 실제로 찍힌 자리의 한가운데를
+      // 보도록 시선을 옮기고 다시 잰다 — 상자 중심과 투영 중심은 원근 때문에
+      // 어긋나서, 한 번만 재면 모델이 한쪽으로 쏠린다.
+      const spanWide = Math.tan(horizontalFov / 2);
+      const spanHigh = Math.tan(verticalFov / 2);
+      let distance = 0;
+      for (let pass = 0; pass < 4; pass += 1) {
+        distance = 0;
+        for (const point of points) {
+          const local = point.clone().sub(centre);
+          const depth = local.dot(view);
+          distance = Math.max(
+            distance,
+            Math.abs(local.dot(right)) / spanWide + depth,
+            Math.abs(local.dot(up)) / spanHigh + depth,
+          );
+        }
+        distance = Math.max(distance * 1.06, radius * 0.6);
+        let minWide = Infinity, maxWide = -Infinity;
+        let minHigh = Infinity, maxHigh = -Infinity;
+        for (const point of points) {
+          const local = point.clone().sub(centre);
+          const depth = Math.max(distance - local.dot(view), 1e-4);
+          const across = local.dot(right) / depth;
+          const above = local.dot(up) / depth;
+          minWide = Math.min(minWide, across); maxWide = Math.max(maxWide, across);
+          minHigh = Math.min(minHigh, above); maxHigh = Math.max(maxHigh, above);
+        }
+        const shiftWide = ((minWide + maxWide) / 2) * distance;
+        const shiftHigh = ((minHigh + maxHigh) / 2) * distance;
+        if (Math.hypot(shiftWide, shiftHigh) < radius * 0.004) break;
+        centre.addScaledVector(right, shiftWide).addScaledVector(up, shiftHigh);
+      }
+      // 예전에는 늘 원점을 보았는데, 부품 중심이 원점에 있는 설계는 절반도
+      // 되지 않는다. 팔이 한쪽으로만 뻗은 기체는 화면 구석으로 밀려났다.
+      camera.position.copy(view.clone().multiplyScalar(distance).add(centre));
       camera.near = Math.max(radius / 100, 0.02);
       camera.far = Math.max(distance + radius * 10, 100);
       camera.updateProjectionMatrix();
-      controls.target.set(0, 0.35, 0);
+      controls.target.copy(centre);
+      runtime.hull = points;
       controls.minDistance = Math.max(radius * 0.55, 1.5);
       controls.maxDistance = Math.max(radius * 8, 12);
       controls.update();
@@ -210,6 +381,7 @@ export function ParametricUavViewer({
       grid,
       fitCamera,
       radius: 0,
+      hull: [],
       lastFittedRadius: 0,
       topology: '',
       syncing: false,
@@ -249,7 +421,7 @@ export function ParametricUavViewer({
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       const runtime = runtimeRef.current;
-      if (runtime?.radius) runtime.fitCamera(runtime.radius, true);
+      if (runtime?.radius) runtime.fitCamera(runtime.hull, true);
     };
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(resizeFrame);
@@ -284,6 +456,8 @@ export function ParametricUavViewer({
         handleContextLost,
       );
       renderer.domElement.removeEventListener('keydown', handleKeyboard);
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       controls.dispose();
       controls.removeEventListener('change', syncCamera);
       if (syncGroup) {
@@ -321,13 +495,16 @@ export function ParametricUavViewer({
         disposeObject(runtime.forces);
       }
 
-      runtime.model = buildAircraft(draft, changedGroup, false);
-      runtime.model.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
+      runtime.model = buildAircraft(draft, changedGroup, false, assembly, baseline, selectedParts, bladeCount);
+      // STL 뷰어와 같은 범위로 자른다. 학습 모델은 -67°까지도 내놓는데(예측의
+      // 20%가 ±45°를 넘는다) 그대로 기울이면 기체가 뒤집힌 것처럼 보인다.
+      const pitch = THREE.MathUtils.clamp(pitchDegrees, -45, 45);
+      runtime.model.rotation.z = THREE.MathUtils.degToRad(pitch);
       runtime.scene.add(runtime.model);
 
       if (showGhost && baseline) {
-        runtime.ghost = buildAircraft(baseline, null, true);
-        runtime.ghost.rotation.z = THREE.MathUtils.degToRad(pitchDegrees);
+        runtime.ghost = buildAircraft(baseline, null, true, assembly, null, null, bladeCount);
+        runtime.ghost.rotation.z = THREE.MathUtils.degToRad(pitch);
         runtime.scene.add(runtime.ghost);
       } else {
         runtime.ghost = null;
@@ -336,10 +513,8 @@ export function ParametricUavViewer({
       runtime.forces = showForces ? buildForceVectors(forceVectors) : null;
       if (runtime.forces) runtime.scene.add(runtime.forces);
 
-      const box = new THREE.Box3().setFromObject(runtime.model);
-      const sphere = box.getBoundingSphere(new THREE.Sphere());
       runtime.fitCamera(
-        Math.max(sphere.radius, 2.5),
+        hullPointsOf(runtime.model),
         topologyChanged || runtime.radius === 0,
       );
       window.queueMicrotask(() => {
@@ -358,6 +533,9 @@ export function ParametricUavViewer({
     draft,
     forceVectors,
     pitchDegrees,
+    assembly,
+    bladeCount,
+    selectedParts,
     showForces,
     showGhost,
     retryKey,
@@ -394,6 +572,45 @@ export function ParametricUavViewer({
       data-surplus-wing-anchors={hierarchyDiagnostics.surplusWings}
       className="absolute inset-0 overflow-hidden bg-[#f5f5f7] outline-none [&>canvas:focus-visible]:ring-2 [&>canvas:focus-visible]:ring-inset [&>canvas:focus-visible]:ring-[#3182f6]"
     >
+      {pickedInfo && (
+        <div className="pointer-events-auto absolute right-3 top-3 z-20 w-56 rounded-xl border border-[#e5e5ea] bg-white/95 p-3 text-xs shadow-lg backdrop-blur">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-[#1d1d1f]">{pickedInfo.name}</p>
+              {pickedInfo.type && (
+                <p className="mt-0.5 text-[10px] text-[#6e6e73]">
+                  {pickedInfo.type.replaceAll('_', ' ')}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              aria-label="선택 해제"
+              onClick={() => setPicked([])}
+              className="shrink-0 rounded-md px-1.5 py-0.5 text-[#6e6e73] hover:bg-[#f5f5f7]"
+            >
+              ✕
+            </button>
+          </div>
+          {pickedInfo.size && (
+            <p className="mt-2 tabular-nums text-[#3c3c43]">
+              {pickedInfo.size.map((value) => Math.round(value)).join(' × ')}
+              <span className="ml-1 text-[10px] text-[#86868b]">mm</span>
+            </p>
+          )}
+          {pickedInfo.model && (
+            <p className="mt-2 break-all rounded-lg bg-[#f5f5f7] px-2 py-1.5 text-[10px] text-[#3c3c43]">
+              {pickedInfo.model}
+            </p>
+          )}
+          {pickedInfo.count > 1 && (
+            <p className="mt-2 border-t border-[#e5e5ea] pt-2 text-[10px] text-[#6e6e73]">
+              모두 {pickedInfo.count}개 선택됨
+              {pickedInfo.types.length > 1 && ` · ${pickedInfo.types.length}종`}
+            </p>
+          )}
+        </div>
+      )}
       {status === 'loading' && (
         <div className="absolute inset-0 z-10 grid place-items-center text-xs font-semibold tracking-[0.12em] text-[#6e6e73]">
           파라메트릭 형상 준비 중
@@ -421,50 +638,150 @@ export function ParametricUavViewer({
   );
 }
 
-function buildAircraft(
-  draft: DesignDraft,
+const COLORS = {
+  structure: 0x167f91,
+  fuselage: 0xe7eef1,
+  propulsion: 0x233a49,
+  energy: 0x6d5bd0,
+  wing: 0x82c4ce,
+  payload: 0xe7a33e,
+  layout: 0x1c9b62,
+} as const;
+
+/**
+ * 기본 상태의 부품 색. 원본 STL 뷰어와 같은 민트 톤을 쓴다. 무채색으로 두니
+ * 나란히 놓았을 때 왼쪽만 유독 흐릿해 형태가 읽히지 않았다. 부품 탭에서
+ * 고른 것에만 종류별 색이 입혀지는 규칙은 그대로다.
+ */
+const NEUTRAL_COLOR = 0x93d4dc;
+
+/**
+ * `design_low_level.json`의 component_type별 색. 부품 탭에서 골랐을 때만
+ * 쓴다. 종류를 알 수 없는 부품은 기존 계열 색으로 되돌아간다.
+ */
+export const TYPE_COLORS: Record<string, number> = {
+  Tube: 0x2f8fd4,
+  Flange: 0xef8a3c,
+  Para_Hub_2: 0x8d6e5c,
+  Para_Hub_3: 0x9d7f6b,
+  Para_Hub_4: 0xad8f7a,
+  Para_Hub_6: 0xbd9f89,
+  Motor: 0xd94f70,
+  Propeller: 0x8e5bd0,
+  Battery: 0x3fa66a,
+  BatteryController: 0x2c7f4f,
+  Sensor: 0xe0b32c,
+  Servo: 0x1c9b62,
+  Wing: 0x39bcd0,
+  Cargo: 0xe7a33e,
+  CargoCase: 0xc98626,
+  UAV_Fuselage: 0xd7e0e6,
+  Orient: 0x9aa7ad,
+};
+
+/**
+ * NACA 4자리 익형의 단면 좌표. `2712`면 최대 캠버 2%, 위치 70%, 두께 12%다.
+ * 실제 날개는 앞이 둥글고 뒤로 갈수록 뾰족한데, 직육면체로 그리면 옆에서 봤을
+ * 때 각진 판으로 보여 원본과 확연히 달랐다.
+ * 시위 1 기준의 (x, y)를 앞전 → 윗면 → 뒷전 → 아랫면 순서로 돌려준다.
+ */
+function nacaSection(profile: string, steps = 16) {
+  const code = String(profile).padStart(4, '0');
+  const camber = Number(code[0]) / 100;
+  const position = Number(code[1]) / 10;
+  const thickness = Number(code.slice(2)) / 100 || 0.12;
+  const half = (x: number) =>
+    5 * thickness *
+    (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1015 * x ** 4);
+  const mid = (x: number) => {
+    if (!camber || !position) return 0;
+    return x < position
+      ? (camber / position ** 2) * (2 * position * x - x * x)
+      : (camber / (1 - position) ** 2) * (1 - 2 * position + 2 * position * x - x * x);
+  };
+  const upper: [number, number][] = [];
+  const lower: [number, number][] = [];
+  for (let i = 0; i <= steps; i += 1) {
+    // 앞전 쪽을 촘촘히 잡아야 둥근 코가 살아난다.
+    const x = (1 - Math.cos((i / steps) * Math.PI)) / 2;
+    upper.push([x, mid(x) + half(x)]);
+    lower.push([x, mid(x) - half(x)]);
+  }
+  // 앞전에서 윗면을 따라 뒷전까지, 다시 아랫면을 따라 돌아온다.
+  return [...upper, ...lower.slice(1, -1).reverse()];
+}
+
+type MaterialFactory = (
+  kind: keyof typeof COLORS,
+  metalness?: number,
+  /** 종류별 색. 주면 계열 색 대신 이 색을 쓴다. */
+  color?: number,
+) => THREE.MeshStandardMaterial;
+
+function createMaterialFactory(
   changedGroup: ParameterGroup | null,
   ghost: boolean,
-) {
-  const group = new THREE.Group();
-  group.name = ghost ? 'baseline-ghost' : 'editable-aircraft';
-
-  const colors = {
-    structure: 0x167f91,
-    fuselage: 0xe7eef1,
-    propulsion: 0x233a49,
-    energy: 0x6d5bd0,
-    wing: 0x82c4ce,
-    payload: 0xe7a33e,
-    layout: 0x1c9b62,
-  } as const;
-  const material = (kind: keyof typeof colors, metalness = 0.12) => {
+): MaterialFactory {
+  return (kind, metalness = 0.12, color?: number) => {
     const active = changedGroup === kind;
+    const plain = color === NEUTRAL_COLOR;
     return new THREE.MeshStandardMaterial({
-      color: ghost ? 0x7f96a2 : colors[kind],
-      roughness: ghost ? 0.8 : 0.48,
-      metalness: ghost ? 0 : metalness,
+      color: ghost ? 0x7f96a2 : color ?? COLORS[kind],
+      // 기본 상태에서는 원본 STL과 같은 재질값을 쓴다.
+      roughness: ghost ? 0.8 : plain ? 0.44 : 0.48,
+      metalness: ghost ? 0 : plain ? 0.24 : metalness,
       transparent: ghost,
       opacity: ghost ? 0.16 : 1,
       depthWrite: !ghost,
-      emissive: !ghost && active ? colors[kind] : 0x000000,
+      emissive: !ghost && active ? color ?? COLORS[kind] : 0x000000,
       emissiveIntensity: !ghost && active ? 0.28 : 0,
       side: THREE.DoubleSide,
     });
   };
+}
+
+function buildAircraft(
+  draft: DesignDraft,
+  changedGroup: ParameterGroup | null,
+  ghost: boolean,
+  assembly: AssemblyInfo | null = null,
+  baseline: DesignDraft | null = null,
+  selected: Set<string> | null = null,
+  bladeCount: 2 | 4 = 2,
+) {
+  if (assembly?.placements.length) {
+    return buildFromPlacements(draft, assembly, changedGroup, ghost, baseline, selected, bladeCount);
+  }
+
+  const group = new THREE.Group();
+  group.name = ghost ? 'baseline-ghost' : 'editable-aircraft';
+
+  const colors = COLORS;
+  const material = createMaterialFactory(changedGroup, ghost);
 
   const fuselage = draft.fuselage;
+  // The source geometry is a flat rounded box, not an ellipsoid. A sphere scaled
+  // to the same numbers reads as an egg and hides the wide, low proportion.
+  const bodyWidth = Math.max(fuselage.length * SCALE, 1.3);
+  const bodyHeight = Math.max(fuselage.verticalDiameter * SCALE, 0.68);
+  const bodyDepth = Math.max(fuselage.horizontalDiameter * SCALE, 1.56);
   const body = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 36, 22),
+    new RoundedBoxGeometry(
+      bodyWidth,
+      bodyHeight,
+      bodyDepth,
+      4,
+      Math.min(bodyWidth, bodyHeight, bodyDepth) * 0.24,
+    ),
     material('fuselage', 0.22),
   );
   body.name = 'fuselage';
-  body.scale.set(
-    Math.max(fuselage.length * SCALE * 0.5, 0.65),
-    Math.max(fuselage.verticalDiameter * SCALE * 0.5, 0.34),
-    Math.max(fuselage.horizontalDiameter * SCALE * 0.5, 0.78),
-  );
-  body.position.y = 0.42;
+  // Source STLs stack the craft as landing gear → rotors → arm deck → fuselage,
+  // with the fuselage floor meeting the arms exactly. Fixed constants used to
+  // flatten all of that into one plane regardless of the body's real height.
+  const deckY = Math.max(bodyHeight * 0.7, fuselage.floorHeight * SCALE * 3, 0.5);
+  const bodyCenterY = deckY + bodyHeight * 0.5;
+  body.position.y = bodyCenterY;
   group.add(body);
 
   const topologyCount = Math.max(
@@ -488,7 +805,7 @@ function buildAircraft(
     ),
     material('structure', 0.34),
   );
-  hub.position.y = 0.78;
+  hub.position.y = deckY;
   group.add(hub);
 
   const usableSegments = draft.segments.filter((segment) => segment.length > 0);
@@ -514,6 +831,7 @@ function buildAircraft(
   const armResult = buildHierarchicalArms(
     draft,
     fallbackLength,
+    deckY,
     (start, end, nodeType) => {
       const radius = /MountBracket/i.test(nodeType)
         ? 0.035
@@ -541,12 +859,12 @@ function buildAircraft(
     const length = Math.max(fallbackLength * SCALE, 1.45);
     const start = new THREE.Vector3(
       Math.cos(angle) * 0.25,
-      0.73,
+      deckY,
       Math.sin(angle) * 0.25,
     );
     const end = new THREE.Vector3(
       Math.cos(angle) * length,
-      0.76,
+      deckY,
       Math.sin(angle) * length,
     );
     group.add(cylinderBetween(start, end, 0.075, material('structure', 0.4)));
@@ -564,15 +882,33 @@ function buildAircraft(
       ),
       material('propulsion', 0.55),
     );
-    motor.position.copy(end).add(new THREE.Vector3(0, 0.15, 0));
+    // Motors hang below the arm end and the rotor disc sits under them, matching
+    // the source silhouette where the widest band is below the arm deck.
+    motor.position.copy(end).add(new THREE.Vector3(0, -0.14, 0));
     motor.name = `motor-${index + 1}`;
     group.add(motor);
 
     const { diameter, pitch } = propellerSize(propulsionGroup?.propellerType);
     const rotor = new THREE.Group();
     rotor.name = `propeller-${index + 1}`;
-    rotor.position.copy(end).add(new THREE.Vector3(0, 0.34, 0));
+    rotor.position.copy(end).add(new THREE.Vector3(0, -0.3, 0));
     const rotorRadius = diameter * 25.4 * SCALE * 0.5;
+    // Blades alone read as thin sticks. The swept disc restores the silhouette
+    // the source STL shows, where rotor discs dominate the top view.
+    const sweep = new THREE.Mesh(
+      new THREE.CylinderGeometry(rotorRadius, rotorRadius, 0.015, 44),
+      new THREE.MeshStandardMaterial({
+        color: ghost ? 0x7f96a2 : colors.propulsion,
+        transparent: true,
+        opacity: ghost ? 0.05 : 0.16,
+        depthWrite: false,
+        roughness: 0.65,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      }),
+    );
+    sweep.name = `propeller-sweep-${index + 1}`;
+    rotor.add(sweep);
     const hubCap = new THREE.Mesh(
       new THREE.CylinderGeometry(0.09, 0.11, 0.1, 18),
       material('propulsion', 0.3),
@@ -615,25 +951,28 @@ function buildAircraft(
       material('energy', 0.05),
     );
     battery.name = `battery-envelope-${index + 1}`;
+    // Batteries ride inside the fuselage, so they follow its centre height.
     battery.position.set(
       (index - (batteryTypes.length - 1) / 2) * 0.65,
-      0.45,
+      bodyCenterY,
       0,
     );
     group.add(battery);
   });
 
   if (draft.payload.mass > 0) {
+    const payloadHeight = 0.28 + Math.min(draft.payload.mass, 10) * 0.025;
     const payload = new THREE.Mesh(
-      new THREE.BoxGeometry(
-        0.52,
-        0.28 + Math.min(draft.payload.mass, 10) * 0.025,
-        0.4,
-      ),
+      new THREE.BoxGeometry(0.52, payloadHeight, 0.4),
       material('payload', 0.08),
     );
     payload.name = 'payload';
-    payload.position.set(0, -0.18, 0);
+    // Cargo hangs under the fuselage floor rather than at a fixed depth.
+    payload.position.set(
+      0,
+      bodyCenterY - bodyHeight * 0.5 - payloadHeight * 0.5,
+      0,
+    );
     group.add(payload);
   }
 
@@ -697,9 +1036,760 @@ function buildAircraft(
         material('layout', 0.1),
       );
       sensor.name = `sensor-${name}`;
-      sensor.position.set(position.x * SCALE, 0.75, position.y * SCALE);
+      sensor.position.set(
+        position.x * SCALE,
+        bodyCenterY + bodyHeight * 0.5,
+        position.y * SCALE,
+      );
       group.add(sensor);
     });
+
+  return group;
+}
+
+/**
+ * 원본 STEP 좌표로 기체를 조립한다. 부품 이름과 위치·방향이 모두 주어지므로
+ * topology 문자열로 배치를 추정하던 경로(buildAircraft의 나머지)를 대신한다.
+ * STEP은 Z가 높이인 mm 좌표계라 Three.js 축(Y가 높이)으로 바꿔 넣는다.
+ */
+function buildFromPlacements(
+  draft: DesignDraft,
+  assembly: AssemblyInfo,
+  changedGroup: ParameterGroup | null,
+  ghost: boolean,
+  baseline: DesignDraft | null = null,
+  selected: Set<string> | null = null,
+  bladeCount: 2 | 4 = 2,
+) {
+  const { placements, neighbours } = assembly;
+  const group = new THREE.Group();
+  group.name = ghost ? 'baseline-ghost' : 'editable-aircraft';
+  const makeMaterial = createMaterialFactory(changedGroup, ghost);
+  // A design carries up to 126 parts. Building one material per part pushed
+  // hundreds of shader programs at the GPU and made the viewer sluggish.
+  const materialCache = new Map<string, THREE.MeshStandardMaterial>();
+  const material: MaterialFactory = (kind, metalness = 0.12, color) => {
+    const key = `${kind}:${metalness}:${color ?? 'base'}`;
+    const cached = materialCache.get(key);
+    if (cached) return cached;
+    const created = makeMaterial(kind, metalness, color);
+    materialCache.set(key, created);
+    return created;
+  };
+
+  /**
+   * 부품 하나의 색을 정한다. 종류를 알면 종류별 색, 모르면 계열 색이다.
+   * 선택된 부품이 있으면 고른 것만 강조하고 나머지는 흐린 회색으로 물러난다.
+   */
+  // 선택하지 않은 부품은 뒤로 물러나되 형태는 남겨 둔다.
+  const dimmed = new THREE.MeshStandardMaterial({
+    color: 0xb4c2c9,
+    roughness: 0.85,
+    metalness: 0,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const partMaterial = (
+    part: PartPlacement,
+    kind: keyof typeof COLORS,
+    metalness = 0.12,
+  ) => {
+    // 아무것도 고르지 않았으면 전체가 무채색이다.
+    if (!selected) return material(kind, metalness, NEUTRAL_COLOR);
+    if (!selected.has(part.n)) return dimmed;
+    const typed = TYPE_COLORS[assembly.typeOf.get(part.n) ?? ''];
+    return material(kind, metalness, typed);
+  };
+
+  const toScene = (v: readonly number[]) =>
+    new THREE.Vector3(v[0] * SCALE, v[2] * SCALE, -v[1] * SCALE);
+  const toDirection = (v: readonly number[]) =>
+    new THREE.Vector3(v[0], v[2], -v[1]).normalize();
+
+  /**
+   * 실측 치수를 쓰면 형상은 정확해지지만 슬라이더를 움직여도 상자가 그대로라
+   * 편집 피드백이 사라진다. 기준 설계 대비 변화율을 곱해 둘 다 잡는다.
+   * 편집 전에는 비율이 정확히 1이므로 실측 그대로 그려진다.
+   */
+  const reference = baseline ?? draft;
+  const growth = (current: number, original: number) =>
+    original > 0 && current > 0
+      ? THREE.MathUtils.clamp(Math.cbrt(current / original), 0.4, 2.5)
+      : 1;
+
+  // `ARM_55703_1`은 sourceParameters의 `Arm_55703_Length`와 짝이다.
+  //
+  // 접두사까지 키에 넣어야 한다. 한 설계에 `Arm_5_Length`와
+  // `RotatedArm_5_Length`가 같이 있는데 숫자만 키로 쓰면 뒤엣것이 앞엣것을
+  // 덮어써, 팔이 남의 길이로 그려진다. 설계 #1에서는 425mm 팔이 50mm로
+  // 줄어 관절까지 닿지 못하고 끊어져 보였다(전체 8개 설계에서 발생).
+  const armKeyOf = (prefix: string, index: string) => `${prefix.toUpperCase()}_${index}`;
+  const baseLengthByKey = new Map<string, number>();
+  for (const [name, value] of draft.sourceParameters) {
+    const match = name.match(/^((?:Rotated|FixedRotation)?Arm)_(\d+)_Length$/i);
+    if (match && typeof value === 'number') {
+      baseLengthByKey.set(armKeyOf(match[1], match[2]), value);
+    }
+  }
+
+  // 팔 슬라이더는 draft.segments에 쓰는데 이 경로는 STEP 좌표를 그대로 써서
+  // 편집이 형상에 전혀 나타나지 않았다. 세그먼트를 팔 부품과 이어 준다.
+  // 기준 길이가 sourceParameters의 값과 같은 팔이 그 세그먼트의 팔이다.
+  //
+  // 꺾인 마디(AngledWingArm·DoubleBendSegment, 전체의 10%)는 슬라이더 값이
+  // `arm1Length + arm2Length` 합계라 그 합과 같은 파라미터가 존재하지 않는다.
+  // 합계로만 찾던 예전 방식은 이 9,439개에서 100% 실패해, 슬라이더를 움직여도
+  // 형상이 그대로였다. 두 팔로 나눠 각각 찾으면 전부 짝이 맞는다.
+  const armTargetsOf = (segment: DesignDraft['segments'][number]) => {
+    const first = segment.parameters?.arm1Length;
+    const second = segment.parameters?.arm2Length;
+    return typeof first === 'number' && typeof second === 'number'
+      ? [first, second]
+      : [segment.length];
+  };
+
+  const armKeysOfSegment = new Map<number, string[]>();
+  const taken = new Set<string>();
+  draft.segments.forEach((_, index) => {
+    const original = reference.segments[index] ?? draft.segments[index];
+    const keys: string[] = [];
+    for (const target of armTargetsOf(original)) {
+      let best: string | null = null;
+      let error = Infinity;
+      for (const [key, value] of baseLengthByKey) {
+        if (taken.has(key) || keys.includes(key)) continue;
+        const gap = Math.abs(value - target);
+        if (gap < error) {
+          error = gap;
+          best = key;
+        }
+      }
+      if (!best || error >= Math.max(target * 0.02, 1)) return;
+      keys.push(best);
+    }
+    // 한 팔이라도 못 찾으면 그 마디는 통째로 포기한다. 반쪽만 이어 두면
+    // 슬라이더를 움직였을 때 마디가 따로 놀며 끊어져 보인다.
+    armKeysOfSegment.set(index, keys);
+    for (const key of keys) taken.add(key);
+  });
+
+  /** 마디 길이가 기준에서 몇 배로 바뀌었나. 꺾인 마디는 두 팔에 같은 비율로 나눈다. */
+  const growthOfSegment = (index: number) => {
+    const original = reference.segments[index] ?? draft.segments[index];
+    return original.length > 0 ? draft.segments[index].length / original.length : 1;
+  };
+
+  // 조립 그래프로 바깥쪽을 정확히 가릴 수 있게 되어, 중간 팔도 늘릴 수 있다.
+  const lengthByKey = new Map(baseLengthByKey);
+  for (const [index, keys] of armKeysOfSegment) {
+    if (keys.length === 1) {
+      lengthByKey.set(keys[0], draft.segments[index].length);
+      continue;
+    }
+    const ratio = growthOfSegment(index);
+    for (const key of keys) lengthByKey.set(key, (baseLengthByKey.get(key) ?? 0) * ratio);
+  }
+  const fallbackArmLength =
+    draft.segments.reduce((sum, segment) => sum + segment.length, 0) /
+      Math.max(draft.segments.length, 1) || 300;
+
+  const orient = (mesh: THREE.Object3D, axis: THREE.Vector3) => {
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
+  };
+
+  const propeller = propellerSize(draft.propulsionGroups[0]?.propellerType);
+  const catalogRotorRadius = (propeller.diameter * 25.4 * SCALE) / 2;
+  const catalogMotorRadius = motorRadius(draft.propulsionGroups[0]?.motorType);
+  const wingGeometry = draft.wings[0];
+  // 실측 치수가 있으면 그것을 쓴다. 같은 설계 안에서도 프로펠러 지름이
+  // 부품마다 다르므로 카탈로그 문자열 하나로는 맞출 수 없다.
+  const measured = (part: PartPlacement) =>
+    part.s ? (part.s.map((v) => v * SCALE) as [number, number, number]) : null;
+  const largestOf = (size: [number, number, number] | null) =>
+    size ? Math.max(...size) : null;
+
+  /**
+   * 팔 끝 로터 뭉치(플랜지·모터·프로펠러)에 적용할 보정. 장착 각도와 결합
+   * 오프셋 슬라이더가 기준에서 얼마나 움직였는지를 팔 축 둘레의 회전과
+   * 축 방향 이동으로 옮긴다. 아래에서 채운다.
+   */
+  type Adjustment = { pivot: THREE.Vector3; spin: THREE.Quaternion; slide: THREE.Vector3 };
+  const rotorAdjustment = new Map<string, Adjustment[]>();
+  /** 안쪽 보정부터 차례로 적용한다. 바깥 팔은 안쪽 팔을 따라 이미 움직인 상태다. */
+  const applyChain = (point: THREE.Vector3, chain: Adjustment[] | undefined) => {
+    if (!chain) return point;
+    for (const step of chain) {
+      point.sub(step.pivot).applyQuaternion(step.spin).add(step.pivot).add(step.slide);
+    }
+    return point;
+  };
+  const spinChain = (vector: THREE.Vector3, chain: Adjustment[] | undefined) => {
+    if (!chain) return vector;
+    for (const step of chain) vector.applyQuaternion(step.spin);
+    return vector;
+  };
+
+  /**
+   * 부품이 기록한 로컬 축 세 개를 장면 좌표로 돌려준다. STEP은 X축과 Z축만
+   * 적으므로 Y축은 외적으로 복원한다. 실측 치수 `s`는 이 순서와 같은 축에
+   * 대응하므로, 축 하나를 고르면 그 방향의 길이도 함께 알 수 있다.
+   */
+  const basisOf = (part: PartPlacement) => {
+    const chain = rotorAdjustment.get(part.n);
+    const x = spinChain(toDirection(part.x), chain);
+    const z = spinChain(toDirection(part.z), chain);
+    const y = new THREE.Vector3().crossVectors(z, x).normalize();
+    return [x, y, z] as const;
+  };
+
+  /** 보정이 걸린 부품은 회전 뒤 이동까지 적용한 자리에 놓인다. */
+  const placeOf = (part: PartPlacement) =>
+    applyChain(toScene(part.p), rotorAdjustment.get(part.n));
+
+  /** 부품의 로컬 축을 그대로 회전으로 옮긴다. 세 축이 직교하므로 항상 정회전이다. */
+  const orientToBasis = (mesh: THREE.Object3D, part: PartPlacement) => {
+    mesh.quaternion.setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(...basisOf(part)),
+    );
+  };
+
+  /**
+   * 원통 부품이 누운 축. 나머지 두 변이 가장 비슷해지는 축이 지름 한 쌍을
+   * 이루므로, 그 축이 원통의 길이 방향이다. 모터는 이 축이 X 26%·Y 19%·Z 55%로
+   * 갈리는데, 예전처럼 Z로 고정하면 45%가 지름과 길이를 맞바꿔 그렸다.
+   */
+  const cylinderAxisOf = (size: readonly number[]) => {
+    let best = 2;
+    let spread = Infinity;
+    for (let index = 0; index < 3; index += 1) {
+      const [a, b] = [0, 1, 2]
+        .filter((other) => other !== index)
+        .map((other) => size[other]);
+      const gap = Math.abs(a - b) / Math.max(a, b, 1e-6);
+      if (gap < spread) {
+        spread = gap;
+        best = index;
+      }
+    }
+    return best;
+  };
+
+  /** 실측 치수가 목표 길이에 가장 가까운 축의 번호. */
+  const axisNearest = (
+    size: readonly number[] | undefined,
+    target: number,
+    candidates: readonly number[],
+  ) => {
+    if (!size) return candidates[0];
+    let best = candidates[0];
+    let error = Infinity;
+    for (const index of candidates) {
+      const gap = Math.abs(size[index] - target);
+      if (gap < error) {
+        error = gap;
+        best = index;
+      }
+    }
+    return best;
+  };
+
+  // 부품 이름은 `WING_<그룹>_<인스턴스>` 꼴인데, 같은 그룹의 인스턴스는 치수가
+  // 같고 파라미터의 끝번호는 그룹 번호가 아니라 그 순서에 대응한다. 이름을
+  // 파라미터 경로에 그대로 맞추면 실측과 74%만 일치하지만, 이 규칙은 91.9%로
+  // 데이터가 허용하는 상한(92.5%)에 사실상 닿는다.
+  const wingGroups = [
+    ...new Set(
+      placements
+        .map((part) => Number(part.n.match(/^WING_(\d+)_/i)?.[1]))
+        .filter((value) => Number.isFinite(value)),
+    ),
+  ].sort((a, b) => a - b);
+  const wingParametersFor = (partName: string) => {
+    const rank = wingGroups.indexOf(Number(partName.match(/^WING_(\d+)_/i)?.[1])) + 1;
+    if (rank < 1) return wingGeometry;
+    return (
+      draft.wings.find((wing) => wing.path.endsWith(`_${rank}`)) ??
+      draft.wings[rank - 1] ??
+      wingGeometry
+    );
+  };
+
+  // 조립 그래프를 허브에서 바깥으로 걸어, 팔 하나의 "바깥쪽"이 어디까지인지
+  // 정확히 가린다. 예전에는 기하로 추측했는데 가지가 갈라지는 설계(전체의
+  // 59%)에서 형제 가지를 서로 집어갔다.
+  //
+  // 허브만 막고 걸으면 안쪽으로도 새어 나간다. 허브에 닿기 전의 안쪽 팔은
+  // 그대로 통과하기 때문이다(팔의 56.9%, 설계의 49.6%). 그러면 바깥 팔을
+  // 늘렸을 때 안쪽 팔까지 밀려나 이음매가 벌어진다. 허브를 뿌리로 트리를
+  // 세우고 제 아래 가지만 센다.
+  const hubName = placements.find((item) => /^MAINHUB/i.test(item.n))?.n;
+  const parentOf = new Map<string, string | null>();
+  if (hubName) {
+    parentOf.set(hubName, null);
+    const queue = [hubName];
+    while (queue.length) {
+      const current = queue.shift() as string;
+      for (const next of neighbours.get(current) ?? []) {
+        if (parentOf.has(next)) continue;
+        parentOf.set(next, current);
+        queue.push(next);
+      }
+    }
+  }
+  const outboardOf = (armName: string) => {
+    const stack = [armName];
+    const found: string[] = [];
+    const seen = new Set<string>([armName]);
+    while (stack.length) {
+      const current = stack.pop() as string;
+      for (const next of neighbours.get(current) ?? []) {
+        // 허브 쪽 부모로는 내려가지 않는다. 트리 밖(허브가 없는 설계)이면
+        // 예전처럼 허브만 막고 걷는다.
+        if (seen.has(next)) continue;
+        if (parentOf.size ? parentOf.get(next) !== current : next === hubName) continue;
+        seen.add(next);
+        found.push(next);
+        stack.push(next);
+      }
+    }
+    return found;
+  };
+
+  const byName = new Map(placements.map((item) => [item.n, item]));
+
+  /**
+   * 팔이 뻗어 나가는 방향.
+   *
+   * 예전에는 "원점에서 멀어지는 쪽"으로 추측했는데, 가지가 갈라진 뒤 안쪽으로
+   * 되꺾이는 팔에서는 반대로 잡혔다(팔의 3.5%, 설계의 10.1%). 그 팔을 늘리면
+   * 허브 쪽으로 자라며 이음매가 찢어진다. 조립 트리에서 부모가 어디인지 알고
+   * 있으니 추측할 필요가 없다 — 부모에서 멀어지는 쪽이 바깥이다.
+   */
+  const outwardFrom = (part: PartPlacement, axis: THREE.Vector3, point: THREE.Vector3) => {
+    const parentName = parentOf.get(part.n);
+    const parent = parentName ? byName.get(parentName) : undefined;
+    const away = parent
+      ? point.clone().sub(applyChain(toScene(parent.p), rotorAdjustment.get(parent.n)))
+      : point;
+    const outward = axis.clone();
+    if (outward.dot(away) < 0) outward.negate();
+    return outward;
+  };
+  // 안쪽 세그먼트부터 처리해야 바깥 팔의 회전축이 이미 움직인 자리에서 잡힌다.
+  // 꺾인 마디는 팔이 둘이라 각각 한 번씩 돈다. 각도와 오프셋은 마디 뿌리에서
+  // 한 번만 적용하고, 길이 증가분은 팔마다 제 몫만 민다 — 둘 다에 전체
+  // 증가분을 주면 바깥 부품이 두 배로 밀려난다.
+  const editedArms = [...armKeysOfSegment]
+    .filter(([index]) => reference.segments[index])
+    .sort((a, b) => (draft.segments[a[0]].depth ?? 0) - (draft.segments[b[0]].depth ?? 0))
+    .flatMap(([index, keys]) => {
+      const segment = draft.segments[index];
+      const original = reference.segments[index];
+      const turn = THREE.MathUtils.degToRad(segment.angle - original.angle);
+      const offsetShift = (segment.offset - original.offset) * SCALE;
+      const ratio = growthOfSegment(index);
+      return keys.map((key, order) => {
+        const base = baseLengthByKey.get(key) ?? 0;
+        const grow = keys.length === 1
+          ? (segment.length - original.length) * SCALE
+          : (base * ratio - base) * SCALE;
+        return {
+          key,
+          turn: order === 0 ? turn : 0,
+          shift: (order === 0 ? offsetShift : 0) + grow,
+        };
+      });
+    });
+
+  for (const { key, turn, shift } of editedArms) {
+    if (!turn && !shift) continue;
+    // 키가 이미 `ROTATEDARM_5` 꼴이라 접두사를 다시 붙이지 않는다.
+    const armPattern = new RegExp(`^${key}_`, 'i');
+    for (const arm of placements) {
+      if (!armPattern.test(arm.n)) continue;
+      const chain = rotorAdjustment.get(arm.n);
+      // 이 팔 자신이 안쪽 보정으로 이미 옮겨졌다면, 축과 피벗도 같이 옮긴다.
+      const centre = applyChain(toScene(arm.p), chain);
+      const along = outwardFrom(arm, spinChain(toDirection(arm.z), chain), centre);
+      const half = ((arm.s?.[2] ?? baseLengthByKey.get(key) ?? 200) * SCALE) / 2;
+      const end = centre.clone().addScaledVector(along, half);
+      const step: Adjustment = {
+        pivot: end,
+        spin: new THREE.Quaternion().setFromAxisAngle(along, turn),
+        slide: along.clone().multiplyScalar(shift),
+      };
+      for (const moved of outboardOf(arm.n)) {
+        if (!byName.has(moved)) continue;
+        rotorAdjustment.set(moved, [...(rotorAdjustment.get(moved) ?? []), step]);
+      }
+    }
+  }
+
+  for (const part of placements) {
+    const name = part.n.toUpperCase();
+    if (name === 'UAV_ASM' || name === 'ORIENT') continue;
+    const position = placeOf(part);
+    const axis = basisOf(part)[2];
+
+    if (name.startsWith('MOTOR')) {
+      const size = measured(part);
+      // 축이 항상 로컬 Z라고 보던 탓에, 캔처럼 길쭉한 모터가 납작한 원반이
+      // 되어 암 끝과 프로펠러 사이가 비어 보였다. 실측 세 변에서 지름 한
+      // 쌍을 찾아 나머지를 길이로 쓴다.
+      const axisIndex = size ? cylinderAxisOf(size) : 2;
+      const girth = size
+        ? [0, 1, 2].filter((index) => index !== axisIndex).map((index) => size[index])
+        : null;
+      // 모터 종류를 바꾸면 카탈로그 반지름이 달라진다. 그 변화율만 실측에
+      // 곱해, 편집 전에는 실측 그대로이면서 편집은 형상에 보이게 한다.
+      const edit = growth(
+        motorRadius(draft.propulsionGroups[0]?.motorType),
+        motorRadius(reference.propulsionGroups[0]?.motorType),
+      );
+      const radius = (girth ? (girth[0] + girth[1]) / 4 : catalogMotorRadius) * edit;
+      const height = (size ? Math.max(size[axisIndex], 0.02) : 0.28) * edit;
+      const motor = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius * 0.93, height, 24),
+        partMaterial(part, 'propulsion', 0.55),
+      );
+      motor.position.copy(position);
+      // 모터의 64%는 90° 단위가 아닌 각도로 달려 있다. 회전을 빼면 암이 꺾인
+      // 설계에서 모터만 수직으로 남는다.
+      if (size) orient(motor, basisOf(part)[axisIndex]);
+      motor.name = part.n;
+      group.add(motor);
+      continue;
+    }
+
+    if (name.startsWith('PROPELLER')) {
+      const size = measured(part);
+      // 프로펠러는 회전면이 납작한 원판이라 가장 긴 변이 지름이다.
+      const edit = growth(
+        propellerSize(draft.propulsionGroups[0]?.propellerType).diameter,
+        propellerSize(reference.propulsionGroups[0]?.propellerType).diameter,
+      );
+      const rotorRadius = ((largestOf(size) ?? catalogRotorRadius * 2) / 2) * edit;
+      const rotor = new THREE.Group();
+      rotor.name = part.n;
+      rotor.position.copy(position);
+      orient(rotor, axis);
+      rotor.add(
+        new THREE.Mesh(
+          new THREE.CylinderGeometry(rotorRadius, rotorRadius, 0.015, 44),
+          new THREE.MeshStandardMaterial({
+            color: ghost
+              ? 0x7f96a2
+              : selected?.has(part.n)
+                ? TYPE_COLORS.Propeller
+                : NEUTRAL_COLOR,
+            transparent: true,
+            opacity: ghost ? 0.05 : selected && !selected.has(part.n) ? 0.05 : 0.16,
+            depthWrite: false,
+            roughness: 0.65,
+            metalness: 0,
+            side: THREE.DoubleSide,
+          }),
+        ),
+      );
+      // 날개 2장은 막대 하나가 지름을 가로지르는 모양이고, 4장은 그 막대를
+      // 직교로 하나 더 얹는다.
+      const bars = bladeCount / 2;
+      for (let blade = 0; blade < bars; blade += 1) {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(
+            rotorRadius * 1.84,
+            0.035 + propeller.pitch * 0.0015,
+            Math.max(0.085, rotorRadius * 0.17),
+          ),
+          partMaterial(part, 'propulsion', 0.18),
+        );
+        // 예전에는 4°와 86°로 두어 피치가 있는 것처럼 보이려 했는데, 위에서
+        // 보면 십자가 82°로 어긋나 보였다. 고르게 나눈다.
+        mesh.rotation.y = (blade * Math.PI) / bars;
+        rotor.add(mesh);
+      }
+      group.add(rotor);
+      continue;
+    }
+
+    if (/^(?:ROTATEDARM|FIXEDROTATIONARM|ARM)_/.test(name)) {
+      const named = part.n.match(/^(ROTATEDARM|FIXEDROTATIONARM|ARM)_(\d+)_/i);
+      const key = named ? armKeyOf(named[1], named[2]) : '';
+      const length = (lengthByKey.get(key) ?? fallbackArmLength) * SCALE;
+      // 팔은 10×5mm 각재가 아니라 지름 10mm 원통이다. 카탈로그에 튜브 모델이
+      // `0394OD_para_tube` 하나뿐이고 0.394인치 외경이 10mm로, 실측 s[0]과
+      // 같다. 부품 수의 26%를 차지해 형태 차이가 화면에 크게 남는다.
+      const radius = (part.s ? Math.max(part.s[0], part.s[1]) / 2 : 5) * SCALE;
+      const bar = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, Math.max(length, 0.2), 14),
+        partMaterial(part, 'structure', 0.4),
+      );
+      bar.position.copy(position);
+      // 좌표가 형상의 중심이라 길이를 늘리면 허브 쪽으로도 자란다. 뿌리를
+      // 그대로 두고 바깥으로만 뻗도록 늘어난 만큼의 절반을 밀어 준다.
+      const grown = length - (baseLengthByKey.get(key) ?? length / SCALE) * SCALE;
+      if (grown) {
+        const outward = outwardFrom(part, axis, position);
+        bar.position.addScaledVector(outward, grown / 2);
+      }
+      orient(bar, axis);
+      bar.name = part.n;
+      group.add(bar);
+      continue;
+    }
+
+    if (/^(?:BEND|BRANCH|CROSS|FLANGE)/.test(name)) {
+      // 관절을 13mm 정육면체로 고정해 두었는데 실제 중앙값은 49mm다. 3.8배
+      // 작은 탓에 팔과 모터 사이를 이어주지 못하고 눈에 띄는 틈이 생겼다.
+      const size = measured(part);
+      const joint = new THREE.Mesh(
+        size
+          ? new THREE.BoxGeometry(size[0], size[1], size[2])
+          : new THREE.BoxGeometry(0.13, 0.13, 0.13),
+        partMaterial(part, 'structure', 0.34),
+      );
+      joint.position.copy(position);
+      if (size) orientToBasis(joint, part);
+      joint.name = part.n;
+      group.add(joint);
+      continue;
+    }
+
+    if (name.startsWith('MAINHUB')) {
+      // 허브 93.6%는 지름 66 · 높이 20인 납작한 원반인데 높이 24로 고정해 두어
+      // 실제보다 두꺼웠다. 나머지 6.4%는 원반이 아니라 66mm 길이의 막대라
+      // 크기뿐 아니라 축도 실측에서 읽어야 한다.
+      const size = measured(part);
+      const axisIndex = size ? cylinderAxisOf(size) : 1;
+      const girth = size
+        ? [0, 1, 2].filter((index) => index !== axisIndex).map((index) => size[index])
+        : null;
+      const radius = girth ? (girth[0] + girth[1]) / 4 : 0.32;
+      const height = size ? Math.max(size[axisIndex], 0.02) : 0.24;
+      const hub = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, height, 18),
+        partMaterial(part, 'structure', 0.34),
+      );
+      hub.position.copy(position);
+      if (size) orient(hub, basisOf(part)[axisIndex]);
+      hub.name = part.n;
+      group.add(hub);
+      continue;
+    }
+
+    if (name.startsWith('FUSELAGE')) {
+      // 동체는 아래가 좁고 가운데가 부푼 곡면 선체다. STEP 꼭짓점만으로 재면
+      // 폭·깊이는 27,713개 전부 정확한데 높이만 예외 없이 실제의 0.47배로
+      // 나와, 두꺼운 선체가 납작한 판이 되고 안에 들어가야 할 배터리가
+      // 밖으로 비어져 나왔다. 셋 다 파라미터에서 읽는다.
+      // `length`는 캡슐 원통부(FUSE_CYL_LENGTH)이고 양 끝에 반지름
+      // verticalDiameter/2 인 반구가 더 붙는다. 그래서 전체 길이는
+      // length + verticalDiameter다. 원본 STL 122개와 대조해 중앙값 1.00,
+      // ±8% 적중 60%로 맞았다(그냥 length면 0.62, 적중 1%).
+      let width = Math.max(
+        (draft.fuselage.length + draft.fuselage.verticalDiameter) * SCALE,
+        0.05,
+      );
+      const height = Math.max(draft.fuselage.verticalDiameter * SCALE, 0.05);
+      let depth = Math.max(draft.fuselage.horizontalDiameter * SCALE, 0.05);
+      // length는 캡슐 원통부의 길이라(FUSE_CYL_LENGTH) 둥근 끝단만큼 실제보다
+      // 짧다. 그대로 그리면 안에 실려야 할 배터리가 껍데기를 뚫고 나오고,
+      // 면이 맞닿아 z-fighting 줄무늬까지 생긴다. 내용물을 감싸도록 넓힌다.
+      const clearance = 6 * SCALE;
+      for (const inner of placements) {
+        if (!inner.s || !/^(BATTERY|SENSOR)/i.test(inner.n)) continue;
+        const centre = toScene(inner.p);
+        const [ix, iy, iz] = basisOf(inner);
+        const size = measured(inner) as [number, number, number];
+        // 회전된 부품의 전역 축 반치수는 각 축 성분의 가중합이다.
+        const reach = (axis: 'x' | 'y' | 'z') =>
+          (Math.abs(ix[axis]) * size[0] +
+            Math.abs(iy[axis]) * size[1] +
+            Math.abs(iz[axis]) * size[2]) / 2;
+        width = Math.max(width, (Math.abs(centre.x - position.x) + reach('x')) * 2 + clearance);
+        depth = Math.max(depth, (Math.abs(centre.z - position.z) + reach('z')) * 2 + clearance);
+      }
+      // 실제 부품은 `capsule_fuselage`, 즉 원통 양 끝에 반구가 붙은 캡슐이다.
+      // 둥근 상자로 그리면 끝 모서리가 반구 밖으로 튀어나와, 길이를 제대로
+      // 맞춘 뒤 오히려 동체 오차가 커졌다. 단면이 가로·세로로 다르므로
+      // 반지름 1짜리 캡슐을 만들어 축마다 늘린다.
+      const capRadius = Math.min(height, depth) / 2;
+      const barrel = Math.max(width - capRadius * 2, 0.001);
+      const capsule = new THREE.CapsuleGeometry(capRadius, barrel, 8, 24);
+      // CapsuleGeometry는 Y축을 따라 서 있다. 동체는 X축으로 눕는다.
+      capsule.rotateZ(Math.PI / 2);
+      capsule.scale(1, height / (capRadius * 2), depth / (capRadius * 2));
+      const body = new THREE.Mesh(capsule, partMaterial(part, 'fuselage', 0.22));
+      body.position.copy(position);
+      // 실측 상자는 선체의 윗절반만 잡으므로 윗면 높이는 맞다. 윗면을 그대로
+      // 두고 아래로만 늘린다. 번들 STL 12개와 대조해 평균 오차 7mm.
+      if (part.s) {
+        body.position.y = (part.p[2] + part.s[2] / 2) * SCALE - height / 2;
+      }
+      body.name = part.n;
+      group.add(body);
+      continue;
+    }
+
+    if (name.startsWith('BATTERY')) {
+      // 실측이 있는데도 용량으로 추정한 상자를 그리고 있었다. 방향도 맞추지
+      // 않아, 눕혀 실린 배터리가 세로로 서서 동체 밖으로 삐져나왔다.
+      const size = measured(part);
+      const capacity = batteryInfo(draft.energy.batteryTypes[0]).capacity;
+      const edit = growth(
+        capacity,
+        batteryInfo(reference.energy.batteryTypes[0]).capacity,
+      );
+      const battery = new THREE.Mesh(
+        size
+          ? new THREE.BoxGeometry(...(size.map((v) => v * edit) as [number, number, number]))
+          : new THREE.BoxGeometry(
+              0.9 * THREE.MathUtils.clamp(Math.cbrt(capacity / 5000), 0.7, 1.7),
+              0.32 * THREE.MathUtils.clamp(Math.cbrt(capacity / 5000), 0.7, 1.7),
+              0.5 * THREE.MathUtils.clamp(Math.cbrt(capacity / 5000), 0.7, 1.7),
+            ),
+        partMaterial(part, 'energy', 0.05),
+      );
+      battery.position.copy(position);
+      if (size) orientToBasis(battery, part);
+      battery.name = part.n;
+      group.add(battery);
+      continue;
+    }
+
+    if (name === 'CARGOCASE') {
+      // The source splits the centre body into fuselage plus this case. Skipping
+      // it left the middle visibly thinner than the STL.
+      const size = measured(part);
+      const width = size ? size[0] : Math.max(draft.fuselage.length * SCALE * 0.8, 0.35);
+      const height = size ? size[2] : Math.max(draft.fuselage.verticalDiameter * SCALE * 0.5, 0.2);
+      const depth = size ? size[1] : Math.max(draft.fuselage.horizontalDiameter * SCALE * 0.55, 0.4);
+      const caseMesh = new THREE.Mesh(
+        new RoundedBoxGeometry(width, height, depth, 3, Math.min(width, height, depth) * 0.2),
+        partMaterial(part, 'payload', 0.1),
+      );
+      caseMesh.position.copy(position);
+      caseMesh.name = part.n;
+      group.add(caseMesh);
+      continue;
+    }
+
+    if (name.startsWith('CARGO')) {
+      // 화물도 실측을 두고 적재량으로 추정한 상자를 쓰고 있었다. 실제 화물은
+      // 화물칸을 거의 채우는 크기라 추정치보다 훨씬 크다.
+      const size = measured(part);
+      const guessed = 0.28 + Math.min(draft.payload.mass, 10) * 0.025;
+      const edit = growth(draft.payload.mass, reference.payload.mass);
+      const cargo = new THREE.Mesh(
+        size
+          ? new THREE.BoxGeometry(...(size.map((v) => v * edit) as [number, number, number]))
+          : new THREE.BoxGeometry(0.52, guessed, 0.4),
+        partMaterial(part, 'payload', 0.08),
+      );
+      cargo.position.copy(position);
+      if (size) orientToBasis(cargo, part);
+      cargo.name = part.n;
+      group.add(cargo);
+      continue;
+    }
+
+    if (name.startsWith('WING')) {
+      const wingData = wingParametersFor(part.n);
+      // 치수는 파라미터에서 읽는다. 실측 상자를 그대로 쓰면 슬라이더를 움직여도
+      // 형상이 그대로였고, 변의 길이 순서로 span·시위를 가르는 방식은 짧고 넓은
+      // 날개에서 둘을 뒤바꿨다.
+      const span = Math.max((wingData?.span ?? 900) * SCALE, 0.3);
+      const root = Math.max((wingData?.chordInner ?? 220) * SCALE, 0.08);
+      const tip = Math.max((wingData?.chordOuter ?? 140) * SCALE, 0.04);
+
+      // 어느 로컬 축으로 뻗는지는 실측 치수가 span과 가장 가까운 축으로 고른다.
+      // 단순히 가장 긴 축을 쓰면 19,716장 중 4.7%가 엉뚱한 축을 향했다.
+      const basis = basisOf(part);
+      const spanIndex = axisNearest(part.s, wingData?.span ?? 900, [0, 1, 2]);
+      const rest = [0, 1, 2].filter((index) => index !== spanIndex);
+      const chordIndex = axisNearest(part.s, wingData?.chordInner ?? 220, rest);
+      const thickIndex = rest.find((index) => index !== chordIndex) ?? rest[0];
+
+      // 좌우 날개는 뻗는 축이 정반대라, 넓은 뿌리를 한쪽으로 고정하면 한 장은
+      // 뿌리가 바깥을 향한다. 기체 중심에 가까운 끝을 뿌리로 잡는다.
+      const towardCentre = position.lengthSq() > 0
+        ? position.clone().negate().normalize()
+        : basis[chordIndex];
+      const spanAxis = basis[spanIndex].clone();
+      if (spanAxis.dot(towardCentre) < 0) spanAxis.negate();
+
+      // 뿌리는 로컬 +X, 시위는 +Z, 두께는 +Y에 놓고 만든 뒤 통째로 돌린다.
+      const half = span / 2;
+      const rootFront = -root / 2;
+      // taperOffset이면 앞전을 일직선으로 두어 뒤쪽만 좁아진다.
+      const tipFront = wingData?.taperOffset ? rootFront : -tip / 2;
+      // 뿌리와 끝단 단면을 NACA 익형으로 깎고 그 사이를 잇는다.
+      const section = nacaSection(wingData?.nacaProfile ?? '0012');
+      const count = section.length;
+      const vertices: number[] = [];
+      for (const [side, chord, front] of [
+        [half, root, rootFront],
+        [-half, tip, tipFront],
+      ] as const) {
+        for (const [cx, cy] of section) {
+          vertices.push(side, cy * chord, front + cx * chord);
+        }
+      }
+      const shape = new THREE.BufferGeometry();
+      shape.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+      const index: number[] = [];
+      // 옆면: 뿌리 단면과 끝단 단면을 띠로 잇는다.
+      for (let i = 0; i < count; i += 1) {
+        const j = (i + 1) % count;
+        index.push(i, count + i, count + j, i, count + j, j);
+      }
+      // 단면 두 장은 부채꼴로 메운다.
+      for (let i = 1; i < count - 1; i += 1) {
+        index.push(0, i + 1, i);
+        index.push(count, count + i, count + i + 1);
+      }
+      shape.setIndex(index);
+      // 꼭짓점을 공유한 채 법선을 구하면 모서리가 뭉개지므로 면마다 분리한다.
+      const solid = shape.toNonIndexed();
+      solid.computeVertexNormals();
+      shape.dispose();
+      const wing = new THREE.Mesh(solid, partMaterial(part, 'wing', 0.18));
+      wing.position.copy(position);
+      // 세 축을 그대로 회전 행렬로 쓴다. 이전처럼 span축 하나만 맞추면 나머지
+      // 회전이 임의로 정해져 시위 방향과 두께 방향이 제멋대로 누웠다.
+      const frame = new THREE.Matrix4().makeBasis(
+        spanAxis,
+        basis[thickIndex],
+        basis[chordIndex],
+      );
+      // 축을 뒤섞으면 좌우가 뒤집힐 수 있다. 두께축은 대칭이라 뒤집어도 무해하다.
+      if (frame.determinant() < 0) {
+        frame.makeBasis(spanAxis, basis[thickIndex].clone().negate(), basis[chordIndex]);
+      }
+      wing.quaternion.setFromRotationMatrix(frame);
+      wing.name = part.n;
+      group.add(wing);
+      continue;
+    }
+
+    if (name.startsWith('SERVO') || name.startsWith('SENSOR')) {
+      // 지름 11mm 구슬로 고정해 두었는데 실제는 28~84mm라, 동체 안이 비어
+      // 보이고 실제 형상을 덮지 못했다. 센서·서보는 대부분 납작한 상자다.
+      const size = measured(part);
+      const marker = new THREE.Mesh(
+        size
+          ? new THREE.BoxGeometry(size[0], size[1], size[2])
+          : new THREE.SphereGeometry(0.055, 10, 8),
+        partMaterial(part, 'layout', 0.1),
+      );
+      marker.position.copy(position);
+      if (size) orientToBasis(marker, part);
+      marker.name = part.n;
+      group.add(marker);
+    }
+  }
 
   return group;
 }
@@ -768,6 +1858,7 @@ export function analyzeParametricHierarchy(
 function buildHierarchicalArms(
   draft: DesignDraft,
   fallbackLength: number,
+  deckY: number,
   addArm: (start: THREE.Vector3, end: THREE.Vector3, nodeType: string) => void,
 ) {
   const graph = createHierarchyGraph(draft);
@@ -782,10 +1873,15 @@ function buildHierarchicalArms(
   let maxReach = 0;
   let rootInstance = 0;
 
+  // `_Sym` hubs mirror every second copy instead of repeating one bend around
+  // the circle. Source STLs show three mirrored pairs, not six equal spokes.
+  const mirrored = /_Sym/i.test(draft.topology);
+
   const walk = (
     segment: DesignSegment,
     start: THREE.Vector3,
     direction: number,
+    mirror: number,
   ) => {
     const traced = traceSegment(
       segment,
@@ -793,6 +1889,7 @@ function buildHierarchicalArms(
       direction,
       fallbackLength,
       addArm,
+      mirror,
     );
     maxReach = Math.max(maxReach, Math.hypot(traced.end.x, traced.end.z));
     if (isPropellerSegment(segment)) {
@@ -806,19 +1903,33 @@ function buildHierarchicalArms(
     }
     const children = graph.children.get(segment.path) ?? [];
     childInstances(segment, children).forEach((child) => {
-      walk(child.segment, traced.end, traced.outgoing + child.angleOffset);
+      walk(
+        child.segment,
+        traced.end,
+        traced.outgoing + child.angleOffset * mirror,
+        mirror,
+      );
     });
   };
 
+  const step = (Math.PI * 2) / instanceCount;
+  const half = Math.ceil(instanceCount / 2);
+
   for (let rootIndex = 0; rootIndex < graph.roots.length; rootIndex += 1) {
     for (let copy = 0; copy < repetitions[rootIndex]; copy += 1) {
-      const direction = (rootInstance / instanceCount) * Math.PI * 2;
+      // A symmetric hub folds one half onto the other across a single axis, so
+      // the second half reuses the first half's slots with the bend reversed.
+      const side = !mirrored || rootInstance < half ? 1 : -1;
+      const slot = side === 1 ? rootInstance : rootInstance - half;
+      const direction = mirrored
+        ? side * (slot + 0.5) * step
+        : rootInstance * step;
       const start = new THREE.Vector3(
         Math.cos(direction) * 0.25,
-        0.73,
+        deckY,
         Math.sin(direction) * 0.25,
       );
-      walk(graph.roots[rootIndex], start, direction);
+      walk(graph.roots[rootIndex], start, direction, side);
       rootInstance += 1;
     }
   }
@@ -967,7 +2078,9 @@ function traceSegment(
   direction: number,
   fallbackLength: number,
   addArm: (start: THREE.Vector3, end: THREE.Vector3, nodeType: string) => void,
+  mirror = 1,
 ) {
+  const bendAngle = (segment.angle || 0) * mirror;
   const requestedLength = Math.max(
     (segment.length || fallbackLength) * SCALE,
     0.35,
@@ -990,7 +2103,7 @@ function traceSegment(
     );
     addArm(start, elbow, segment.nodeType);
     if (segment.nodeType === 'DoubleBendSegment') {
-      outgoing = direction + THREE.MathUtils.degToRad(segment.angle || 0);
+      outgoing = direction + THREE.MathUtils.degToRad(bendAngle);
       end = new THREE.Vector3(
         elbow.x + Math.cos(outgoing) * secondLength,
         elbow.y,
@@ -1015,7 +2128,7 @@ function traceSegment(
     );
     addArm(start, end, segment.nodeType);
     if (/^(?:BendSegment|SidewaysBendSegment)$/i.test(segment.nodeType)) {
-      outgoing = direction + THREE.MathUtils.degToRad(segment.angle || 0);
+      outgoing = direction + THREE.MathUtils.degToRad(bendAngle);
     }
   }
 

@@ -11,6 +11,7 @@ import {
   Info,
   Layers3,
   MousePointer2,
+  Package,
   Plane,
   RotateCcw,
   Ruler,
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 
 import { PerformancePredictionPanel } from './performance-prediction-panel';
-import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
+import { ParametricUavViewer, TYPE_COLORS } from '@/components/parametric-uav-viewer';
 import { StlViewer } from '@/components/stl-viewer';
 import { cloneDraft } from '@/lib/design-draft';
 import { countChanges, estimateDraft } from '@/lib/design-performance';
@@ -39,11 +40,13 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
+  AssemblyInfo,
   DesignDraft,
   DesignSummary,
   DraftGeometryMode,
   ParameterDefinition,
   ParameterGroup,
+  PartPlacement,
   ShowcaseDesign,
   WingParameters,
 } from '@/lib/drawn-types';
@@ -96,7 +99,7 @@ export function DesignLabView({
   workspace: DesignWorkspace;
   focusedParameterId?: string | null;
 }) {
-  const { baseline, draft, setDraft, catalogs, loading, loadError } = workspace;
+  const { baseline, draft, setDraft, catalogs, placements, loading, loadError } = workspace;
   const [mode, setMode] = useState<DraftGeometryMode>('parametric-preview');
   const [showGhost, setShowGhost] = useState(false);
   const [changedGroup, setChangedGroup] = useState<ParameterGroup | null>(null);
@@ -105,11 +108,25 @@ export function DesignLabView({
   const [expertMode, setExpertMode] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('preview');
   const [compareOpen, setCompareOpen] = useState(false);
+  /** 부품 탭에서 고른 부품 이름들. 3D에서는 이것만 제 색으로 남는다. */
+  const [selectedParts, setSelectedParts] = useState<string[]>([]);
+  const [openTypes, setOpenTypes] = useState<string[]>([]);
+  /** 프로펠러 날개 수는 데이터에 없어 보는 사람이 고르는 표시 설정이다. */
+  const [bladeCount, setBladeCount] = useState<2 | 4>(2);
+  /**
+   * 개념 형상과 원본 STL을 나란히 둔다. 겹쳐 그리면 회색끼리 묻혀서 어느 쪽이
+   * 무엇인지 읽기 어려웠다. 원본은 로컬에 있을 때만 뜬다.
+   */
+  const [sideBySide, setSideBySide] = useState(false);
+  /** 왼쪽 패널 탭. 부품 목록이 파라미터 아코디언에 끼면 매번 밀려 내려간다. */
+  const [panelTab, setPanelTab] = useState<'parameters' | 'parts'>('parameters');
   const [estimateState, setEstimateState] = useState<'ready' | 'calculating'>('ready');
   const [estimateImpact, setEstimateImpact] = useState<'performance' | 'geometry-only'>('performance');
   const highlightTimeoutRef = useRef<number | null>(null);
   const estimateTimeoutRef = useRef<number | null>(null);
   const packagedReference = referenceDesign ?? ('modelPath' in selected ? selected as ShowcaseDesign : null);
+  // 배포된 STL이 없어도 개발 PC의 원본에서 받아올 수 있다.
+  const originalStlUrl = packagedReference?.modelPath ?? `/local-model/${selected.id}`;
 
   const focusedParameter = draft?.parameterDefinitions.find((definition) => definition.id === focusedParameterId || definition.path === focusedParameterId);
   const focusId = focusedParameter?.id;
@@ -238,18 +255,54 @@ export function DesignLabView({
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#86868b]" />
               <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="파라미터 검색" className="h-9 border-[#e5e5ea] bg-[#f5f5f7] pl-8 text-xs" />
             </div>
-            <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-[#f5f5f7] px-3 py-2">
-              <div>
-                <p className="text-xs font-medium text-[#6e6e73]">전문가 모드</p>
-                <p className="mt-0.5 text-[10px] leading-4 text-[#86868b]">데이터셋 원본 변수 {parameterCount}개를 그대로 편집합니다</p>
+            {panelTab === 'parameters' && (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-[#f5f5f7] px-3 py-2">
+                <div>
+                  <p className="text-xs font-medium text-[#6e6e73]">전문가 모드</p>
+                  <p className="mt-0.5 text-[10px] leading-4 text-[#86868b]">데이터셋 원본 변수 {parameterCount}개를 그대로 편집합니다</p>
+                </div>
+                <Switch checked={expertMode} onCheckedChange={toggleExpertMode} size="sm" aria-label="전문가 모드" />
               </div>
-              <Switch checked={expertMode} onCheckedChange={toggleExpertMode} size="sm" aria-label="전문가 모드" />
-            </div>
+            )}
+            {placements && (
+              <div className="mt-3 grid grid-cols-2 rounded-xl bg-[#f5f5f7] p-1">
+                {([
+                  ['parameters', '파라미터', SlidersHorizontal],
+                  ['parts', '부품', Package],
+                ] as const).map(([id, label, Icon]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setPanelTab(id)}
+                    aria-pressed={panelTab === id}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${panelTab === id ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}
+                  >
+                    <Icon className={`size-3.5 ${panelTab === id ? 'text-[#3182f6]' : ''}`} />
+                    {label}
+                    {id === 'parts' && selectedParts.length > 0 && (
+                      <span className="rounded-full bg-[#3182f6] px-1.5 text-[10px] text-white">{selectedParts.length}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <ScrollArea className="h-[500px] @min-[900px]/lab:h-[calc(100%-116px)]">
             {loading || !draft || !baseline ? (
               <div className="grid h-80 place-items-center text-xs text-[#6e6e73]">설계 파라미터를 준비하고 있습니다…</div>
+            ) : panelTab === 'parts' && placements ? (
+              <PartsPanel
+                assembly={placements}
+                selected={selectedParts}
+                onSelect={setSelectedParts}
+                openTypes={openTypes}
+                onToggleType={(type) => setOpenTypes((current) =>
+                  current.includes(type)
+                    ? current.filter((item) => item !== type)
+                    : [...current, type])}
+                search={search}
+              />
             ) : (
               <Accordion multiple value={openSections} onValueChange={(value) => setOpenSections(value.map(String))} className="px-3 pb-5">
                 {groupVisible('structure', ['topology', 'hub', 'arm', 'angle', 'offset', '구조', '길이']) && (
@@ -261,8 +314,8 @@ export function DesignLabView({
                           팔 {index + 1}<span className="font-normal text-[#6e6e73]">{formatComponent(segment.nodeType)}</span>
                         </p>
                         <NumberSlider label="팔 길이" unit="mm" min={50} max={520} step={1} value={segment.length} baseline={baseline.segments[index]?.length ?? segment.length} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].length = value; })} />
-                        <NumberSlider label="장착 각도" unit="°" min={-135} max={360} step={1} value={segment.angle} baseline={baseline.segments[index]?.angle ?? segment.angle} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].angle = value; })} />
-                        <NumberSlider label="결합 위치 오프셋" unit="mm" min={-50} max={50} step={1} value={segment.offset} baseline={baseline.segments[index]?.offset ?? segment.offset} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].offset = value; })} />
+                        <NumberSlider label="장착 각도" unit="°" min={-135} max={360} step={1} value={segment.angle} baseline={baseline.segments[index]?.angle ?? segment.angle} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].angle = value; })} geometryOnly />
+                        <NumberSlider label="결합 위치 오프셋" unit="mm" min={-50} max={50} step={1} value={segment.offset} baseline={baseline.segments[index]?.offset ?? segment.offset} onChange={(value) => mutateDraft('structure', (next) => { next.segments[index].offset = value; })} geometryOnly />
                       </div>
                     ))}
                   </ParameterSection>
@@ -273,7 +326,7 @@ export function DesignLabView({
                     <NumberSlider label="길이" unit="mm" min={84} max={559} step={1} value={draft.fuselage.length} baseline={baseline.fuselage.length} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.length = value; })} />
                     <NumberSlider label="가로 지름" unit="mm" min={120} max={805} step={1} value={draft.fuselage.horizontalDiameter} baseline={baseline.fuselage.horizontalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.horizontalDiameter = value; })} />
                     <NumberSlider label="세로 지름" unit="mm" min={51} max={354} step={1} value={draft.fuselage.verticalDiameter} baseline={baseline.fuselage.verticalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.verticalDiameter = value; })} />
-                    <NumberSlider label="바닥 높이" unit="mm" min={8} max={60} step={0.5} value={draft.fuselage.floorHeight} baseline={baseline.fuselage.floorHeight} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.floorHeight = value; })} />
+                    <NumberSlider label="바닥 높이" unit="mm" min={8} max={60} step={0.5} value={draft.fuselage.floorHeight} baseline={baseline.fuselage.floorHeight} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.floorHeight = value; })} geometryOnly />
                   </ParameterSection>
                 )}
 
@@ -308,7 +361,7 @@ export function DesignLabView({
 
                 {groupVisible('payload', ['payload', 'cargo', '탑재', '중량']) && (
                   <ParameterSection value="payload" icon={<Weight />} title="탑재 중량" count={1} advanced hint={GROUP_HINTS.payload}>
-                    <NumberSlider label="탑재 화물 질량" unit="kg" min={0} max={20} step={0.1} value={draft.payload.mass} baseline={baseline.payload.mass} onChange={(value) => mutateDraft('payload', (next) => { next.payload.mass = value; })} />
+                    <NumberSlider label="탑재 화물 질량" unit="kg" min={0} max={20} step={0.1} value={draft.payload.mass} baseline={baseline.payload.mass} onChange={(value) => mutateDraft('payload', (next) => { next.payload.mass = value; })} geometryOnly />
                   </ParameterSection>
                 )}
 
@@ -317,8 +370,8 @@ export function DesignLabView({
                     {Object.entries(draft.layout).map(([name, position]) => (
                       <div key={name} className="rounded-xl bg-[#f5f5f7] p-3">
                         <p className="mb-2 text-xs font-semibold capitalize text-[#3c3c43]">{formatComponent(name)}</p>
-                        <NumberSlider label="X 위치" unit="mm" min={-280} max={280} step={1} value={position.x} baseline={baseline.layout[name]?.x ?? position.x} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].x = value; }, false)} />
-                        <NumberSlider label="Y 위치" unit="mm" min={-280} max={280} step={1} value={position.y} baseline={baseline.layout[name]?.y ?? position.y} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].y = value; }, false)} />
+                        <NumberSlider label="X 위치" unit="mm" min={-280} max={280} step={1} value={position.x} baseline={baseline.layout[name]?.x ?? position.x} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].x = value; }, false)} geometryOnly />
+                        <NumberSlider label="Y 위치" unit="mm" min={-280} max={280} step={1} value={position.y} baseline={baseline.layout[name]?.y ?? position.y} onChange={(value) => mutateDraft('layout', (next) => { next.layout[name].y = value; }, false)} geometryOnly />
                       </div>
                     ))}
                   </ParameterSection>
@@ -356,7 +409,8 @@ export function DesignLabView({
             <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e5ea] bg-white px-3 py-2.5">
               <div className="flex rounded-lg bg-[#f5f5f7] p-1">
                 <ModeButton active={mode === 'parametric-preview'} onClick={() => setMode('parametric-preview')}>설계 미리보기</ModeButton>
-                <ModeButton active={mode === 'exact-stl'} onClick={() => packagedReference && setMode('exact-stl')} disabled={!packagedReference}>원본 STL</ModeButton>
+                <ModeButton active={mode === 'exact-stl'} onClick={() => setMode('exact-stl')}>원본 STL</ModeButton>
+                <ModeButton active={sideBySide} onClick={() => setSideBySide((value) => !value)}>나란히</ModeButton>
               </div>
               <Badge variant="outline" className={mode === 'parametric-preview' ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1b64da]' : 'border-[#e5e5ea] bg-white text-[#6e6e73]'}>
                 {mode === 'parametric-preview' ? '개념 형상 · 제조용 CAD 아님' : `AircraftVerse #${selected.id}`}
@@ -369,16 +423,41 @@ export function DesignLabView({
             <div className="relative min-h-0 flex-1">
               {loading ? (
                 <div className="absolute inset-0 grid place-items-center text-sm text-[#6e6e73]">Design #{selected.id} 형상을 불러오는 중…</div>
+              ) : draft && baseline && sideBySide ? (
+                <div className="absolute inset-0 grid grid-cols-2 divide-x divide-[#e5e5ea]">
+                  <div className="relative">
+                    <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} syncGroup={`compare-${selected.id}`} />
+                    <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#3182f6] backdrop-blur">개념 형상</span>
+                  </div>
+                  <div className="relative">
+                    <StlViewer key={originalStlUrl} src={originalStlUrl} />
+                    <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#6e6e73] backdrop-blur">원본 STL</span>
+                  </div>
+                </div>
               ) : draft && baseline && mode === 'parametric-preview' ? (
-                <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} />
-              ) : packagedReference ? (
-                <StlViewer src={packagedReference.modelPath} />
+                <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} />
               ) : (
-                <div className="absolute inset-0 grid place-items-center text-sm text-[#6e6e73]">이 설계에는 배포된 원본 STL이 없습니다.</div>
+                <StlViewer key={originalStlUrl} src={originalStlUrl} />
               )}
               {mode === 'parametric-preview' && <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-[#e5e5ea] bg-white/90 px-3 py-2 text-[11px] text-[#6e6e73] shadow-sm backdrop-blur">
                 <MousePointer2 className="size-3" /> 드래그 회전 · 스크롤 확대
               </div>}
+              {mode === 'parametric-preview' && (
+                <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-[#e5e5ea] bg-white/90 p-1 text-[11px] shadow-sm backdrop-blur">
+                  <span className="px-1.5 text-[#86868b]">프로펠러</span>
+                  {([2, 4] as const).map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      onClick={() => setBladeCount(count)}
+                      aria-pressed={bladeCount === count}
+                      className={`rounded-md px-2 py-1 font-medium tabular-nums ${bladeCount === count ? 'bg-[#1d1d1f] text-white' : 'text-[#6e6e73] hover:bg-[#f5f5f7]'}`}
+                    >
+                      {count}엽
+                    </button>
+                  ))}
+                </div>
+              )}
               {changedGroup && (
                 <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-lg bg-[#3182f6] px-3 py-2 text-xs font-semibold text-white shadow-sm">
                   {GROUP_LABELS[changedGroup]} 반영됨
@@ -552,7 +631,15 @@ function ParameterSection({ value, icon, title, count, advanced = false, hint, c
   );
 }
 
-function NumberSlider({ label, unit, min, max, step, value, baseline, onChange }: { label: string; unit: string; min: number; max: number; step: number; value: number; baseline: number; onChange: (value: number) => void }) {
+/**
+ * `geometryOnly`는 3D 형상에만 반영되고 AI 성능 예측에는 쓰이지 않는 값이다.
+ * 어느 값이 그런지는 backend/app/performance_features.py 의
+ * `unsupported_changes()`가 정한다. 예측 응답의 `unsupportedInputs`에도 같은
+ * 키가 실려 오므로, 예측 패널의 안내와 이 배지가 어긋나면 둘 중 하나가
+ * 낡은 것이다. 지금 대상은 암 각도·오프셋, 동체 바닥 높이, 탑재 중량,
+ * 내부 배치, 날개 회전·조종면·튜브 오프셋이다.
+ */
+function NumberSlider({ label, unit, min, max, step, value, baseline, onChange, geometryOnly = false }: { label: string; unit: string; min: number; max: number; step: number; value: number; baseline: number; onChange: (value: number) => void; geometryOnly?: boolean }) {
   const changed = Math.abs(value - baseline) > Math.max(step / 2, 0.0001);
   const safeMin = Math.min(min, Math.floor(baseline), Math.floor(value));
   const safeMax = Math.max(max, Math.ceil(baseline), Math.ceil(value));
@@ -576,7 +663,17 @@ function NumberSlider({ label, unit, min, max, step, value, baseline, onChange }
   return (
     <div className="mb-3 last:mb-0">
       <div className="mb-2 flex items-center justify-between gap-2 text-[11px]">
-        <span className="text-[#6e6e73]">{label}</span>
+        <span className="flex items-center gap-1 text-[#6e6e73]">
+          {label}
+          {geometryOnly && (
+            <span
+              title="이 값은 3D 형상에만 반영되고 AI 성능 예측에는 쓰이지 않습니다."
+              className="rounded bg-[#f0f0f2] px-1 py-px text-[9px] font-medium text-[#86868b]"
+            >
+              형상만
+            </span>
+          )}
+        </span>
         <span className="flex items-center gap-1.5">
           {changed && <button onClick={() => onChange(baseline)} aria-label={`${label} 초기화`} className="rounded p-0.5 text-[#86868b] hover:bg-[#e5e5ea] hover:text-[#3c3c43]"><RotateCcw className="size-3" /></button>}
           <span className="flex items-center gap-1">
@@ -698,10 +795,10 @@ function WingControls({ wing, baseline, nacaOptions, onChange }: { wing: WingPar
       <NumberSlider label="날개 폭 (Span)" unit="mm" min={200} max={2000} step={1} value={wing.span} baseline={baseline.span} onChange={(value) => onChange((next) => { next.span = value; })} />
       <NumberSlider label="안쪽 날개 깊이" unit="mm" min={100} max={500} step={1} value={wing.chordInner} baseline={baseline.chordInner} onChange={(value) => onChange((next) => { next.chordInner = value; if (next.chordOuter > value) next.chordOuter = value; })} />
       <NumberSlider label="바깥쪽 날개 깊이" unit="mm" min={50} max={Math.max(50, wing.chordInner)} step={1} value={Math.min(wing.chordOuter, wing.chordInner)} baseline={Math.min(baseline.chordOuter, wing.chordInner)} onChange={(value) => onChange((next) => { next.chordOuter = value; })} />
-      <NumberSlider label="장착 각도" unit="°" min={0} max={360} step={1} value={wing.rotation} baseline={baseline.rotation} onChange={(value) => onChange((next) => { next.rotation = value; })} />
-      <NumberSlider label="결합 튜브 오프셋" unit="mm" min={-100} max={160} step={1} value={wing.tubeOffset} baseline={baseline.tubeOffset} onChange={(value) => onChange((next) => { next.tubeOffset = value; })} />
-      <NumberSlider label="에일러론 비율" unit="" min={0.1} max={1} step={0.01} value={wing.aileronBias} baseline={baseline.aileronBias} onChange={(value) => onChange((next) => { next.aileronBias = value; })} />
-      <NumberSlider label="플랩 비율" unit="" min={0.1} max={1} step={0.01} value={wing.flapBias} baseline={baseline.flapBias} onChange={(value) => onChange((next) => { next.flapBias = value; })} />
+      <NumberSlider label="장착 각도" unit="°" min={0} max={360} step={1} value={wing.rotation} baseline={baseline.rotation} onChange={(value) => onChange((next) => { next.rotation = value; })} geometryOnly />
+      <NumberSlider label="결합 튜브 오프셋" unit="mm" min={-100} max={160} step={1} value={wing.tubeOffset} baseline={baseline.tubeOffset} onChange={(value) => onChange((next) => { next.tubeOffset = value; })} geometryOnly />
+      <NumberSlider label="에일러론 비율" unit="" min={0.1} max={1} step={0.01} value={wing.aileronBias} baseline={baseline.aileronBias} onChange={(value) => onChange((next) => { next.aileronBias = value; })} geometryOnly />
+      <NumberSlider label="플랩 비율" unit="" min={0.1} max={1} step={0.01} value={wing.flapBias} baseline={baseline.flapBias} onChange={(value) => onChange((next) => { next.flapBias = value; })} geometryOnly />
     </div>
   );
 }
@@ -862,4 +959,131 @@ function maxArmSpan(draft: DesignDraft | null) {
     distanceByPath.set(segment.path, parentDistance + segment.length);
   }
   return Math.max(...distanceByPath.values(), ...draft.segments.map((segment) => segment.length), 0) * 2;
+}
+
+
+
+/**
+ * 부품 탭. 종류별로 묶어 보여주고, 고르면 3D에서 그 부품만 제 색으로 남고
+ * 나머지는 색을 잃는다. 작은 부품은 3D에서 직접 누르기 어려워 목록이 필요하다.
+ * 파라미터 아코디언 안에 두면 펼칠 때마다 다른 항목이 밀려나서 탭으로 분리했다.
+ */
+function PartsPanel({ assembly, selected, onSelect, openTypes, onToggleType, search }: {
+  assembly: AssemblyInfo;
+  selected: string[];
+  onSelect: (names: string[]) => void;
+  openTypes: string[];
+  onToggleType: (type: string) => void;
+  search: string;
+}) {
+  const groups = useMemo(() => {
+    const byType = new Map<string, PartPlacement[]>();
+    for (const part of assembly.placements) {
+      const type = assembly.typeOf.get(part.n);
+      // 조립 루트와 기준 좌표계는 형상이 없어 고를 것이 없다.
+      if (!type || type === 'Orient') continue;
+      byType.set(type, [...(byType.get(type) ?? []), part]);
+    }
+    return [...byType].sort((a, b) => b[1].length - a[1].length);
+  }, [assembly]);
+
+  const needle = search.trim().toLowerCase();
+  const visible = needle
+    ? groups.filter(([type, parts]) =>
+        type.toLowerCase().includes(needle) ||
+        parts.some((part) => part.n.toLowerCase().includes(needle)))
+    : groups;
+  if (!visible.length) return null;
+
+  const total = groups.reduce((sum, [, parts]) => sum + parts.length, 0);
+  const chosen = new Set(selected);
+  const swatch = (type: string) => `#${(TYPE_COLORS[type] ?? 0x9aa7ad).toString(16).padStart(6, '0')}`;
+
+  return (
+    <div className="grid gap-1.5 px-3 pb-5 pt-3">
+      <p className="px-0.5 pb-1 text-[10px] leading-4 text-[#86868b]">
+        3D는 기본이 무채색입니다. 여기서 고른 부품에만 색이 입혀지고 나머지는
+        흐려집니다. 종류를 누르면 같은 종류 전체가, 화살표를 펼치면 하나씩 고를 수
+        있습니다. 여러 개를 함께 고를 수 있어요.
+      </p>
+      {selected.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onSelect([])}
+          className="mb-1 w-full rounded-xl bg-[#1d1d1f] px-3 py-2 text-xs font-semibold text-white"
+        >
+          색 전부 지우기 ({selected.length}개)
+        </button>
+      )}
+      {visible.map(([type, parts]) => {
+        const names = parts.map((part) => part.n);
+        const allChosen = names.every((name) => chosen.has(name));
+        const someChosen = names.some((name) => chosen.has(name));
+        const open = openTypes.includes(type);
+        return (
+          <div
+            key={type}
+            className={`overflow-hidden rounded-xl ${someChosen ? 'bg-white ring-1 ring-[#d5d5da]' : 'bg-[#f5f5f7]'}`}
+          >
+            <div className="flex items-center gap-2 p-2.5">
+              <span className="size-3 shrink-0 rounded-full" style={{ background: swatch(type) }} />
+              <button
+                type="button"
+                onClick={() => onSelect(
+                  allChosen
+                    ? selected.filter((name) => !names.includes(name))
+                    : [...selected, ...names.filter((name) => !chosen.has(name))],
+                )}
+                className={`min-w-0 flex-1 text-left text-xs font-semibold ${someChosen ? 'text-[#1d1d1f]' : 'text-[#3c3c43]'}`}
+              >
+                {type.replaceAll('_', ' ')}
+                <span className="ml-1.5 font-normal text-[#86868b]">
+                  {someChosen ? `${names.filter((name) => chosen.has(name)).length}/${parts.length}` : parts.length}
+                </span>
+              </button>
+              {parts.length > 1 && (
+                <button
+                  type="button"
+                  aria-label={`${type} 목록 펼치기`}
+                  onClick={() => onToggleType(type)}
+                  className="shrink-0 rounded-md px-1 text-[#6e6e73] hover:bg-white"
+                >
+                  <ChevronRight className={`size-3.5 transition-transform ${open ? 'rotate-90' : ''}`} />
+                </button>
+              )}
+            </div>
+            {open && parts.length > 1 && (
+              <div className="grid gap-1 px-2.5 pb-2.5">
+                {parts.map((part) => {
+                  const active = chosen.has(part.n);
+                  return (
+                    <button
+                      key={part.n}
+                      type="button"
+                      onClick={() => onSelect(
+                        active
+                          ? selected.filter((name) => name !== part.n)
+                          : [...selected, part.n],
+                      )}
+                      className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] ${active ? 'bg-white font-semibold text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73] hover:bg-white/60'}`}
+                    >
+                      <span className="truncate">{part.n}</span>
+                      {part.s && (
+                        <span className="shrink-0 tabular-nums text-[10px] text-[#86868b]">
+                          {part.s.map((value) => Math.round(value)).join('×')}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <p className="mt-2 px-0.5 text-[10px] text-[#86868b]">
+        모두 {total}개 · {visible.length}종
+      </p>
+    </div>
+  );
 }

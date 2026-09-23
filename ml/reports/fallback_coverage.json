@@ -1,0 +1,112 @@
+{
+  "question": "The fallback trained on the 6,409 designs that have measured anchors and serves the other 21,305. How much does that cost?",
+  "method": "Real trim values for val and test designs from the v2 retraining artifacts, split by whether the design appears in the fallback's training file. Six of the eight targets; lift and distance are not carried in those artifacts.",
+  "evaluated_at": "2026-09-24T01:45:51+0900",
+  "population": {
+    "inside_training_designs": 1290,
+    "outside_training_designs": 408,
+    "inside_rows": 30442,
+    "outside_rows": 3133,
+    "note": "Outside designs average far fewer valid speeds - their trim solve converged at only a handful of points, which is why they have no anchors and were excluded from training."
+  },
+  "per_target": {
+    "pitch": {
+      "inside": {
+        "rows": 30442,
+        "r2": 0.601571,
+        "mae": 2.7105
+      },
+      "outside": {
+        "rows": 3133,
+        "r2": 0.082911,
+        "mae": 7.5388
+      },
+      "r2_drop": -0.51866,
+      "mae_ratio": 2.78
+    },
+    "drag": {
+      "inside": {
+        "rows": 30442,
+        "r2": 0.981391,
+        "mae": 0.6565
+      },
+      "outside": {
+        "rows": 3133,
+        "r2": 0.927371,
+        "mae": 1.5633
+      },
+      "r2_drop": -0.054019,
+      "mae_ratio": 2.38
+    },
+    "thrust": {
+      "inside": {
+        "rows": 30442,
+        "r2": 0.961796,
+        "mae": 3.2447
+      },
+      "outside": {
+        "rows": 3133,
+        "r2": 0.892644,
+        "mae": 5.8622
+      },
+      "r2_drop": -0.069152,
+      "mae_ratio": 1.81
+    },
+    "flightTime": {
+      "inside": {
+        "rows": 30442,
+        "r2": 0.934544,
+        "mae": 24.4745
+      },
+      "outside": {
+        "rows": 3133,
+        "r2": 0.801108,
+        "mae": 32.2637
+      },
+      "r2_drop": -0.133436,
+      "mae_ratio": 1.32
+    },
+    "power": {
+      "inside": {
+        "rows": 30442,
+        "r2": 0.872576,
+        "mae": 206.4214
+      },
+      "outside": {
+        "rows": 3133,
+        "r2": 0.832053,
+        "mae": 390.0802
+      },
+      "r2_drop": -0.040523,
+      "mae_ratio": 1.89
+    },
+    "current": {
+      "inside": {
+        "rows": 30442,
+        "r2": 0.849828,
+        "mae": 14.8142
+      },
+      "outside": {
+        "rows": 3133,
+        "r2": 0.791467,
+        "mae": 21.8325
+      },
+      "r2_drop": -0.058361,
+      "mae_ratio": 1.47
+    }
+  },
+  "sparse_designs": {
+    "definition": "3 or fewer valid speeds in 0-50 m/s",
+    "designs": 187,
+    "r2": {
+      "pitch": 0.141475,
+      "drag": 0.811568,
+      "thrust": 0.791136,
+      "flightTime": 0.657152,
+      "power": 0.575286,
+      "current": 0.688837
+    },
+    "example": "design 13077 has one valid speed (12 m/s); the fallback predicts 91 N thrust against a recorded 11.9, and 3,715 W against 387."
+  },
+  "conclusion": "Retrain on trim data for all 27,714 designs. The row count only grows about 20% - roughly 180,000 valid rows against 149,437 - because the excluded designs contribute few rows each. What changes is that the model finally sees them. Training takes about 20 seconds on a laptop CPU; the missing piece is the data, not the hardware."
+}

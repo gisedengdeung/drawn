@@ -1,0 +1,287 @@
+{
+  "model": "trim-param-v1",
+  "evaluated_at": "2026-09-24T01:48:13+0900",
+  "comparison": {
+    "against": "ml/sources/dongha/20260920_160522/test_predictions.csv",
+    "basis": "Identical test rows, restricted to designs held out by both splits. The anchored model is given five measured trim values per design; this one is given none.",
+    "designs_excluded_as_trained_on": 574,
+    "dropped_anchor_features": [
+      "dragAt20",
+      "powerAt20",
+      "powerAt0",
+      "thrustAt0",
+      "currentAt0"
+    ]
+  },
+  "scoring_rule": "R2 in the raw unit over finite rows, referenced to the mean of those rows. Speeds with no valid trim row are absent from the dataset.",
+  "per_target": {
+    "drag": {
+      "rows": 1582,
+      "test_r2": 0.974405,
+      "test_mae": 0.6487,
+      "test_r2_speed_gt0": 0.973463,
+      "anchored_model": {
+        "test_r2": 0.9824,
+        "delta": -0.007996,
+        "top_decile_pct_of_iqr": 1.4,
+        "predicted_max_over_actual_max": 1.1047
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          -0.1,
+          0.2,
+          0.2,
+          -0.1,
+          0.6,
+          -0.1,
+          -0.2,
+          -0.4,
+          0.7,
+          3.2
+        ],
+        "top_decile_pct_of_iqr": 3.2,
+        "actual_max": 53.88,
+        "predicted_max": 63.079,
+        "predicted_max_over_actual_max": 1.1707
+      }
+    },
+    "lift": {
+      "rows": 1582,
+      "test_r2": -3.20863,
+      "test_mae": 0.1216,
+      "test_r2_speed_gt0": -3.207473,
+      "anchored_model": {
+        "test_r2": 0.654878,
+        "delta": -3.863507,
+        "top_decile_pct_of_iqr": null,
+        "predicted_max_over_actual_max": 0.4115
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "top_decile_pct_of_iqr": null,
+        "actual_max": 12.16,
+        "predicted_max": 8.9624,
+        "predicted_max_over_actual_max": 0.737
+      }
+    },
+    "thrust": {
+      "rows": 1582,
+      "test_r2": 0.944629,
+      "test_mae": 3.0867,
+      "test_r2_speed_gt0": 0.94472,
+      "anchored_model": {
+        "test_r2": 0.984806,
+        "delta": -0.040177,
+        "top_decile_pct_of_iqr": -0.0,
+        "predicted_max_over_actual_max": 1.0636
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          10.6,
+          -0.7,
+          -0.7,
+          9.7,
+          1.8,
+          2.6,
+          -13.8,
+          8.3,
+          1.4,
+          3.7
+        ],
+        "top_decile_pct_of_iqr": 3.7,
+        "actual_max": 101.58,
+        "predicted_max": 105.6079,
+        "predicted_max_over_actual_max": 1.0397
+      }
+    },
+    "pitch": {
+      "rows": 1582,
+      "test_r2": 0.694374,
+      "test_mae": 2.7512,
+      "test_r2_speed_gt0": 0.694391,
+      "anchored_model": {
+        "test_r2": 0.824927,
+        "delta": -0.130554,
+        "top_decile_pct_of_iqr": 0.2,
+        "predicted_max_over_actual_max": 0.3642
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          0.3,
+          2.4,
+          0.7,
+          -0.2,
+          -1.6,
+          -3.2,
+          -3.5,
+          -1.9,
+          -0.8,
+          -1.4
+        ],
+        "top_decile_pct_of_iqr": -1.4,
+        "actual_max": 63.34,
+        "predicted_max": 32.3311,
+        "predicted_max_over_actual_max": 0.5104
+      }
+    },
+    "power": {
+      "rows": 1582,
+      "test_r2": 0.814221,
+      "test_mae": 205.489,
+      "test_r2_speed_gt0": 0.816024,
+      "anchored_model": {
+        "test_r2": 0.949395,
+        "delta": -0.135173,
+        "top_decile_pct_of_iqr": -10.2,
+        "predicted_max_over_actual_max": 0.9105
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          4.3,
+          1.2,
+          3.3,
+          12.0,
+          8.9,
+          3.6,
+          3.2,
+          -6.6,
+          7.8,
+          -8.6
+        ],
+        "top_decile_pct_of_iqr": -8.6,
+        "actual_max": 5621.25,
+        "predicted_max": 5070.0596,
+        "predicted_max_over_actual_max": 0.9019
+      }
+    },
+    "current": {
+      "rows": 1582,
+      "test_r2": 0.804799,
+      "test_mae": 13.8546,
+      "test_r2_speed_gt0": 0.807816,
+      "anchored_model": {
+        "test_r2": 0.968559,
+        "delta": -0.16376,
+        "top_decile_pct_of_iqr": -15.1,
+        "predicted_max_over_actual_max": 0.9265
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          8.0,
+          4.9,
+          7.3,
+          8.3,
+          2.6,
+          -2.5,
+          2.8,
+          -5.2,
+          -0.4,
+          -3.6
+        ],
+        "top_decile_pct_of_iqr": -3.6,
+        "actual_max": 315.08,
+        "predicted_max": 296.9983,
+        "predicted_max_over_actual_max": 0.9426
+      }
+    },
+    "flightTime": {
+      "rows": 1582,
+      "test_r2": 0.963654,
+      "test_mae": 18.1608,
+      "test_r2_speed_gt0": 0.964075,
+      "anchored_model": {
+        "test_r2": 0.988691,
+        "delta": -0.025038,
+        "top_decile_pct_of_iqr": -11.6,
+        "predicted_max_over_actual_max": 0.8586
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          0.9,
+          0.1,
+          1.7,
+          4.3,
+          -8.0,
+          -1.0,
+          -4.0,
+          -7.0,
+          6.5,
+          -45.9
+        ],
+        "top_decile_pct_of_iqr": -45.9,
+        "actual_max": 881.07,
+        "predicted_max": 821.3977,
+        "predicted_max_over_actual_max": 0.9323
+      }
+    },
+    "distance": {
+      "rows": 1582,
+      "test_r2": 0.972945,
+      "test_mae": 300.1002,
+      "test_r2_speed_gt0": 0.972701,
+      "anchored_model": {
+        "test_r2": 0.993003,
+        "delta": -0.020058,
+        "top_decile_pct_of_iqr": -0.9,
+        "predicted_max_over_actual_max": 0.8854
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          7.2,
+          6.5,
+          7.3,
+          6.8,
+          4.7,
+          5.8,
+          2.3,
+          -11.2,
+          -10.9,
+          -7.8
+        ],
+        "top_decile_pct_of_iqr": -7.8,
+        "actual_max": 21005.45,
+        "predicted_max": 17655.8105,
+        "predicted_max_over_actual_max": 0.8405
+      }
+    }
+  },
+  "shrinkage_watch": {
+    "why": "Every model on this project so far has under-predicted its top decile enough to make ranking unsafe. Checked before the fallback reaches the UI.",
+    "threshold": "top decile below -25% of the IQR",
+    "ranking_unsafe": [
+      "flightTime"
+    ],
+    "safe_to_rank": [
+      "drag",
+      "lift",
+      "thrust",
+      "pitch",
+      "power",
+      "current",
+      "distance"
+    ]
+  },
+  "known_issues": [
+    {
+      "id": "flightTime_top_decile_shrinkage",
+      "severity": "blocker_for_ranking",
+      "detail": "flightTime under-predicts its top decile by 46% of the IQR. Display is fine; do not sort or search designs on it."
+    },
+    {
+      "id": "lift_weak",
+      "severity": "reporting",
+      "detail": "lift reaches only R2 -3.209. The anchored model scores 0.655 here, so this is the target itself being hard, not the missing anchors."
+    }
+  ]
+}

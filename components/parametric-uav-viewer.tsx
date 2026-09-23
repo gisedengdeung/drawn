@@ -1137,30 +1137,59 @@ function buildFromPlacements(
   // 팔 슬라이더는 draft.segments에 쓰는데 이 경로는 STEP 좌표를 그대로 써서
   // 편집이 형상에 전혀 나타나지 않았다. 세그먼트를 팔 부품과 이어 준다.
   // 기준 길이가 sourceParameters의 값과 같은 팔이 그 세그먼트의 팔이다.
-  const armIdOfSegment = new Map<number, string>();
+  //
+  // 꺾인 마디(AngledWingArm·DoubleBendSegment, 전체의 10%)는 슬라이더 값이
+  // `arm1Length + arm2Length` 합계라 그 합과 같은 파라미터가 존재하지 않는다.
+  // 합계로만 찾던 예전 방식은 이 9,439개에서 100% 실패해, 슬라이더를 움직여도
+  // 형상이 그대로였다. 두 팔로 나눠 각각 찾으면 전부 짝이 맞는다.
+  const armTargetsOf = (segment: DesignDraft['segments'][number]) => {
+    const first = segment.parameters?.arm1Length;
+    const second = segment.parameters?.arm2Length;
+    return typeof first === 'number' && typeof second === 'number'
+      ? [first, second]
+      : [segment.length];
+  };
+
+  const armKeysOfSegment = new Map<number, string[]>();
   const taken = new Set<string>();
   draft.segments.forEach((_, index) => {
-    const original = (reference.segments[index] ?? draft.segments[index]).length;
-    let best: string | null = null;
-    let error = Infinity;
-    for (const [key, value] of baseLengthByKey) {
-      if (taken.has(key)) continue;
-      const gap = Math.abs(value - original);
-      if (gap < error) {
-        error = gap;
-        best = key;
+    const original = reference.segments[index] ?? draft.segments[index];
+    const keys: string[] = [];
+    for (const target of armTargetsOf(original)) {
+      let best: string | null = null;
+      let error = Infinity;
+      for (const [key, value] of baseLengthByKey) {
+        if (taken.has(key) || keys.includes(key)) continue;
+        const gap = Math.abs(value - target);
+        if (gap < error) {
+          error = gap;
+          best = key;
+        }
       }
+      if (!best || error >= Math.max(target * 0.02, 1)) return;
+      keys.push(best);
     }
-    if (best && error < Math.max(original * 0.02, 1)) {
-      armIdOfSegment.set(index, best);
-      taken.add(best);
-    }
+    // 한 팔이라도 못 찾으면 그 마디는 통째로 포기한다. 반쪽만 이어 두면
+    // 슬라이더를 움직였을 때 마디가 따로 놀며 끊어져 보인다.
+    armKeysOfSegment.set(index, keys);
+    for (const key of keys) taken.add(key);
   });
+
+  /** 마디 길이가 기준에서 몇 배로 바뀌었나. 꺾인 마디는 두 팔에 같은 비율로 나눈다. */
+  const growthOfSegment = (index: number) => {
+    const original = reference.segments[index] ?? draft.segments[index];
+    return original.length > 0 ? draft.segments[index].length / original.length : 1;
+  };
 
   // 조립 그래프로 바깥쪽을 정확히 가릴 수 있게 되어, 중간 팔도 늘릴 수 있다.
   const lengthByKey = new Map(baseLengthByKey);
-  for (const [index, key] of armIdOfSegment) {
-    lengthByKey.set(key, draft.segments[index].length);
+  for (const [index, keys] of armKeysOfSegment) {
+    if (keys.length === 1) {
+      lengthByKey.set(keys[0], draft.segments[index].length);
+      continue;
+    }
+    const ratio = growthOfSegment(index);
+    for (const key of keys) lengthByKey.set(key, (baseLengthByKey.get(key) ?? 0) * ratio);
   }
   const fallbackArmLength =
     draft.segments.reduce((sum, segment) => sum + segment.length, 0) /
@@ -1290,36 +1319,91 @@ function buildFromPlacements(
   // 조립 그래프를 허브에서 바깥으로 걸어, 팔 하나의 "바깥쪽"이 어디까지인지
   // 정확히 가린다. 예전에는 기하로 추측했는데 가지가 갈라지는 설계(전체의
   // 59%)에서 형제 가지를 서로 집어갔다.
+  //
+  // 허브만 막고 걸으면 안쪽으로도 새어 나간다. 허브에 닿기 전의 안쪽 팔은
+  // 그대로 통과하기 때문이다(팔의 56.9%, 설계의 49.6%). 그러면 바깥 팔을
+  // 늘렸을 때 안쪽 팔까지 밀려나 이음매가 벌어진다. 허브를 뿌리로 트리를
+  // 세우고 제 아래 가지만 센다.
   const hubName = placements.find((item) => /^MAINHUB/i.test(item.n))?.n;
-  const outboardOf = (armName: string) => {
-    const reached = new Set<string>([armName]);
-    if (hubName) reached.add(hubName);
-    const queue = [armName];
-    const found: string[] = [];
+  const parentOf = new Map<string, string | null>();
+  if (hubName) {
+    parentOf.set(hubName, null);
+    const queue = [hubName];
     while (queue.length) {
-      const current = queue.pop() as string;
+      const current = queue.shift() as string;
       for (const next of neighbours.get(current) ?? []) {
-        if (reached.has(next)) continue;
-        reached.add(next);
-        found.push(next);
+        if (parentOf.has(next)) continue;
+        parentOf.set(next, current);
         queue.push(next);
+      }
+    }
+  }
+  const outboardOf = (armName: string) => {
+    const stack = [armName];
+    const found: string[] = [];
+    const seen = new Set<string>([armName]);
+    while (stack.length) {
+      const current = stack.pop() as string;
+      for (const next of neighbours.get(current) ?? []) {
+        // 허브 쪽 부모로는 내려가지 않는다. 트리 밖(허브가 없는 설계)이면
+        // 예전처럼 허브만 막고 걷는다.
+        if (seen.has(next)) continue;
+        if (parentOf.size ? parentOf.get(next) !== current : next === hubName) continue;
+        seen.add(next);
+        found.push(next);
+        stack.push(next);
       }
     }
     return found;
   };
 
   const byName = new Map(placements.map((item) => [item.n, item]));
-  // 안쪽 세그먼트부터 처리해야 바깥 팔의 회전축이 이미 움직인 자리에서 잡힌다.
-  const editedSegments = [...armIdOfSegment]
-    .filter(([index]) => reference.segments[index])
-    .sort((a, b) => (draft.segments[a[0]].depth ?? 0) - (draft.segments[b[0]].depth ?? 0));
 
-  for (const [index, key] of editedSegments) {
-    const segment = draft.segments[index];
-    const original = reference.segments[index];
-    const turn = THREE.MathUtils.degToRad(segment.angle - original.angle);
-    const shift =
-      (segment.offset - original.offset + (segment.length - original.length)) * SCALE;
+  /**
+   * 팔이 뻗어 나가는 방향.
+   *
+   * 예전에는 "원점에서 멀어지는 쪽"으로 추측했는데, 가지가 갈라진 뒤 안쪽으로
+   * 되꺾이는 팔에서는 반대로 잡혔다(팔의 3.5%, 설계의 10.1%). 그 팔을 늘리면
+   * 허브 쪽으로 자라며 이음매가 찢어진다. 조립 트리에서 부모가 어디인지 알고
+   * 있으니 추측할 필요가 없다 — 부모에서 멀어지는 쪽이 바깥이다.
+   */
+  const outwardFrom = (part: PartPlacement, axis: THREE.Vector3, point: THREE.Vector3) => {
+    const parentName = parentOf.get(part.n);
+    const parent = parentName ? byName.get(parentName) : undefined;
+    const away = parent
+      ? point.clone().sub(applyChain(toScene(parent.p), rotorAdjustment.get(parent.n)))
+      : point;
+    const outward = axis.clone();
+    if (outward.dot(away) < 0) outward.negate();
+    return outward;
+  };
+  // 안쪽 세그먼트부터 처리해야 바깥 팔의 회전축이 이미 움직인 자리에서 잡힌다.
+  // 꺾인 마디는 팔이 둘이라 각각 한 번씩 돈다. 각도와 오프셋은 마디 뿌리에서
+  // 한 번만 적용하고, 길이 증가분은 팔마다 제 몫만 민다 — 둘 다에 전체
+  // 증가분을 주면 바깥 부품이 두 배로 밀려난다.
+  const editedArms = [...armKeysOfSegment]
+    .filter(([index]) => reference.segments[index])
+    .sort((a, b) => (draft.segments[a[0]].depth ?? 0) - (draft.segments[b[0]].depth ?? 0))
+    .flatMap(([index, keys]) => {
+      const segment = draft.segments[index];
+      const original = reference.segments[index];
+      const turn = THREE.MathUtils.degToRad(segment.angle - original.angle);
+      const offsetShift = (segment.offset - original.offset) * SCALE;
+      const ratio = growthOfSegment(index);
+      return keys.map((key, order) => {
+        const base = baseLengthByKey.get(key) ?? 0;
+        const grow = keys.length === 1
+          ? (segment.length - original.length) * SCALE
+          : (base * ratio - base) * SCALE;
+        return {
+          key,
+          turn: order === 0 ? turn : 0,
+          shift: (order === 0 ? offsetShift : 0) + grow,
+        };
+      });
+    });
+
+  for (const { key, turn, shift } of editedArms) {
     if (!turn && !shift) continue;
     // 키가 이미 `ROTATEDARM_5` 꼴이라 접두사를 다시 붙이지 않는다.
     const armPattern = new RegExp(`^${key}_`, 'i');
@@ -1328,8 +1412,7 @@ function buildFromPlacements(
       const chain = rotorAdjustment.get(arm.n);
       // 이 팔 자신이 안쪽 보정으로 이미 옮겨졌다면, 축과 피벗도 같이 옮긴다.
       const centre = applyChain(toScene(arm.p), chain);
-      const along = spinChain(toDirection(arm.z), chain);
-      if (along.dot(centre) < 0) along.negate();
+      const along = outwardFrom(arm, spinChain(toDirection(arm.z), chain), centre);
       const half = ((arm.s?.[2] ?? baseLengthByKey.get(key) ?? 200) * SCALE) / 2;
       const end = centre.clone().addScaledVector(along, half);
       const step: Adjustment = {
@@ -1448,8 +1531,7 @@ function buildFromPlacements(
       // 그대로 두고 바깥으로만 뻗도록 늘어난 만큼의 절반을 밀어 준다.
       const grown = length - (baseLengthByKey.get(key) ?? length / SCALE) * SCALE;
       if (grown) {
-        const outward = axis.clone();
-        if (outward.dot(position) < 0) outward.negate();
+        const outward = outwardFrom(part, axis, position);
         bar.position.addScaledVector(outward, grown / 2);
       }
       orient(bar, axis);

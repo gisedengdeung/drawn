@@ -7,6 +7,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 import { Button } from '@/components/ui/button';
+import { broadcastViewerCamera, registerViewerCamera } from '@/lib/viewer-camera-sync';
+import { configureInfiniteGrid, createInfiniteGrid, disposeInfiniteGrid, updateInfiniteGrid, type InfiniteGrid } from '@/lib/three-infinite-grid';
 import type {
   AssemblyInfo,
   DesignDraft,
@@ -54,6 +56,10 @@ type ParametricUavViewerProps = {
   onSelectionChange?: (names: string[]) => void;
   /** 배경 장식용 등, 조작 없이 저절로 돌아가야 할 때. */
   autoRotate?: boolean;
+  /** 자동 프레이밍 여백 배율. 값이 클수록 카메라가 더 멀리 물러난다. */
+  cameraFitPadding?: number;
+  /** 서로 다른 종류의 뷰어와 정규화된 카메라 자세를 공유한다. */
+  cameraSync?: { group: string; id: string; linked: boolean };
 };
 
 type ViewerRuntime = {
@@ -64,11 +70,12 @@ type ViewerRuntime = {
   model: THREE.Group | null;
   ghost: THREE.Group | null;
   forces: THREE.Group | null;
-  grid: THREE.GridHelper;
+  grid: InfiniteGrid;
   fitCamera: (points: THREE.Vector3[], force?: boolean) => void;
   radius: number;
   /** 마지막으로 맞춘 모델 바깥 점들. 창 크기가 바뀔 때 같은 곳을 다시 잡는다. */
   hull: THREE.Vector3[];
+  homeTarget: THREE.Vector3;
   lastFittedRadius: number;
   topology: string;
   syncing: boolean;
@@ -120,6 +127,8 @@ export function ParametricUavViewer({
   selection,
   onSelectionChange,
   autoRotate = false,
+  cameraFitPadding = 1.24,
+  cameraSync,
 }: ParametricUavViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ViewerRuntime | null>(null);
@@ -151,6 +160,10 @@ export function ParametricUavViewer({
   useEffect(() => {
     autoRotateRef.current = autoRotate;
   }, [autoRotate]);
+  const cameraSyncRef = useRef(cameraSync);
+  useEffect(() => {
+    cameraSyncRef.current = cameraSync;
+  }, [cameraSync]);
   const selectedParts = useMemo(
     () => (picked.length ? new Set(picked) : null),
     [picked],
@@ -288,16 +301,8 @@ export function ParametricUavViewer({
     rim.position.set(-5, 2, -4);
     scene.add(rim);
 
-    const grid = new THREE.GridHelper(30, 30, 0x9cb3bd, 0xd4e0e5);
-    const gridMaterials = Array.isArray(grid.material)
-      ? grid.material
-      : [grid.material];
-    gridMaterials.forEach((material) => {
-      material.transparent = true;
-      material.opacity = 0.55;
-    });
-    grid.position.y = -0.9;
-    scene.add(grid);
+    const grid = createInfiniteGrid(-0.9);
+    scene.add(grid.mesh);
 
     let disposed = false;
     let frame = 0;
@@ -348,7 +353,7 @@ export function ParametricUavViewer({
             Math.abs(local.dot(up)) / spanHigh + depth,
           );
         }
-        distance = Math.max(distance * 1.06, radius * 0.6);
+        distance = Math.max(distance * cameraFitPadding, radius * 0.6);
         let minWide = Infinity, maxWide = -Infinity;
         let minHigh = Infinity, maxHigh = -Infinity;
         for (const point of points) {
@@ -371,11 +376,16 @@ export function ParametricUavViewer({
       camera.far = Math.max(distance + radius * 10, 100);
       camera.updateProjectionMatrix();
       controls.target.copy(centre);
+      runtime.homeTarget.copy(centre);
       runtime.hull = points;
       controls.minDistance = Math.max(radius * 0.55, 1.5);
       controls.maxDistance = Math.max(radius * 8, 12);
       controls.update();
-      grid.scale.setScalar(Math.max(radius / 7, 0.65));
+      configureInfiniteGrid(grid, {
+        step: Math.max(radius / 7, 0.65),
+        fadeDistance: Math.max(radius * 14, 45),
+      });
+      updateInfiniteGrid(grid, camera);
       runtime.lastFittedRadius = radius;
     };
 
@@ -391,6 +401,7 @@ export function ParametricUavViewer({
       fitCamera,
       radius: 0,
       hull: [],
+      homeTarget: new THREE.Vector3(),
       lastFittedRadius: 0,
       topology: '',
       syncing: false,
@@ -419,6 +430,38 @@ export function ParametricUavViewer({
       }
     };
     controls.addEventListener('change', syncCamera);
+
+    const externalGroup = cameraSync?.group;
+    const externalId = cameraSync?.id;
+    const unregisterExternal = externalGroup && externalId
+      ? registerViewerCamera(externalGroup, externalId, {
+          read: () => {
+            if (!runtime.radius) return null;
+            const scale = 1 / runtime.radius;
+            return {
+              offset: camera.position.clone().sub(controls.target).multiplyScalar(scale).toArray(),
+              targetOffset: controls.target.clone().sub(runtime.homeTarget).multiplyScalar(scale).toArray(),
+              zoom: camera.zoom,
+            };
+          },
+          apply: (pose) => {
+            if (!runtime.radius) return;
+            runtime.syncing = true;
+            controls.target.copy(runtime.homeTarget).add(new THREE.Vector3(...pose.targetOffset).multiplyScalar(runtime.radius));
+            camera.position.copy(controls.target).add(new THREE.Vector3(...pose.offset).multiplyScalar(runtime.radius));
+            camera.zoom = pose.zoom;
+            camera.updateProjectionMatrix();
+            controls.update();
+            runtime.syncing = false;
+          },
+        })
+      : null;
+    const syncExternalCamera = () => {
+      const config = cameraSyncRef.current;
+      if (!config?.linked || runtime.syncing) return;
+      broadcastViewerCamera(config.group, config.id);
+    };
+    controls.addEventListener('change', syncExternalCamera);
 
     const resize = () => {
       const width = Math.max(1, Math.floor(mount.clientWidth));
@@ -450,6 +493,7 @@ export function ParametricUavViewer({
 
     const animate = () => {
       controls.update();
+      updateInfiniteGrid(grid, camera);
       renderer.render(scene, camera);
       frame = requestAnimationFrame(animate);
     };
@@ -469,6 +513,8 @@ export function ParametricUavViewer({
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       controls.dispose();
       controls.removeEventListener('change', syncCamera);
+      controls.removeEventListener('change', syncExternalCamera);
+      unregisterExternal?.();
       if (syncGroup) {
         const members = VIEWER_SYNC_GROUPS.get(syncGroup);
         members?.delete(runtime);
@@ -477,13 +523,12 @@ export function ParametricUavViewer({
       disposeObject(runtimeRef.current?.model);
       disposeObject(runtimeRef.current?.ghost);
       disposeObject(runtimeRef.current?.forces);
-      grid.geometry.dispose();
-      gridMaterials.forEach((material) => material.dispose());
+      disposeInfiniteGrid(grid);
       renderer.dispose();
       renderer.domElement.remove();
       runtimeRef.current = null;
     };
-  }, [retryKey, syncGroup]);
+  }, [cameraFitPadding, cameraSync?.group, cameraSync?.id, retryKey, syncGroup]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;

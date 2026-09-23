@@ -1,19 +1,23 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CircleGauge,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
+import {
   Crosshair,
-  Gauge,
   History,
   PackageCheck,
   Radar,
-  Route,
   ShieldCheck,
   Sparkles,
   Star,
   Trophy,
-  Weight,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -22,8 +26,8 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import type { DesignSummary, ShowcaseDesign, ShowcaseMap } from '@/lib/drawn-types';
-import { classifyAirframe, formatDistance, formatHub, formatMetric } from '@/lib/drawn-types';
+import type { DesignSummary, ShowcaseMap } from '@/lib/drawn-types';
+import { classifyAirframe, formatHub, formatMetric } from '@/lib/drawn-types';
 import {
   DIRECTION_GROUPS,
   EMPTY_SHAPE_FILTERS,
@@ -44,7 +48,7 @@ import {
   type Objective,
   type ScoredDesign,
 } from '@/lib/candidate-search';
-import { ConfigurationList, MetricTile, SourceBadge } from '@/components/views/shared';
+import { SourceBadge } from '@/components/views/shared';
 
 /** 한 번에 보여줄 결과 수. 바닥에 닿으면 이만큼씩 더 붙인다. */
 const PAGE = 40;
@@ -61,14 +65,14 @@ const PRESET_ICONS: Record<string, typeof PackageCheck> = {
   'Heavy Payload': ShieldCheck,
 };
 
-type Section = 'filter' | 'recommend' | 'favorites' | 'results' | 'summary';
+type Section = 'browse' | 'recommend' | 'favorites';
+type PickerAction = Section | 'model-info';
 
-const SECTIONS: { id: Section; label: string }[] = [
-  { id: 'filter', label: '필터' },
+const SECTIONS: { id: PickerAction; label: string }[] = [
+  { id: 'browse', label: '탐색' },
   { id: 'recommend', label: '추천' },
   { id: 'favorites', label: '즐겨찾기' },
-  { id: 'results', label: '목록' },
-  { id: 'summary', label: '요약' },
+  { id: 'model-info', label: '모델 정보' },
 ];
 
 function readStoredIds(key: string): number[] {
@@ -104,14 +108,16 @@ export function DesignPicker({
   showcases,
   selectedId,
   onSelect,
+  onOpenModelInfo,
 }: {
   designs: DesignSummary[];
   showcases: ShowcaseMap;
   selectedId: number | null;
   onSelect: (id: number) => void;
+  onOpenModelInfo?: () => void;
 }) {
   const { classes } = useShapeClasses();
-  const [section, setSection] = useState<Section>('filter');
+  const [section, setSection] = useState<Section>('browse');
   const [shape, setShape] = useState<ShapeFilters>(EMPTY_SHAPE_FILTERS);
   const [massMax, setMassMax] = useState(MASS_ANY);
   const [feasibleOnly, setFeasibleOnly] = useState(false);
@@ -189,13 +195,12 @@ export function DesignPicker({
     setVisibleCount(PAGE);
   }
 
-  const selectedSummary = useMemo(
-    () => (selectedId == null ? null : (designs.find((design) => design.id === selectedId) ?? null)),
-    [designs, selectedId],
-  );
-  const selectedDetail = selectedId == null ? null : (showcases[String(selectedId)] ?? null);
-
   const candidatePool = selectedId == null ? [] : buildCandidatePool(designs, selectedId, candidateMassLimit, candidatePowerLimit, objective);
+
+  const selectDesign = (id: number) => {
+    onSelect(id);
+    onOpenModelInfo?.();
+  };
 
   const cancelPendingRun = () => {
     if (runTimeoutRef.current != null) {
@@ -228,21 +233,21 @@ export function DesignPicker({
       setResults(scored);
       setRunning(false);
       runTimeoutRef.current = null;
-      if (scored[0]) onSelect(scored[0].id);
+      if (scored[0]) selectDesign(scored[0].id);
     }, 0);
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex items-center gap-0.5 border-b border-[#e5e5ea] p-2">
         {SECTIONS.map((item) => (
           <button
             key={item.id}
             type="button"
-            onClick={() => setSection(item.id)}
-            aria-pressed={section === item.id}
+            onClick={() => item.id === 'model-info' ? onOpenModelInfo?.() : setSection(item.id)}
+            aria-pressed={item.id !== 'model-info' && section === item.id}
             className={`flex-1 rounded-lg px-1.5 py-1.5 text-[10px] font-medium transition ${
-              section === item.id ? 'bg-[#eff6ff] text-[#1b64da]' : 'text-[#6e6e73] hover:bg-[#f5f5f7]'
+              item.id !== 'model-info' && section === item.id ? 'bg-[#eff6ff] text-[#1b64da]' : 'text-[#6e6e73] hover:bg-[#f5f5f7]'
             }`}
           >
             {item.label}
@@ -250,20 +255,33 @@ export function DesignPicker({
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {section === 'filter' && (
-          <FilterSection
-            shape={shape}
-            onShapeChange={setShape}
-            facets={facets}
-            massMax={massMax}
-            onMassMaxChange={setMassMax}
-            viewerOnly={viewerOnly}
-            onViewerOnlyChange={setViewerOnly}
-            feasibleOnly={feasibleOnly}
-            onFeasibleOnlyChange={setFeasibleOnly}
-            resultCount={filtered.length}
-          />
+      <div className={`min-h-0 flex-1 ${section === 'browse' ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'}`}>
+        {section === 'browse' && (
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="shrink-0">
+              <FilterSection
+                shape={shape}
+                onShapeChange={setShape}
+                facets={facets}
+                massMax={massMax}
+                onMassMaxChange={setMassMax}
+                viewerOnly={viewerOnly}
+                onViewerOnlyChange={setViewerOnly}
+                feasibleOnly={feasibleOnly}
+                onFeasibleOnlyChange={setFeasibleOnly}
+              />
+            </div>
+            <ResultsSection
+              filtered={filtered}
+              visibleCount={visibleCount}
+              onLoadMore={() => setVisibleCount((count) => Math.min(count + PAGE, filtered.length))}
+              total={designs.length}
+              selectedId={selectedId}
+              onSelect={selectDesign}
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
+            />
+          </div>
         )}
         {section === 'recommend' && (
           <RecommendSection
@@ -279,7 +297,7 @@ export function DesignPicker({
             onApplyPreset={applyPreset}
             onSelectObjective={(id) => { cancelPendingRun(); setObjective(id); }}
             onRun={runCandidateSearch}
-            onSelect={onSelect}
+            onSelect={selectDesign}
             selectedId={selectedId}
           />
         )}
@@ -289,23 +307,10 @@ export function DesignPicker({
             recent={recent}
             designs={designs}
             selectedId={selectedId}
-            onSelect={onSelect}
+            onSelect={selectDesign}
             onToggleFavorite={toggleFavorite}
           />
         )}
-        {section === 'results' && (
-          <ResultsSection
-            filtered={filtered}
-            visibleCount={visibleCount}
-            onLoadMore={() => setVisibleCount((count) => Math.min(count + PAGE, filtered.length))}
-            total={designs.length}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            favorites={favorites}
-            onToggleFavorite={toggleFavorite}
-          />
-        )}
-        {section === 'summary' && <SummarySection summary={selectedSummary} detail={selectedDetail} />}
       </div>
     </div>
   );
@@ -321,7 +326,6 @@ function FilterSection({
   onViewerOnlyChange,
   feasibleOnly,
   onFeasibleOnlyChange,
-  resultCount,
 }: {
   shape: ShapeFilters;
   onShapeChange: (updater: (previous: ShapeFilters) => ShapeFilters) => void;
@@ -332,7 +336,6 @@ function FilterSection({
   onViewerOnlyChange: (value: boolean) => void;
   feasibleOnly: boolean;
   onFeasibleOnlyChange: (value: boolean) => void;
-  resultCount: number;
 }) {
   return (
     <div className="p-3">
@@ -432,9 +435,6 @@ function FilterSection({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between rounded-lg bg-[#f5f5f7] px-3 py-2 text-[11px] text-[#6e6e73]">
-        조건에 맞는 설계 <span className="font-mono font-semibold text-[#1b64da]">{resultCount.toLocaleString()}</span>개 · &ldquo;목록&rdquo; 탭에서 확인
-      </div>
     </div>
   );
 }
@@ -632,21 +632,97 @@ function ResultsSection({
   favorites: number[];
   onToggleFavorite: (id: number) => void;
 }) {
+  const scrollRegionId = useId();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollDragOffsetRef = useRef<number | null>(null);
+  const [scrollThumb, setScrollThumb] = useState({ top: 0, height: 0, value: 0, scrollable: false });
+
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    let frame = window.requestAnimationFrame(() => setScrollThumb(measureScrollThumb(node)));
+    const observer = new ResizeObserver(() => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => setScrollThumb(measureScrollThumb(node)));
+    });
+    observer.observe(node);
+    if (node.firstElementChild) observer.observe(node.firstElementChild);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [filtered.length, visibleCount]);
+
+  const scrollFromPointer = (event: ReactPointerEvent<HTMLDivElement>, offset: number) => {
+    const node = scrollRef.current;
+    if (!node) return;
+    const track = event.currentTarget;
+    const trackRect = track.getBoundingClientRect();
+    const travel = Math.max(track.clientHeight - scrollThumb.height, 0);
+    const nextTop = Math.min(Math.max(event.clientY - trackRect.top - offset, 0), travel);
+    node.scrollTop = travel > 0 ? (nextTop / travel) * (node.scrollHeight - node.clientHeight) : 0;
+  };
+
+  const handleTrackPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    scrollDragOffsetRef.current = scrollThumb.height / 2;
+    scrollFromPointer(event, scrollDragOffsetRef.current);
+  };
+
+  const handleThumbPointerDown = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const track = event.currentTarget.parentElement;
+    if (!track) return;
+    track.setPointerCapture(event.pointerId);
+    const trackRect = track.getBoundingClientRect();
+    scrollDragOffsetRef.current = event.clientY - trackRect.top - scrollThumb.top;
+  };
+
+  const handleTrackPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (scrollDragOffsetRef.current === null || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    scrollFromPointer(event, scrollDragOffsetRef.current);
+  };
+
+  const stopScrollDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    scrollDragOffsetRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  const handleScrollKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const node = scrollRef.current;
+    if (!node) return;
+    const steps: Partial<Record<string, number>> = {
+      ArrowUp: -40,
+      ArrowDown: 40,
+      PageUp: -node.clientHeight * 0.8,
+      PageDown: node.clientHeight * 0.8,
+      Home: -node.scrollHeight,
+      End: node.scrollHeight,
+    };
+    const delta = steps[event.key];
+    if (delta === undefined) return;
+    event.preventDefault();
+    node.scrollBy({ top: delta, behavior: event.key.startsWith('Arrow') ? 'smooth' : 'auto' });
+  };
+
   return (
-    <div>
-      <div className="flex items-center justify-between border-b border-[#e5e5ea] px-3 py-2 text-[11px]">
+    <div className="flex min-h-0 flex-1 flex-col border-t border-[#e5e5ea]">
+      <div className="flex shrink-0 items-center justify-between border-b border-[#e5e5ea] px-3 py-2 text-[11px]">
         <span className="text-[#6e6e73]">
           설계 <span className="font-mono font-medium text-[#3c3c43]">{filtered.length.toLocaleString()}</span>
           <small className="ml-1 text-[10px] text-[#86868b]">/ {total.toLocaleString()}</small>
         </span>
       </div>
-      <div
-        className="divide-y divide-[#e5e5ea]"
-        onScroll={(event) => {
-          const box = event.currentTarget;
-          if (box.scrollTop + box.clientHeight >= box.scrollHeight - 120) onLoadMore();
-        }}
-      >
+      <div className="group/design-scroll relative min-h-0 flex-1 pl-2.5">
+        <div
+          id={scrollRegionId}
+          ref={scrollRef}
+          onScroll={(event) => setScrollThumb(measureScrollThumb(event.currentTarget))}
+          className="native-scrollbar-hidden h-full overflow-y-auto overscroll-contain scroll-pb-8"
+        >
+          <div className="divide-y divide-[#e5e5ea] pb-8">
         {filtered.slice(0, visibleCount).map((design) => {
           const active = selectedId === design.id;
           return (
@@ -671,58 +747,52 @@ function ResultsSection({
             </div>
           );
         })}
-        {!filtered.length && (
-          <p className="p-6 text-center text-[11px] leading-5 text-[#6e6e73]">조건에 맞는 설계가 없습니다. &ldquo;필터&rdquo; 탭에서 조건을 지우고 다시 골라보세요.</p>
+          {!filtered.length && (
+            <p className="p-6 text-center text-[11px] leading-5 text-[#6e6e73]">조건에 맞는 설계가 없습니다. 위 필터의 조건을 지우고 다시 골라보세요.</p>
+          )}
+          {visibleCount < filtered.length && (
+            <button type="button" onClick={onLoadMore} className="w-full border-t border-[#e5e5ea] px-3 py-3 text-[11px] font-semibold text-[#3182f6] hover:bg-[#eff6ff]">
+              설계 {Math.min(PAGE, filtered.length - visibleCount).toLocaleString()}개 더 보기
+            </button>
+          )}
+          </div>
+        </div>
+        {scrollThumb.scrollable && (
+          <div
+            role="scrollbar"
+            aria-label="설계 목록 스크롤"
+            aria-orientation="vertical"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={scrollThumb.value}
+            aria-controls={scrollRegionId}
+            tabIndex={0}
+            onPointerDown={handleTrackPointerDown}
+            onPointerMove={handleTrackPointerMove}
+            onPointerUp={stopScrollDrag}
+            onPointerCancel={stopScrollDrag}
+            onKeyDown={handleScrollKeyDown}
+            className="absolute inset-y-1 left-0 z-10 w-2.5 touch-none rounded-full opacity-0 transition-opacity duration-200 group-hover/design-scroll:opacity-100 hover:bg-[#3c3c43]/[0.04] focus-visible:opacity-100 focus-visible:outline-none"
+          >
+            <span
+              onPointerDown={handleThumbPointerDown}
+              className="absolute left-[3px] w-1 cursor-grab rounded-full bg-[#3c3c43]/35 shadow-[0_0_0_0.5px_rgba(255,255,255,0.45)] hover:bg-[#3c3c43]/55 active:cursor-grabbing active:bg-[#3c3c43]/60"
+              style={{ height: scrollThumb.height, transform: `translateY(${scrollThumb.top}px)` }}
+            />
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function SummarySection({ summary, detail }: { summary: DesignSummary | null; detail: ShowcaseDesign | null }) {
-  if (!summary) {
-    return <p className="p-6 text-center text-[11px] leading-5 text-[#6e6e73]">설계를 고르면 구성과 성능 요약이 여기 나타납니다.</p>;
-  }
-  return (
-    <div className="p-3">
-      <div className="mb-3 flex items-center gap-2">
-        <p className="text-[11px] font-semibold text-[#3c3c43]">
-          {classifyAirframe(summary).label} <span className="font-mono font-normal text-[#6e6e73]">#{summary.id}</span>
-        </p>
-        {summary.feasible ? (
-          <Badge className="bg-emerald-50 text-[9px] text-emerald-700">비행성능 유효</Badge>
-        ) : (
-          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[9px] text-amber-700">성능 해석 불가</Badge>
-        )}
-      </div>
-
-      <div className="rounded-lg border border-[#e5e5ea] bg-white p-3">
-        <div className="mb-1 flex items-center justify-between">
-          <h3 className="text-[11px] font-medium text-[#3c3c43]">설계 구성</h3>
-          <SourceBadge />
-        </div>
-        {detail ? (
-          <ConfigurationList design={detail} />
-        ) : (
-          <div className="divide-y divide-[#e5e5ea]">
-            {[
-              ['허브', formatHub(summary.hub)],
-              ['프로펠러', String(summary.numPropellers)],
-              ['날개', String(summary.numWings)],
-              ['암 길이', summary.armLength ? `${summary.armLength.toFixed(1)} mm` : '—'],
-            ].map(([label, value]) => (
-              <div key={label} className="flex justify-between gap-3 py-2 text-[11px]"><span className="text-[#6e6e73]">{label}</span><span className="text-[#3c3c43]">{value}</span></div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <MetricTile icon={<Route className="size-4" />} label="최대 비행거리" value={summary.maxDistance ? formatMetric(summary.maxDistance / 1000, 2) : '—'} unit={summary.maxDistance ? 'km' : undefined} note={summary.speedMfd ? `${summary.speedMfd} m/s 기준` : '성능 데이터 없음'} tone="cyan" />
-        <MetricTile icon={<CircleGauge className="size-4" />} label="체공 시간" value={summary.hoverTime ? formatMetric(summary.hoverTime, 0) : '—'} unit={summary.hoverTime ? 'sec' : undefined} tone="violet" />
-        <MetricTile icon={<Gauge className="size-4" />} label="최고 속도" value={summary.maxSpeed ? formatMetric(summary.maxSpeed, 1) : '—'} unit={summary.maxSpeed ? 'm/s' : undefined} tone="green" />
-        <MetricTile icon={<Weight className="size-4" />} label="질량" value={formatMetric(summary.mass, 2)} unit="kg" note={formatDistance(summary.maxDistance)} />
-      </div>
-    </div>
-  );
+function measureScrollThumb(node: HTMLElement) {
+  const { clientHeight, scrollHeight, scrollTop } = node;
+  if (scrollHeight <= clientHeight || clientHeight <= 0) return { top: 0, height: 0, value: 0, scrollable: false };
+  const trackHeight = Math.max(clientHeight - 8, 1);
+  const height = Math.max(28, trackHeight * (clientHeight / scrollHeight));
+  const travel = Math.max(trackHeight - height, 0);
+  const progress = scrollTop / Math.max(scrollHeight - clientHeight, 1);
+  const top = travel * progress;
+  return { top, height, value: Math.round(progress * 100), scrollable: true };
 }

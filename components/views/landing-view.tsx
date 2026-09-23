@@ -29,6 +29,7 @@ export function LandingView({
             draft={heroDraft}
             assembly={heroPlacements}
             autoRotate
+            cameraFitPadding={1.62}
             selection={[]}
             onSelectionChange={() => {}}
           />

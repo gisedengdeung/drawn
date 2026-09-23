@@ -399,10 +399,10 @@ export function DrawnApp() {
               {view === 'lab' && selectedSummary && (
                 <DesignLabView
                   key={`${selectedSummary.id}-${importVersion}`}
-                  designs={labSelectorDesigns}
                   selected={selectedSummary}
                   referenceDesign={selectedDetail}
                   datasetDesigns={dataset.designs}
+                  showcases={showcases}
                   onSelect={setSelectedId}
                   onOpenDatasetCompare={() => openCompareFromExplorer(selectedSummary.id)}
                   workspace={designWorkspace}

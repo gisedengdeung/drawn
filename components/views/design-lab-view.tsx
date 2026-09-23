@@ -5,6 +5,8 @@ import {
   Activity,
   BatteryCharging,
   Box,
+  Boxes,
+  ChevronDown,
   ChevronRight,
   CircleGauge,
   GitCompareArrows,
@@ -25,6 +27,7 @@ import {
 
 import { PerformancePredictionPanel } from './performance-prediction-panel';
 import { ParametricUavViewer, TYPE_COLORS } from '@/components/parametric-uav-viewer';
+import { DesignPicker } from '@/components/design-picker';
 import { StlViewer } from '@/components/stl-viewer';
 import { cloneDraft } from '@/lib/design-draft';
 import { countChanges, estimateDraft } from '@/lib/design-performance';
@@ -48,10 +51,11 @@ import type {
   ParameterGroup,
   PartPlacement,
   ShowcaseDesign,
+  ShowcaseMap,
   WingParameters,
 } from '@/lib/drawn-types';
 import { formatBatteryLabel, formatComponent, formatEnergyConfiguration, formatMetric, formatMotorLabel, formatPropellerLabel, isAvailableMetric, percentChange } from '@/lib/drawn-types';
-import { DataDisclaimer, DesignSelector, SectionHeading } from '@/components/views/shared';
+import { DataDisclaimer } from '@/components/views/shared';
 
 type MobilePanel = 'parameters' | 'preview' | 'performance';
 
@@ -79,20 +83,20 @@ const GROUP_HINTS: Record<ParameterGroup, string> = {
 const EXPERT_MODE_STORAGE_KEY = 'aerotwin:design-lab-expert-mode';
 
 export function DesignLabView({
-  designs,
   selected,
   referenceDesign,
   datasetDesigns = [],
+  showcases = {},
   onSelect,
   onOpenDatasetCompare,
   onOpenParts,
   workspace,
   focusedParameterId,
 }: {
-  designs: Array<Pick<DesignSummary, 'id' | 'numPropellers' | 'numWings'>>;
   selected: DesignSummary;
   referenceDesign?: ShowcaseDesign | null;
   datasetDesigns?: DesignSummary[];
+  showcases?: ShowcaseMap;
   onSelect: (id: number) => void;
   onOpenDatasetCompare: () => void;
   onOpenParts: () => void;
@@ -119,7 +123,10 @@ export function DesignLabView({
    */
   const [sideBySide, setSideBySide] = useState(false);
   /** 왼쪽 패널 탭. 부품 목록이 파라미터 아코디언에 끼면 매번 밀려 내려간다. */
-  const [panelTab, setPanelTab] = useState<'parameters' | 'parts'>('parameters');
+  const [panelTab, setPanelTab] = useState<'design' | 'parameters' | 'parts'>('parameters');
+  // 아일랜드는 3D 위에 떠 있으므로 접어서 화면을 완전히 비울 수 있어야 한다.
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
   const [estimateState, setEstimateState] = useState<'ready' | 'calculating'>('ready');
   const [estimateImpact, setEstimateImpact] = useState<'performance' | 'geometry-only'>('performance');
   const highlightTimeoutRef = useRef<number | null>(null);
@@ -208,54 +215,58 @@ export function DesignLabView({
   );
   const changedCount = useMemo(() => draft && baseline ? countChanges(draft, baseline) : 0, [baseline, draft]);
   const parameterCount = draft?.parameterDefinitions?.length ?? 0;
-  const editableParameterCount = draft?.parameterDefinitions?.filter((item) => item.editable).length ?? 0;
   const query = search.trim().toLocaleLowerCase('ko-KR');
   const groupVisible = (group: ParameterGroup, terms: string[]) => !query
     || GROUP_LABELS[group].toLocaleLowerCase('ko-KR').includes(query)
     || terms.some((term) => term.toLocaleLowerCase('ko-KR').includes(query));
 
   return (
-    <section className="@container/lab px-3 py-4 lg:px-5">
-      <SectionHeading
-        eyebrow={`파라메트릭 Design Studio / Baseline #${selected.id}`}
-        title="설계 파라미터와 3D를 한 화면에서 조정하세요"
-        description="치수·부품·날개 조건을 편집하고, 속도별 AI 예측과 기존 설계 KPI를 함께 확인하세요."
-        actions={(
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={onOpenParts} disabled={loading || !draft} className="bg-[#3182f6] text-white hover:bg-[#1b64da]"><ShoppingBag className="size-4" />부품 찾기</Button>
-            {expertMode && <Badge variant="outline" className="border-[#bfdbfe] bg-[#eff6ff] text-[#1b64da]">원본 {parameterCount} · 편집 가능 {editableParameterCount}</Badge>}
-            <DesignSelector designs={designs} value={selected.id} onChange={onSelect} />
-          </div>
-        )}
-      />
-
-      <div className="mb-3 grid grid-cols-3 rounded-xl bg-[#f5f5f7] p-1 @min-[900px]/lab:hidden">
+    // 3D를 바닥에 깔고 패널을 그 위에 띄운다. 예전에는 3칸 그리드라 뷰어가
+    // 가로의 절반도 쓰지 못했다.
+    <section className="@container/lab relative h-[calc(100vh-var(--studio-chrome,116px))] min-h-[560px] overflow-hidden">
+      <div className="mb-3 hidden">
         {([
           ['parameters', '파라미터', SlidersHorizontal],
           ['preview', '3D', Box],
           ['performance', '성능', Activity],
         ] as const).map(([id, label, Icon]) => (
-          <button key={id} aria-pressed={mobilePanel === id} onClick={() => setMobilePanel(id)} className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${mobilePanel === id ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}>
-            <Icon className={`size-3.5 ${mobilePanel === id ? 'text-[#3182f6]' : ''}`} /> {label}
+          <button key={id} aria-pressed={mobilePanel === id} onClick={() => setMobilePanel(id)}>
+            <Icon /> {label}
           </button>
         ))}
       </div>
 
-      <div className="grid gap-3 @min-[900px]/lab:h-[calc(100vh-205px)] @min-[900px]/lab:min-h-[560px] @min-[900px]/lab:grid-cols-[minmax(260px,.85fr)_minmax(360px,1.5fr)_minmax(230px,.75fr)]">
-        <aside className={`${mobilePanel === 'parameters' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white shadow-sm @min-[900px]/lab:block`}>
+      <div className="h-full">
+        <aside
+          className={`absolute left-3 top-3 bottom-3 z-20 flex w-[310px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur transition-[max-height] ${
+            leftOpen ? '' : 'bottom-auto max-h-11'
+          }`}
+        >
           <div className="border-b border-[#e5e5ea] p-4">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-[#1d1d1f]">설계 파라미터</p>
-                <p className="mt-1 text-xs text-[#6e6e73]">{changedCount ? `${changedCount}개 변경됨` : 'Baseline과 동일'}</p>
-              </div>
-              <Button size="icon-sm" variant="ghost" onClick={resetAll} disabled={!changedCount} aria-label="전체 초기화" className="text-[#6e6e73]"><RotateCcw /></Button>
+              <button
+                type="button"
+                onClick={() => setLeftOpen((open) => !open)}
+                aria-expanded={leftOpen}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${leftOpen ? '' : '-rotate-90'}`} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-[#1d1d1f]">설계 파라미터</span>
+                  {leftOpen && (
+                    <span className="mt-0.5 block text-xs text-[#6e6e73]">{changedCount ? `${changedCount}개 변경됨` : 'Baseline과 동일'}</span>
+                  )}
+                </span>
+              </button>
+              {leftOpen && (
+                <Button size="icon-sm" variant="ghost" onClick={resetAll} disabled={!changedCount} aria-label="전체 초기화" className="text-[#6e6e73]"><RotateCcw /></Button>
+              )}
             </div>
-            <div className="relative mt-3">
+            <div className={`relative mt-3 ${leftOpen ? '' : 'hidden'}`}>
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#86868b]" />
               <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="파라미터 검색" className="h-9 border-[#e5e5ea] bg-[#f5f5f7] pl-8 text-xs" />
             </div>
-            {panelTab === 'parameters' && (
+            {leftOpen && panelTab === 'parameters' && (
               <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-[#f5f5f7] px-3 py-2">
                 <div>
                   <p className="text-xs font-medium text-[#6e6e73]">전문가 모드</p>
@@ -264,12 +275,13 @@ export function DesignLabView({
                 <Switch checked={expertMode} onCheckedChange={toggleExpertMode} size="sm" aria-label="전문가 모드" />
               </div>
             )}
-            {placements && (
-              <div className="mt-3 grid grid-cols-2 rounded-xl bg-[#f5f5f7] p-1">
+            {leftOpen && (
+              <div className="mt-3 grid grid-cols-3 rounded-xl bg-[#f5f5f7] p-1">
                 {([
+                  ['design', '설계', Boxes],
                   ['parameters', '파라미터', SlidersHorizontal],
                   ['parts', '부품', Package],
-                ] as const).map(([id, label, Icon]) => (
+                ] as const).filter(([id]) => id !== 'parts' || placements).map(([id, label, Icon]) => (
                   <button
                     key={id}
                     type="button"
@@ -288,7 +300,17 @@ export function DesignLabView({
             )}
           </div>
 
-          <ScrollArea className="h-[500px] @min-[900px]/lab:h-[calc(100%-116px)]">
+          {panelTab === 'design' ? (
+            <div className="min-h-0 flex-1">
+              <DesignPicker
+                designs={datasetDesigns}
+                showcases={showcases}
+                selectedId={selected.id}
+                onSelect={onSelect}
+              />
+            </div>
+          ) : (
+          <ScrollArea className="min-h-0 flex-1">
             {loading || !draft || !baseline ? (
               <div className="grid h-80 place-items-center text-xs text-[#6e6e73]">설계 파라미터를 준비하고 있습니다…</div>
             ) : panelTab === 'parts' && placements ? (
@@ -402,11 +424,13 @@ export function DesignLabView({
               </Accordion>
             )}
           </ScrollArea>
+          )}
         </aside>
 
-        <div className={`${mobilePanel === 'preview' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-[#f5f5f7] shadow-sm @min-[900px]/lab:block`}>
+        <div className="absolute inset-0 z-0 bg-[#f5f5f7]">
           <div className="flex h-full flex-col">
-            <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e5ea] bg-white px-3 py-2.5">
+            {/* 모드 전환은 3D 위에 떠 있는 작은 섬으로 둔다. */}
+            <div className="pointer-events-none absolute left-1/2 top-3 z-20 flex max-w-[calc(100%-660px)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-xl border border-[#e5e5ea] bg-white/92 px-3 py-2 shadow-lg backdrop-blur [&>*]:pointer-events-auto">
               <div className="flex rounded-lg bg-[#f5f5f7] p-1">
                 <ModeButton active={mode === 'parametric-preview'} onClick={() => setMode('parametric-preview')}>설계 미리보기</ModeButton>
                 <ModeButton active={mode === 'exact-stl'} onClick={() => setMode('exact-stl')}>원본 STL</ModeButton>
@@ -472,8 +496,29 @@ export function DesignLabView({
           </div>
         </div>
 
-        <aside className={`${mobilePanel === 'performance' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white shadow-sm @min-[900px]/lab:block`}>
-          <ScrollArea className="h-full">
+        <aside
+          className={`absolute right-3 top-3 z-20 flex w-[300px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur ${
+            rightOpen ? 'bottom-3' : 'max-h-11'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setRightOpen((open) => !open)}
+            aria-expanded={rightOpen}
+            className="flex w-full shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3 py-3 text-left"
+          >
+            <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${rightOpen ? '' : '-rotate-90'}`} />
+            <span className="text-sm font-semibold text-[#1d1d1f]">성능</span>
+            <Button
+              size="sm"
+              onClick={(event) => { event.stopPropagation(); onOpenParts(); }}
+              disabled={loading || !draft}
+              className="ml-auto h-7 bg-[#3182f6] px-2 text-[11px] text-white hover:bg-[#1b64da]"
+            >
+              <ShoppingBag className="size-3" />부품 찾기
+            </Button>
+          </button>
+          <ScrollArea className={`min-h-0 flex-1 ${rightOpen ? '' : 'hidden'}`}>
             <div className="p-4">
               <div className="mb-5"><PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} compact /></div>
               <div className="flex items-start justify-between gap-3">

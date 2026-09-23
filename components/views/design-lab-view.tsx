@@ -540,7 +540,7 @@ export function DesignLabView({
                   </div>
                   <div className="relative">
                     <StlViewer key={originalStlUrl} src={originalStlUrl} cameraFitPadding={1.62} cameraSync={{ group: comparisonCameraGroup, id: 'stl', linked: cameraLinked }} showControls={false} />
-                    <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#6e6e73] backdrop-blur">원본 STL</span>
+                    <span className="pointer-events-none absolute right-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#6e6e73] backdrop-blur">원본 STL</span>
                   </div>
                 </div>
               ) : draft && baseline && mode === 'parametric-preview' ? (

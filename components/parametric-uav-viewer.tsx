@@ -76,6 +76,7 @@ type ViewerRuntime = {
   /** 마지막으로 맞춘 모델 바깥 점들. 창 크기가 바뀔 때 같은 곳을 다시 잡는다. */
   hull: THREE.Vector3[];
   homeTarget: THREE.Vector3;
+  homeDistance: number;
   lastFittedRadius: number;
   topology: string;
   syncing: boolean;
@@ -381,6 +382,7 @@ export function ParametricUavViewer({
       controls.minDistance = Math.max(radius * 0.55, 1.5);
       controls.maxDistance = Math.max(radius * 8, 12);
       controls.update();
+      runtime.homeDistance = camera.position.distanceTo(controls.target);
       configureInfiniteGrid(grid, {
         step: Math.max(radius / 7, 0.65),
         fadeDistance: Math.max(radius * 14, 45),
@@ -402,6 +404,7 @@ export function ParametricUavViewer({
       radius: 0,
       hull: [],
       homeTarget: new THREE.Vector3(),
+      homeDistance: 0,
       lastFittedRadius: 0,
       topology: '',
       syncing: false,
@@ -436,19 +439,21 @@ export function ParametricUavViewer({
     const unregisterExternal = externalGroup && externalId
       ? registerViewerCamera(externalGroup, externalId, {
           read: () => {
-            if (!runtime.radius) return null;
+            if (!runtime.radius || !runtime.homeDistance) return null;
             const scale = 1 / runtime.radius;
+            const offset = camera.position.clone().sub(controls.target);
             return {
-              offset: camera.position.clone().sub(controls.target).multiplyScalar(scale).toArray(),
+              direction: offset.clone().normalize().toArray(),
+              distanceScale: offset.length() / runtime.homeDistance,
               targetOffset: controls.target.clone().sub(runtime.homeTarget).multiplyScalar(scale).toArray(),
               zoom: camera.zoom,
             };
           },
           apply: (pose) => {
-            if (!runtime.radius) return;
+            if (!runtime.radius || !runtime.homeDistance) return;
             runtime.syncing = true;
             controls.target.copy(runtime.homeTarget).add(new THREE.Vector3(...pose.targetOffset).multiplyScalar(runtime.radius));
-            camera.position.copy(controls.target).add(new THREE.Vector3(...pose.offset).multiplyScalar(runtime.radius));
+            camera.position.copy(controls.target).add(new THREE.Vector3(...pose.direction).multiplyScalar(runtime.homeDistance * pose.distanceScale));
             camera.zoom = pose.zoom;
             camera.updateProjectionMatrix();
             controls.update();

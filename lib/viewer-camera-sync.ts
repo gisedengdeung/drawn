@@ -1,6 +1,8 @@
 export type ViewerCameraPose = {
-  /** 카메라와 주시점 사이 벡터를 모델 반지름으로 정규화한 값. */
-  offset: [number, number, number];
+  /** 주시점에서 카메라를 향하는 단위 방향. */
+  direction: [number, number, number];
+  /** 각 뷰어가 최초로 맞춘 거리를 1로 본 상대 확대 거리. */
+  distanceScale: number;
   /** 최초 프레이밍 중심에서 이동한 주시점 거리. */
   targetOffset: [number, number, number];
   zoom: number;

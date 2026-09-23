@@ -156,6 +156,7 @@ export function StlViewer({
     let lastDynamics = '';
     let applyingCamera = false;
     const homeTarget = new THREE.Vector3();
+    let homeDistance = 0;
 
     const updateDynamics = () => {
       const dynamics = dynamicsRef.current;
@@ -245,6 +246,7 @@ export function StlViewer({
       controls.minDistance = Math.max(radius * 0.55, 1.5);
       controls.maxDistance = Math.max(radius * 8, 12);
       controls.update();
+      homeDistance = camera.position.distanceTo(controls.target);
       configureInfiniteGrid(grid, {
         step: Math.max(radius / 7, 0.65),
         fadeDistance: Math.max(radius * 14, 45),
@@ -257,19 +259,21 @@ export function StlViewer({
     const unregisterExternal = externalGroup && externalId
       ? registerViewerCamera(externalGroup, externalId, {
           read: () => {
-            if (!modelRadius) return null;
+            if (!modelRadius || !homeDistance) return null;
             const scale = 1 / modelRadius;
+            const offset = camera.position.clone().sub(controls.target);
             return {
-              offset: camera.position.clone().sub(controls.target).multiplyScalar(scale).toArray(),
+              direction: offset.clone().normalize().toArray(),
+              distanceScale: offset.length() / homeDistance,
               targetOffset: controls.target.clone().sub(homeTarget).multiplyScalar(scale).toArray(),
               zoom: camera.zoom,
             };
           },
           apply: (pose) => {
-            if (!modelRadius) return;
+            if (!modelRadius || !homeDistance) return;
             applyingCamera = true;
             controls.target.copy(homeTarget).add(new THREE.Vector3(...pose.targetOffset).multiplyScalar(modelRadius));
-            camera.position.copy(controls.target).add(new THREE.Vector3(...pose.offset).multiplyScalar(modelRadius));
+            camera.position.copy(controls.target).add(new THREE.Vector3(...pose.direction).multiplyScalar(homeDistance * pose.distanceScale));
             camera.zoom = pose.zoom;
             camera.updateProjectionMatrix();
             controls.update();

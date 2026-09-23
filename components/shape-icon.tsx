@@ -67,21 +67,34 @@ export function WingIcon({
 }) {
   return (
     <svg viewBox="0 0 512 512" width={size} height={size} className={className} aria-hidden="true">
-      <path
-        d="M 140 170 Q 95 172 95 215 L 95 325 Q 95 365 135 368 Q 265 370 350 354 Q 410 342 450 285 L 478 225 Q 498 180 452 176 Q 300 182 140 170 Z"
-        fill="currentColor"
-        fillOpacity={present ? 0.18 : 0.08}
-        stroke="currentColor"
-        strokeWidth={18}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        opacity={present ? 0.95 : 0.68}
-      />
-      {!present && (
-        <g stroke="currentColor" strokeWidth={20} strokeLinecap="round" opacity={0.9}>
-          <line x1={259} y1={241} x2={317} y2={299} />
-          <line x1={317} y1={241} x2={259} y2={299} />
-        </g>
+      {present ? (
+        <path
+          d="M 140 170 Q 95 172 95 215 L 95 325 Q 95 365 135 368 Q 265 370 350 354 Q 410 342 450 285 L 478 225 Q 498 180 452 176 Q 300 182 140 170 Z"
+          fill="currentColor"
+          fillOpacity={0.18}
+          stroke="currentColor"
+          strokeWidth={18}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          opacity={0.95}
+        />
+      ) : (
+        <>
+          <path
+            d="M106 157C76 158.333 61 173.333 61 202V312C61 338.667 74.3333 353 101 355C187.667 356.333 259.333 351.667 316 341C356 333 389.333 310 416 272L444 212C457.333 182 448.667 165.667 418 163C316.667 167 212.667 165 106 157Z"
+            fill="currentColor"
+            fillOpacity={0.08}
+            stroke="currentColor"
+            strokeWidth={18}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={0.68}
+          />
+          <g stroke="currentColor" strokeWidth={30} strokeLinecap="round" opacity={0.95}>
+            <line x1={119} y1={119} x2={392} y2={392} />
+            <line x1={392} y1={119} x2={119} y2={392} />
+          </g>
+        </>
       )}
     </svg>
   );

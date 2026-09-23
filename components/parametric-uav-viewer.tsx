@@ -52,6 +52,8 @@ type ParametricUavViewerProps = {
   selection?: string[];
   /** 3D에서 부품을 클릭했을 때. 주면 선택 상태를 바깥에서 관리한다. */
   onSelectionChange?: (names: string[]) => void;
+  /** 배경 장식용 등, 조작 없이 저절로 돌아가야 할 때. */
+  autoRotate?: boolean;
 };
 
 type ViewerRuntime = {
@@ -117,6 +119,7 @@ export function ParametricUavViewer({
   bladeCount = 2,
   selection,
   onSelectionChange,
+  autoRotate = false,
 }: ParametricUavViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ViewerRuntime | null>(null);
@@ -143,6 +146,11 @@ export function ParametricUavViewer({
   useEffect(() => {
     pickRef.current = setPicked;
   }, [setPicked]);
+  // 같은 이유로 자동 회전 여부도 ref로 읽는다.
+  const autoRotateRef = useRef(autoRotate);
+  useEffect(() => {
+    autoRotateRef.current = autoRotate;
+  }, [autoRotate]);
   const selectedParts = useMemo(
     () => (picked.length ? new Set(picked) : null),
     [picked],
@@ -210,7 +218,8 @@ export function ParametricUavViewer({
     controls.enableDamping = true;
     controls.dampingFactor = 0.065;
     controls.enablePan = true;
-    controls.autoRotate = false;
+    controls.autoRotate = autoRotateRef.current;
+    controls.autoRotateSpeed = 1.4;
     const handleKeyboard = (event: KeyboardEvent) => {
       const offset = camera.position.clone().sub(controls.target);
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {

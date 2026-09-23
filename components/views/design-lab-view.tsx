@@ -9,10 +9,13 @@ import {
   ChevronDown,
   ChevronRight,
   CircleGauge,
+  Gauge,
   GitCompareArrows,
   Info,
   Layers3,
   MousePointer2,
+  MoveDown,
+  MoveUp,
   Package,
   Plane,
   RotateCcw,
@@ -20,10 +23,19 @@ import {
   Search,
   SlidersHorizontal,
   ShoppingBag,
+  Timer,
   Weight,
   Wind,
   Zap,
 } from 'lucide-react';
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 import { PerformancePredictionPanel } from './performance-prediction-panel';
 import { ParametricUavViewer, TYPE_COLORS } from '@/components/parametric-uav-viewer';
@@ -35,6 +47,7 @@ import type { DesignWorkspace } from '@/hooks/use-design-workspace';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -55,6 +68,7 @@ import type {
   WingParameters,
 } from '@/lib/drawn-types';
 import { formatBatteryLabel, formatComponent, formatEnergyConfiguration, formatMetric, formatMotorLabel, formatPropellerLabel, isAvailableMetric, percentChange } from '@/lib/drawn-types';
+import { formatValidSpeedRanges } from '@/lib/performance-client';
 import { DataDisclaimer } from '@/components/views/shared';
 
 type MobilePanel = 'parameters' | 'preview' | 'performance';
@@ -127,6 +141,9 @@ export function DesignLabView({
   // 아일랜드는 3D 위에 떠 있으므로 접어서 화면을 완전히 비울 수 있어야 한다.
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  // 성능 확인 탭에서 흡수한 속도별 시트. AI 예측과 같은 speed를 공유해 한 값으로 본다.
+  const [chartsOpen, setChartsOpen] = useState(false);
+  const [speed, setSpeed] = useState(20);
   const [estimateState, setEstimateState] = useState<'ready' | 'calculating'>('ready');
   const [estimateImpact, setEstimateImpact] = useState<'performance' | 'geometry-only'>('performance');
   const highlightTimeoutRef = useRef<number | null>(null);
@@ -223,7 +240,7 @@ export function DesignLabView({
   return (
     // 3D를 바닥에 깔고 패널을 그 위에 띄운다. 예전에는 3칸 그리드라 뷰어가
     // 가로의 절반도 쓰지 못했다.
-    <section className="@container/lab relative h-[calc(100vh-var(--studio-chrome,116px))] min-h-[560px] overflow-hidden">
+    <section className="@container/lab relative h-[calc(100vh-var(--studio-chrome,140px))] min-h-[560px] overflow-hidden">
       <div className="mb-3 hidden">
         {([
           ['parameters', '파라미터', SlidersHorizontal],
@@ -520,7 +537,7 @@ export function DesignLabView({
           </button>
           <ScrollArea className={`min-h-0 flex-1 ${rightOpen ? '' : 'hidden'}`}>
             <div className="p-4">
-              <div className="mb-5"><PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} compact /></div>
+              <div className="mb-5"><PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} speed={speed} onSpeedChange={setSpeed} compact /></div>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-[#1d1d1f]">기존 설계 KPI 비교</p>
@@ -570,6 +587,32 @@ export function DesignLabView({
             </div>
           </ScrollArea>
         </aside>
+
+        <div
+          className={`absolute bottom-3 left-[330px] right-[320px] z-20 flex flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur transition-[max-height] ${
+            chartsOpen ? 'max-h-[440px]' : 'max-h-11'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setChartsOpen((open) => !open)}
+            aria-expanded={chartsOpen}
+            className="flex w-full shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3 py-3 text-left"
+          >
+            <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${chartsOpen ? 'rotate-180' : ''}`} />
+            <span className="text-sm font-semibold text-[#1d1d1f]">속도별 성능 곡선</span>
+            <span className="ml-auto text-[11px] text-[#6e6e73]">{packagedReference ? '기준 설계 원본 시뮬레이션' : '이 설계는 원본 곡선 없음'}</span>
+          </button>
+          <ScrollArea className={`min-h-0 flex-1 ${chartsOpen ? '' : 'hidden'}`}>
+            <div className="p-4">
+              {packagedReference ? (
+                <SpeedCurveSheet selected={packagedReference} speed={speed} onSpeedChange={setSpeed} />
+              ) : (
+                <p className="p-2 text-xs text-[#6e6e73]">이 설계의 원본 STL·trim 곡선은 배포되지 않았습니다. 왼쪽 위 “성능” 패널의 AI 예측만 참고할 수 있습니다.</p>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
       </div>
 
       {loadError && (
@@ -618,6 +661,150 @@ export function DesignLabView({
         </DialogContent>
       </Dialog>
     </section>
+  );
+}
+
+const speedOverviewConfig = {
+  drag: { label: '항력 (N)', color: '#3182f6' },
+  power: { label: '전력 (W)', color: '#6750a4' },
+} satisfies ChartConfig;
+
+const speedAeroConfig = {
+  drag: { label: '항력 (N)', color: '#3182f6' },
+  thrust: { label: '추력 (N)', color: '#178653' },
+  lift: { label: '양력 (N)', color: '#c47a13' },
+} satisfies ChartConfig;
+
+const speedElectricConfig = {
+  power: { label: '전력 (W)', color: '#6750a4' },
+  current: { label: '전류 (A)', color: '#3182f6' },
+} satisfies ChartConfig;
+
+type SpeedCurveMode = 'overview' | 'aero' | 'electric';
+
+/** 기준 설계(12개)의 원본 trim 곡선. 성능 확인 탭에서 흡수한 부분 — 3D 모델 스테이지는
+ * 이미 배경 뷰어(원본 STL 모드)가 대신하므로 슬라이더·수치·그래프만 가져왔다. */
+function SpeedCurveSheet({ selected, speed, onSpeedChange }: { selected: ShowcaseDesign; speed: number; onSpeedChange: (speed: number) => void }) {
+  const [curveMode, setCurveMode] = useState<SpeedCurveMode>('overview');
+  const trim = selected.trim[speed];
+  const validRows = useMemo(() => selected.trim.filter((row) => row.valid), [selected]);
+  const chartRows = selected.trim.map((row) => row.valid ? row : { speed: row.speed });
+  const config = curveMode === 'overview' ? speedOverviewConfig : curveMode === 'aero' ? speedAeroConfig : speedElectricConfig;
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+      <div>
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-xs font-medium text-[#6e6e73]">비행 속도</p>
+            <p className="mt-1 text-[11px] text-[#6e6e73]">0–50 m/s · 1 m/s 간격</p>
+          </div>
+          <p className="font-mono text-2xl font-semibold tracking-[-0.05em] text-[#1b64da]">
+            {speed}<span className="ml-1 text-xs font-normal text-[#6e6e73]">m/s</span>
+          </p>
+        </div>
+        <Slider
+          value={[speed]}
+          min={0}
+          max={50}
+          step={1}
+          onValueChange={(value) => onSpeedChange(Number(Array.isArray(value) ? value[0] : value))}
+          className="mt-4 [&_[data-slot=slider-range]]:bg-[#3182f6] [&_[data-slot=slider-thumb]]:size-4 [&_[data-slot=slider-thumb]]:border-[#3182f6]"
+          aria-label="비행 속도"
+        />
+        <div className="mt-2 flex justify-between font-mono text-[10px] text-[#6e6e73]"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span></div>
+        <div className="mt-3 flex items-center justify-between rounded-lg bg-[#f5f5f7] px-3 py-2 text-[11px]">
+          <span className="text-[#6e6e73]">원본 유효 trim 구간</span>
+          <span className="font-mono font-medium text-emerald-700">{formatValidSpeedRanges(validRows.map((row) => row.speed))}</span>
+        </div>
+        {trim?.valid ? (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <LiveMetric icon={<Wind />} label="항력" value={trim.drag} unit="N" tone="cyan" />
+            <LiveMetric icon={<MoveUp />} label="양력" value={trim.lift} unit="N" tone="amber" />
+            <LiveMetric icon={<Plane />} label="추력" value={trim.thrust} unit="N" tone="green" />
+            <LiveMetric icon={<Gauge />} label="피치각" value={trim.pitch} unit="deg" tone="violet" />
+            <LiveMetric icon={<Zap />} label="전력" value={trim.power} unit="W" tone="violet" />
+            <LiveMetric icon={<BatteryCharging />} label="전류" value={trim.current} unit="A" tone="cyan" />
+            <LiveMetric icon={<Timer />} label="비행 시간" value={trim.flightTime} unit="sec" tone="green" />
+            <LiveMetric icon={<CircleGauge />} label="비행거리" value={trim.distance != null ? trim.distance / 1000 : null} unit="km" tone="amber" />
+          </div>
+        ) : (
+          <div className="mt-3 grid min-h-24 place-items-center rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
+            <div>
+              <MoveDown className="mx-auto mb-1 size-4 text-amber-600" />
+              <p className="text-xs font-medium text-amber-900">이 속도에서는 해석값이 없습니다</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-[#6e6e73]">해석값이 없는 속도에서는 곡선이 끊어집니다.</p>
+          <div className="flex rounded-lg bg-[#f5f5f7] p-1">
+            {([
+              ['overview', '요약'],
+              ['aero', '공력'],
+              ['electric', '전력'],
+            ] as const).map(([id, label]) => (
+              <Button key={id} size="sm" variant="ghost" onClick={() => setCurveMode(id)} className={curveMode === id ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73]'}>{label}</Button>
+            ))}
+          </div>
+        </div>
+        <ChartContainer config={config} className="h-[240px] w-full aspect-auto" initialDimension={{ width: 700, height: 240 }}>
+          <LineChart data={chartRows} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
+            <CartesianGrid vertical={false} stroke="#e2e8ec" />
+            <XAxis dataKey="speed" tickLine={false} axisLine={false} tickMargin={10} unit="m/s" />
+            <YAxis yAxisId="left" tickLine={false} axisLine={false} width={42} />
+            <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} width={48} />
+            <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+            <ReferenceLine x={speed} stroke="#334e5d" strokeOpacity={0.45} strokeDasharray="3 4" />
+            {curveMode === 'overview' && (
+              <>
+                <Line yAxisId="left" type="monotone" dataKey="drag" stroke="var(--color-drag)" strokeWidth={2.2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="power" stroke="var(--color-power)" strokeWidth={2.2} dot={false} />
+              </>
+            )}
+            {curveMode === 'aero' && (
+              <>
+                <Line yAxisId="left" type="monotone" dataKey="drag" stroke="var(--color-drag)" strokeWidth={2.2} dot={false} />
+                <Line yAxisId="left" type="monotone" dataKey="thrust" stroke="var(--color-thrust)" strokeWidth={2.2} dot={false} />
+                <Line yAxisId="left" type="monotone" dataKey="lift" stroke="var(--color-lift)" strokeWidth={2.2} dot={false} />
+              </>
+            )}
+            {curveMode === 'electric' && (
+              <>
+                <Line yAxisId="right" type="monotone" dataKey="power" stroke="var(--color-power)" strokeWidth={2.2} dot={false} />
+                <Line yAxisId="left" type="monotone" dataKey="current" stroke="var(--color-current)" strokeWidth={2.2} dot={false} />
+              </>
+            )}
+          </LineChart>
+        </ChartContainer>
+        <div className="mt-2"><DataDisclaimer compact /></div>
+      </div>
+    </div>
+  );
+}
+
+function LiveMetric({ icon, label, value, unit, tone }: { icon: React.ReactNode; label: string; value: number | null; unit: string; tone: 'cyan' | 'violet' | 'green' | 'amber' }) {
+  const available = value != null && Number.isFinite(value);
+  const toneClass = {
+    cyan: 'bg-[#eff6ff] text-[#1b64da]',
+    violet: 'bg-violet-50 text-violet-700',
+    green: 'bg-emerald-50 text-emerald-700',
+    amber: 'bg-amber-50 text-amber-700',
+  }[tone];
+  return (
+    <div className="rounded-lg border border-[#e5e5ea] bg-white p-2.5">
+      <div className="flex items-center gap-2">
+        <span className={`grid size-6 place-items-center rounded-md [&>svg]:size-3.5 ${toneClass}`}>{icon}</span>
+        <span className="text-[11px] text-[#6e6e73]">{label}</span>
+      </div>
+      <p className="mt-2 font-mono text-base font-semibold text-[#1d1d1f]">
+        {available ? formatMetric(value, unit === 'W' || unit === 'sec' ? 0 : 1) : '—'}
+        {available && <span className="ml-1 text-[10px] font-normal text-[#6e6e73]">{unit}</span>}
+      </p>
+    </div>
   );
 }
 

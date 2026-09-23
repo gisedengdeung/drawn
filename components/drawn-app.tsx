@@ -10,6 +10,7 @@ import {
   Bot,
   Boxes,
   CheckCircle2,
+  ChevronDown,
   HelpCircle,
   MapPin,
   Share2,
@@ -80,6 +81,8 @@ export function DrawnApp() {
   const [assistantMode, setAssistantMode] = useState<AgentMode>('qa');
   const [partsFocusRequest, setPartsFocusRequest] = useState(0);
   const [focusedParameterId, setFocusedParameterId] = useState<string | undefined>();
+  const [chromeOpen, setChromeOpen] = useState(true);
+  const [heroDesignId, setHeroDesignId] = useState<number | null>(null);
 
   const saveWorkspace = useCallback((snapshot: WorkspaceSnapshot) => {
     setWorkspace(snapshot);
@@ -134,6 +137,9 @@ export function DrawnApp() {
         setDataset(index);
         setShowcases(showcaseData);
         setSelectedId(index.summary.defaultShowcaseId);
+        // 실제 비행 가능(feasible)한 설계 중에서만 골라야 배경이 어색하게 멈춘 형상으로 뜨지 않는다.
+        const feasibleIds = index.designs.filter((design) => design.feasible).map((design) => design.id);
+        if (feasibleIds.length) setHeroDesignId(feasibleIds[Math.floor(Math.random() * feasibleIds.length)]);
         try {
           const stored = localStorage.getItem(workspaceStorageKey);
           const restored = stored ? JSON.parse(stored) as WorkspaceSnapshot : null;
@@ -169,6 +175,10 @@ export function DrawnApp() {
   );
   const selectedDetail =
     selectedId == null ? null : (showcases[String(selectedId)] ?? null);
+  const heroDesign = useMemo<DesignSummary | null>(
+    () => (heroDesignId == null ? null : (designById.get(heroDesignId) ?? null)),
+    [designById, heroDesignId],
+  );
   const designWorkspace = useDesignWorkspace(
     selectedSummary, selectedDetail, workspace?.draft ?? null, importVersion, onDraftChange,
   );
@@ -269,91 +279,114 @@ export function DrawnApp() {
   return (
     <TooltipProvider delay={200}>
       <main className="workspace-light min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
-        <header className="sticky top-0 z-50 border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl">
-          <div className="mx-auto flex h-14 max-w-[1720px] items-center gap-4 px-4 lg:px-6">
-            <button
-              onClick={() => setView('home')}
-              className="flex min-w-0 items-center gap-2.5 text-left"
-            >
-              <DrawnLogo className="size-8 shrink-0 rounded-lg shadow-sm" />
-              <div>
-                <p className="text-sm font-semibold tracking-[-0.02em] text-[#1d1d1f]">
-                  Drawn
-                </p>
-                <p className="hidden text-[10px] font-medium tracking-[0.02em] text-[#86868b] sm:block">
-                  UAV 설계 워크벤치
-                </p>
-              </div>
-            </button>
-
-            <div className="hidden h-5 w-px bg-[#e5e5ea] sm:block" />
-            <div className="hidden items-center gap-1.5 text-xs text-[#6e6e73] sm:flex">
-              <CheckCircle2 className="size-3.5 text-emerald-600" />
-              AircraftVerse{' '}
-              {dataset ? dataset.summary.localDesigns.toLocaleString() : '…'}개
-              준비됨
-            </div>
-
-            <div className="ml-auto flex items-center gap-2">
-              <button type="button" onClick={() => setAssistantOpen((value) => !value)} aria-expanded={assistantOpen} aria-controls="design-assistant-panel" aria-label={assistantOpen ? '설계 도우미 AI 닫기' : '설계 도우미 AI 열기'} className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition ${assistantOpen ? 'bg-[#eff6ff] text-[#3182f6]' : 'bg-[#f5f5f7] text-[#3c3c43] hover:bg-[#ececee]'}`}><Bot className="size-4" /><span className="hidden sm:inline">설계 도우미 AI</span></button>
+        {view !== 'home' && (
+        <header className="sticky top-3 z-50 mx-3 mb-3 lg:mx-4">
+          <div className="mx-auto max-w-[1720px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur-xl">
+            <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
               <button
-                onClick={() => setView('guide')}
-                aria-current={view === 'guide' ? 'page' : undefined}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition ${
-                  view === 'guide'
-                    ? 'bg-[#eff6ff] text-[#3182f6]'
-                    : 'bg-[#f5f5f7] text-[#3c3c43] hover:bg-[#ececee]'
-                }`}
+                onClick={() => setView('home')}
+                className="flex min-w-0 items-center gap-2.5 text-left"
               >
-                <HelpCircle className="size-3.5" /> <span className="hidden sm:inline">가이드</span>
+                <DrawnLogo className="size-8 shrink-0 rounded-lg shadow-sm" />
+                <div>
+                  <p className="text-sm font-semibold tracking-[-0.02em] text-[#1d1d1f]">
+                    Drawn
+                  </p>
+                  <p className="hidden text-[10px] font-medium tracking-[0.02em] text-[#86868b] sm:block">
+                    UAV 설계 워크벤치
+                  </p>
+                </div>
               </button>
-              <Popover>
-                <PopoverTrigger className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#f5f5f7] px-3 py-2 text-xs font-medium text-[#3c3c43] transition hover:bg-[#ececee]">
-                  <MapPin className="size-3.5 text-[#3182f6]" />
-                  <span className="hidden sm:inline">주변 비행지</span>
-                </PopoverTrigger>
-                <PopoverContent align="end" sideOffset={8} className="w-[min(22rem,calc(100vw-32px))] bg-white p-4 text-[#1d1d1f] shadow-xl">
-                  <NearbyFlightSites />
-                </PopoverContent>
-              </Popover>
-              {/* Document navigation avoids the current Vinext production Link/prefetch export bug. */}
-              <a href="/packages" className="shrink-0 rounded-full bg-[#3182f6] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#1b64da]">
-                패키지 상품
-              </a>
-              <Badge variant="outline" className="hidden border-transparent bg-[#f5f5f7] text-[10px] text-[#6e6e73] sm:inline-flex">
-                파라메트릭 27,714개 · 원본 STL 12개
-              </Badge>
-            </div>
-          </div>
 
-          <nav className="mx-auto max-w-[1720px] px-2 pb-2.5 lg:px-4" aria-label="설계 작업 단계">
-            <div className="flex items-center gap-0.5 overflow-x-auto rounded-xl bg-[#f5f5f7] p-1">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const active = item.id === view;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setView(item.id)}
-                    aria-current={active ? 'page' : undefined}
-                    className={`flex min-w-fit flex-1 items-center justify-center gap-1.5 rounded-[10px] px-2 py-1.5 text-xs font-medium transition sm:px-3 lg:text-sm ${
-                      active
-                        ? 'bg-white text-[#1d1d1f] shadow-sm'
-                        : 'text-[#6e6e73] hover:text-[#1d1d1f]'
-                    }`}
-                  >
-                    <Icon className={`size-3.5 ${active ? 'text-[#3182f6]' : ''}`} />
-                    <span className="hidden sm:inline">{item.label}</span>
-                    <span className="sm:hidden">{item.short}</span>
-                  </button>
-                );
-              })}
+              {chromeOpen && (
+                <>
+                  <div className="hidden h-5 w-px bg-[#e5e5ea] sm:block" />
+                  <div className="hidden items-center gap-1.5 text-xs text-[#6e6e73] sm:flex">
+                    <CheckCircle2 className="size-3.5 text-emerald-600" />
+                    AircraftVerse{' '}
+                    {dataset ? dataset.summary.localDesigns.toLocaleString() : '…'}개
+                    준비됨
+                  </div>
+                </>
+              )}
+
+              <div className="ml-auto flex items-center gap-2">
+                {chromeOpen && (
+                  <>
+                    <button type="button" onClick={() => setAssistantOpen((value) => !value)} aria-expanded={assistantOpen} aria-controls="design-assistant-panel" aria-label={assistantOpen ? '설계 도우미 AI 닫기' : '설계 도우미 AI 열기'} className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition ${assistantOpen ? 'bg-[#eff6ff] text-[#3182f6]' : 'bg-[#f5f5f7] text-[#3c3c43] hover:bg-[#ececee]'}`}><Bot className="size-4" /><span className="hidden sm:inline">설계 도우미 AI</span></button>
+                    <button
+                      onClick={() => setView('guide')}
+                      aria-current={view === 'guide' ? 'page' : undefined}
+                      className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition ${
+                        view === 'guide'
+                          ? 'bg-[#eff6ff] text-[#3182f6]'
+                          : 'bg-[#f5f5f7] text-[#3c3c43] hover:bg-[#ececee]'
+                      }`}
+                    >
+                      <HelpCircle className="size-3.5" /> <span className="hidden sm:inline">가이드</span>
+                    </button>
+                    <Popover>
+                      <PopoverTrigger className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#f5f5f7] px-3 py-2 text-xs font-medium text-[#3c3c43] transition hover:bg-[#ececee]">
+                        <MapPin className="size-3.5 text-[#3182f6]" />
+                        <span className="hidden sm:inline">주변 비행지</span>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" sideOffset={8} className="w-[min(22rem,calc(100vw-32px))] bg-white p-4 text-[#1d1d1f] shadow-xl">
+                        <NearbyFlightSites />
+                      </PopoverContent>
+                    </Popover>
+                    {/* Document navigation avoids the current Vinext production Link/prefetch export bug. */}
+                    <a href="/packages" className="shrink-0 rounded-full bg-[#3182f6] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#1b64da]">
+                      패키지 상품
+                    </a>
+                    <Badge variant="outline" className="hidden border-transparent bg-[#f5f5f7] text-[10px] text-[#6e6e73] sm:inline-flex">
+                      파라메트릭 27,714개 · 원본 STL 12개
+                    </Badge>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setChromeOpen((value) => !value)}
+                  aria-expanded={chromeOpen}
+                  aria-label={chromeOpen ? '메뉴 접기' : '메뉴 펼치기'}
+                  className="flex shrink-0 items-center justify-center rounded-full bg-[#f5f5f7] p-2 text-[#6e6e73] transition hover:bg-[#ececee]"
+                >
+                  <ChevronDown className={`size-3.5 transition-transform ${chromeOpen ? '' : '-rotate-90'}`} />
+                </button>
+              </div>
             </div>
-          </nav>
+
+            {chromeOpen && (
+              <nav className="px-2 pb-2.5 lg:px-4" aria-label="설계 작업 단계">
+                <div className="flex items-center gap-0.5 overflow-x-auto rounded-xl bg-[#f5f5f7] p-1">
+                  {navItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = item.id === view;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setView(item.id)}
+                        aria-current={active ? 'page' : undefined}
+                        className={`flex min-w-fit flex-1 items-center justify-center gap-1.5 rounded-[10px] px-2 py-1.5 text-xs font-medium transition sm:px-3 lg:text-sm ${
+                          active
+                            ? 'bg-white text-[#1d1d1f] shadow-sm'
+                            : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                        }`}
+                      >
+                        <Icon className={`size-3.5 ${active ? 'text-[#3182f6]' : ''}`} />
+                        <span className="hidden sm:inline">{item.label}</span>
+                        <span className="sm:hidden">{item.short}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>
+            )}
+          </div>
         </header>
+        )}
 
       <div className="mx-auto flex max-w-[1720px] items-start">
-      <div className="min-h-[calc(100vh-103px)] min-w-0 flex-1">
+      <div className={`min-w-0 flex-1 ${view === 'home' ? 'min-h-screen' : 'min-h-[calc(100vh-127px)]'}`}>
           {workspaceNotice && <output className="m-4 flex items-start justify-between gap-4 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-3 text-xs text-[#1b64da]"><span>{workspaceNotice}</span><button type="button" onClick={() => setWorkspaceNotice('')} className="shrink-0 underline">닫기</button></output>}
           {error ? (
             <div className="m-6 rounded-2xl border border-rose-400/20 bg-rose-400/8 p-8 text-rose-200">
@@ -421,6 +454,7 @@ export function DrawnApp() {
               {view === 'guide' && <GuideView onBack={() => setView('explore')} />}
               {view === 'home' && (
                 <LandingView
+                  heroDesign={heroDesign}
                   onStart={() => setView('explore')}
                   onOpenGuide={() => setView('guide')}
                 />
@@ -467,7 +501,7 @@ export function DrawnApp() {
 
 function LoadingWorkspace() {
   return (
-    <div className="grid min-h-[calc(100vh-103px)] place-items-center px-6">
+    <div className="grid min-h-[calc(100vh-127px)] place-items-center px-6">
       <div className="text-center">
         <div className="mx-auto mb-5 grid size-12 place-items-center rounded-xl border border-[#b9dce3] bg-[#eef8fa]">
           <DrawnLogo className="size-7" />

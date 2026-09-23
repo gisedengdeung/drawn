@@ -4,17 +4,37 @@ import { ArrowRight, Boxes, Gauge, HelpCircle, Route } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { DrawnLogo } from '@/components/drawn-logo';
+import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
+import { useDesignWorkspace } from '@/hooks/use-design-workspace';
+import type { DesignSummary } from '@/lib/drawn-types';
 
 export function LandingView({
+  heroDesign = null,
   onStart,
   onOpenGuide,
 }: {
+  heroDesign?: DesignSummary | null;
   onStart: () => void;
   onOpenGuide: () => void;
 }) {
+  // 카드 뒤 배경일 뿐이라 편집 UI는 필요 없다 — draft/placements만 뽑아 쓴다.
+  const { draft: heroDraft, placements: heroPlacements } = useDesignWorkspace(heroDesign, null, null, 0);
+
   return (
-    <section className="grid min-h-[calc(100vh-103px)] place-items-center px-6 py-10">
-      <div className="w-full max-w-xl text-center">
+    <section className="relative grid min-h-screen place-items-center px-6 py-10">
+      {heroDraft && (
+        // 배경은 뷰포트 전체를 채워야 하므로 max-w로 좁혀진 페이지 레이아웃과 무관하게 fixed로 띄운다.
+        <div className="fixed inset-0 z-0">
+          <ParametricUavViewer
+            draft={heroDraft}
+            assembly={heroPlacements}
+            autoRotate
+            selection={[]}
+            onSelectionChange={() => {}}
+          />
+        </div>
+      )}
+      <div className="relative z-10 w-full max-w-xl p-8 text-center [text-shadow:0_1px_3px_rgba(255,255,255,0.9),0_2px_16px_rgba(255,255,255,0.85)]">
         <DrawnLogo className="mx-auto mb-6 size-16 rounded-2xl shadow-sm" />
         <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#1d1d1f]">Drawn</h1>
         <p className="mt-3 text-sm leading-6 text-[#6e6e73]">

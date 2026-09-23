@@ -1,0 +1,15 @@
+{
+  "python": "3.13.9",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "torch": "2.13.0+cu130",
+  "cuda_runtime": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "gpu_memory_bytes": 17094344704,
+  "numpy": "2.1.3",
+  "onnx": "1.23.0",
+  "onnxruntime": "1.30.0",
+  "trimesh": "5.1.0",
+  "seed": 20260920,
+  "source_baseline_commit": "745f00c",
+  "current_app_branch": "feature/agent"
+}

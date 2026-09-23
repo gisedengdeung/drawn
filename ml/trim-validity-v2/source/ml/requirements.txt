@@ -1,0 +1,12 @@
+# Stage 0-2 preprocessing dependencies.
+# PyTorch is NOT listed here: it needs the CUDA wheel index.
+# See ml/README.md for the torch install line.
+numpy>=2.1
+trimesh>=4.5
+
+# Stage 5 export and its verification.
+onnx>=1.22
+onnxruntime>=1.30
+
+# Compatible with ONNX and the shared local Anaconda packages.
+protobuf>=6.31.1,<7

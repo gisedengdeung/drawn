@@ -1,0 +1,29 @@
+GPU=NVIDIA GeForce RTX 5070 Ti train=22187 val=2803 positive_rate=0.1170 recall_guard=0.6356
+bce epoch=1 score=0.3339 f1=0.6163 recall=0.6791 exact=0.0098 upper=0.3354 best=1
+bce epoch=10 score=0.3495 f1=0.6570 recall=0.7192 exact=0.0232 upper=0.3622 best=5
+bce epoch=20 score=0.3379 f1=0.6487 recall=0.6985 exact=0.0122 upper=0.3707 best=5
+bce epoch=30 score=0.3435 f1=0.6466 recall=0.7048 exact=0.0146 upper=0.3634 best=5
+bce epoch=40 score=0.3336 f1=0.6466 recall=0.7144 exact=0.0183 upper=0.3890 best=5
+bce_sqrt epoch=1 score=0.3342 f1=0.6256 recall=0.6939 exact=0.0122 upper=0.3549 best=1
+bce_sqrt epoch=10 score=0.3641 f1=0.6556 recall=0.6943 exact=0.0220 upper=0.3207 best=5
+bce_sqrt epoch=20 score=0.3460 f1=0.6550 recall=0.6997 exact=0.0171 upper=0.3622 best=5
+bce_sqrt epoch=30 score=0.3573 f1=0.6483 recall=0.6783 exact=0.0159 upper=0.3280 best=5
+bce_sqrt epoch=40 score=0.3449 f1=0.6458 recall=0.6827 exact=0.0159 upper=0.3488 best=5
+set_fp epoch=1 score=0.3943 f1=0.6036 recall=0.6541 exact=0.0207 upper=0.2280 best=1
+set_fp epoch=10 score=0.4312 f1=0.6392 recall=0.6388 exact=0.0220 upper=0.1659 best=5
+set_fp epoch=20 score=0.4221 f1=0.6518 recall=0.6702 exact=0.0256 upper=0.2171 best=5
+set_fp epoch=30 score=0.4220 f1=0.6381 recall=0.6418 exact=0.0244 upper=0.1927 best=5
+set_fp epoch=40 score=0.4100 f1=0.6407 recall=0.6451 exact=0.0183 upper=0.2195 best=5
+set_fp_sqrt epoch=1 score=0.3726 f1=0.6167 recall=0.6603 exact=0.0134 upper=0.2646 best=1
+set_fp_sqrt epoch=10 score=0.4167 f1=0.6528 recall=0.6665 exact=0.0280 upper=0.2134 best=5
+set_fp_sqrt epoch=20 score=0.4064 f1=0.6455 recall=0.6371 exact=0.0183 upper=0.2134 best=5
+set_fp_sqrt epoch=30 score=0.4015 f1=0.6427 recall=0.6571 exact=0.0183 upper=0.2341 best=5
+set_fp_sqrt epoch=40 score=0.3911 f1=0.6446 recall=0.6577 exact=0.0244 upper=0.2573 best=5
+REGRESSION epoch=1 macro_R2=0.71705 eligible=False best=0
+REGRESSION epoch=5 macro_R2=0.71757 eligible=False best=0
+REGRESSION epoch=10 macro_R2=0.71322 eligible=False best=0
+REGRESSION epoch=15 macro_R2=0.71708 eligible=False best=0
+REGRESSION epoch=20 macro_R2=0.71743 eligible=False best=0
+REGRESSION epoch=25 macro_R2=0.71330 eligible=False best=0
+REGRESSION epoch=30 macro_R2=0.71682 eligible=False best=0
+SELECTION {"selected": "set_fp", "threshold": 0.55, "validation_score_improved": true, "regression_refinement_accepted": false, "minimum_recall": 0.6356365001877582, "test_used": false, "selected_checkpoint_sha256": "7943b413475c7e86857e55adeb8788ba66bf2127a049a58155a982d12e2cce7b", "elapsed_seconds": 185.13386220000393}

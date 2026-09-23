@@ -90,19 +90,60 @@ def test_rejects_invalid_speeds_and_client_features(client, extra):
     assert client.post("/api/performance/predict", json={"designId": 17297, **extra}).status_code == 422
 
 
-def test_ineligible_design_does_not_receive_mock(client, runtime):
+def test_ineligible_design_falls_back_to_parameters_never_a_mock(client, runtime):
+    """An ineligible design is answered by the parameter model, or not at all.
+
+    The conditioned model cannot run without the design's measured hover and
+    20 m/s values, so it used to return 422 and the panel showed nothing. The
+    fallback answers from design parameters instead. What must never happen is
+    a made-up number presented as a prediction, so the response has to name
+    which model produced it.
+    """
     index = json.loads((SETTINGS.data_root / "design-index.json").read_text("utf-8"))
     design_id = next(d["id"] for d in index["designs"] if d["id"] not in runtime.eligible)
     response = client.post("/api/performance/predict", json={"designId": design_id, "speeds": [0]})
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "model_input_unavailable"
+
+    if not performance.performance_param.is_ready():
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "model_input_unavailable"
+        return
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "parameter-only"
+    assert body["modelVersion"].startswith("trim-param-")
+    assert body["notForRanking"] == ["power"]
+    # lift is identically zero on the 77% of designs without wings and neither
+    # model learns it, so the fallback blanks it rather than showing a number.
+    assert body["predictions"][0]["lift"] is None
+    assert any("unreliable:lift" in row["warnings"] for row in body["predictions"])
 
 
 def test_unready_model_fails_closed(client, monkeypatch):
+    """With no model able to answer, the endpoint refuses rather than inventing one."""
     monkeypatch.setattr(performance, "_runtime", None)
+    monkeypatch.setattr(performance.performance_param, "_boosters", {})
     response = client.post("/api/performance/predict", json={"designId": 17297})
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "model_not_ready"
+
+
+def test_unverified_bundle_still_serves_the_parameter_fallback(client, monkeypatch):
+    """An unverified bundle must not take the whole endpoint down with it.
+
+    The fallback is a separately trained model with its own load-time checks,
+    not a mock, so it can answer while the conditioned bundle is unavailable -
+    which is also what happens on a machine where the CPU golden does not
+    reproduce to the bundle's tolerance.
+    """
+    if not performance.performance_param.is_ready():
+        pytest.skip("parameter fallback models are not installed")
+    monkeypatch.setattr(performance, "_runtime", None)
+    response = client.post("/api/performance/predict", json={"designId": 17297, "speeds": [0, 20]})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "parameter-only"
+    assert len(body["predictions"]) == 2
 
 
 def test_bundle_hash_tampering_is_rejected(tmp_path):

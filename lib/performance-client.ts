@@ -5,13 +5,28 @@ export const PERFORMANCE_METRICS = ['drag', 'lift', 'thrust', 'pitch', 'power', 
 export type PerformanceMetric = typeof PERFORMANCE_METRICS[number];
 export type PerformancePrediction = Record<PerformanceMetric, number | null> & { speed: number; warnings: string[] };
 export type PerformanceRequest = { designId: number; draft?: DesignDraft; speeds?: number[] };
+
+/**
+ * Which model answered. `baseline-conditioned` is fed five measured trim values
+ * from the design's own analysis and is the more accurate of the two, but those
+ * values exist for 6,409 of 27,714 designs and for none that the user has just
+ * edited. `parameter-only` covers the rest from design parameters alone, at a
+ * measured cost: distance 0.954 against 0.991, power 0.732 against 0.966.
+ */
+export const PERFORMANCE_SOURCES = ['baseline-conditioned', 'parameter-only'] as const;
+export type PerformanceSource = typeof PERFORMANCE_SOURCES[number];
+
 export type PerformanceResult = {
   modelVersion: string;
-  source: 'baseline-conditioned';
+  source: PerformanceSource;
   fingerprint: string;
   designId: number;
   predictions: PerformancePrediction[];
   warnings: string[];
+  /** Targets the model withheld because they are unreliable for this design. */
+  withheldTargets?: string[];
+  /** Shown, but the top of the range is under-predicted; never sort on these. */
+  notForRanking?: string[];
   unsupportedInputs: string[];
   outsideTrainingRange: string[];
   unknownCategory: string[];
@@ -55,10 +70,13 @@ function stringList(value: unknown): value is string[] {
 /** Reject malformed or mismatched results before displaying them for an edited design. */
 export function parsePerformanceResult(value: unknown, request: PerformanceRequest): PerformanceResult {
   const invalid = () => new PerformanceApiError('AI 예측 응답을 확인할 수 없습니다. 다시 시도해 주세요.', 'invalid_response', 502);
-  if (!isRecord(value) || value.source !== 'baseline-conditioned' || value.designId !== request.designId
+  if (!isRecord(value) || !PERFORMANCE_SOURCES.includes(value.source as PerformanceSource)
+    || value.designId !== request.designId
     || typeof value.modelVersion !== 'string' || !value.modelVersion || typeof value.fingerprint !== 'string' || !value.fingerprint
     || !stringList(value.warnings) || !stringList(value.unsupportedInputs)
     || !stringList(value.outsideTrainingRange) || !stringList(value.unknownCategory)
+    || (value.withheldTargets !== undefined && !stringList(value.withheldTargets))
+    || (value.notForRanking !== undefined && !stringList(value.notForRanking))
     || !Array.isArray(value.predictions)) throw invalid();
   const expected = request.speeds ?? PERFORMANCE_SPEEDS;
   const seen = new Set<number>();

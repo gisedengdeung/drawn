@@ -72,3 +72,11 @@ next-env.d.ts
 /ml/trim-validity-v2/**/*.npz
 /ml/trim-validity-v2/**/*.pt
 /ml/trim-validity-v2/**/*.onnx
+
+# Parameter fallback boosters (57 MB). Shipped via the team drive like
+# model_bundle's source checkpoints, not committed.
+/backend/models/trim_param/
+
+# Local SQLite for running the API without Postgres. Schema comes from
+# backend/app/database.py; the real deployment uses the compose Postgres.
+/backend/local-dev.db

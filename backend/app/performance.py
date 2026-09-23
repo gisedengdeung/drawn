@@ -11,6 +11,7 @@ import numpy as np
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from . import performance_param
 from .core.errors import ApiError
 from .performance_features import TARGETS, draft_features, finite, transform, unsupported_changes
 
@@ -18,6 +19,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 _runtime: "Runtime | None" = None
 _status: dict[str, Any] = {"ready": False, "reason": "not_initialized", "modelVersion": None}
+_fallback_status: dict[str, Any] = {"ready": False, "reason": "not_initialized", "modelVersion": None}
 
 
 class PredictionRequest(BaseModel):
@@ -91,9 +93,14 @@ class Runtime:
 
 
 def initialize(settings) -> dict:
-    global _runtime, _status
+    global _runtime, _status, _fallback_status
     _runtime = None
     _status = {"ready": False, "reason": "artifact_missing", "modelVersion": None}
+    # The parameter fallback loads independently: it answers the designs the
+    # anchored model refuses, so it must come up even when that one does not.
+    _fallback_status = performance_param.initialize(
+        Path(settings.model_dir).parent / "models" / "trim_param"
+    )
     directory = Path(settings.model_dir)
     if not (directory / "manifest.json").is_file():
         return dict(_status)
@@ -114,7 +121,7 @@ def initialize(settings) -> dict:
 
 
 def status() -> dict:
-    return dict(_status)
+    return {**_status, "fallback": dict(_fallback_status)}
 
 
 @router.get("/performance/model")
@@ -127,11 +134,73 @@ def predict(body: PredictionRequest, request: Request):
     return predict_design(request.app.state.settings, body.designId, body.draft, body.speeds)
 
 
+def _physical_bounds(target: str, value: float) -> bool:
+    """Same rule the conditioned path uses, so both sources blank the same cells."""
+    return ((target in ("drag", "thrust", "power", "current", "distance") and value < 0)
+            or (target == "flightTime" and value <= 0))
+
+
+def _predict_from_parameters(features: dict, draft: dict, baseline: dict,
+                             body: "PredictionRequest") -> dict:
+    """Answer from design parameters when the anchored model has no inputs.
+
+    Returns the same shape as the conditioned path - eight targets per
+    requested speed - so the client renders one curve either way. Only `source`
+    differs, and callers must use it: this model is measurably less accurate,
+    and two of its outputs carry restrictions the conditioned one does not.
+    """
+    from .domain.draft import fingerprint
+
+    if not performance_param.is_ready():
+        raise ApiError(422, "model_input_unavailable",
+                       "이 모델에 필요한 유효한 원본 호버 입력이 없습니다.")
+    try:
+        values = performance_param.predict(features, body.speeds)
+    except (ValueError, KeyError, TypeError):
+        raise ApiError(422, "model_input_invalid",
+                       "모델 입력 또는 예측값을 확인할 수 없습니다.") from None
+
+    predictions = []
+    for speed, row in zip(body.speeds, values):
+        warnings, fields = [], {}
+        for target, raw in zip(TARGETS, row):
+            value = float(raw)
+            invalid = _physical_bounds(target, value)
+            # Some targets are withheld rather than shown; see UNRELIABLE in
+            # performance_param for the measurement behind each one.
+            fields[target] = None if invalid or target in performance_param.UNRELIABLE else value
+            if invalid:
+                warnings.append("physical_bound:" + target)
+            elif target in performance_param.UNRELIABLE:
+                warnings.append("unreliable:" + target)
+        predictions.append({"speed": speed, **fields,
+                            "rawPredictions": dict(zip(TARGETS, map(float, row))),
+                            "warnings": warnings,
+                            "outsideTrainingRange": [], "unknownCategory": []})
+
+    withheld = [name for name in performance_param.UNRELIABLE if name in TARGETS]
+    return {"modelVersion": performance_param.version(), "source": "parameter-only",
+            "fingerprint": fingerprint(draft), "designId": body.designId,
+            "predictions": predictions,
+            "warnings": ["원본 호버·20m/s 값이 없어 설계 파라미터만으로 추정했습니다.",
+                         "조건부 모델보다 정확도가 낮습니다. 오차가 큰 항목은 값을 비워 둡니다.",
+                         "비행 시간은 긴 쪽을 낮게 추정하므로 설계 순위 비교에 쓰지 마세요.",
+                         "비행 유효성과 최고 속도는 이 모델이 예측하지 않습니다."],
+            "withheldTargets": withheld,
+            "notForRanking": [name for name in performance_param.NOT_FOR_RANKING
+                              if name in TARGETS and name not in withheld],
+            "unsupportedInputs": unsupported_changes(draft, baseline),
+            "outsideTrainingRange": [], "unknownCategory": []}
+
+
 def predict_design(settings, design_id: int, draft: dict | None = None,
                    speeds: list[float] | None = None) -> dict:
     body = PredictionRequest(designId=design_id, draft=draft,
                              speeds=speeds if speeds is not None else list(range(51)))
-    if _runtime is None:
+    # Fails closed only when neither model can answer. The parameter fallback is
+    # a separately trained model with its own load-time checks, not a mock, so
+    # an unverified bundle no longer takes the whole endpoint down with it.
+    if _runtime is None and not performance_param.is_ready():
         raise ApiError(503, "model_not_ready", "학습 모델 검증이 완료되지 않아 예측을 사용할 수 없습니다.")
     from .domain.draft import fingerprint, validate_draft
     from .services.dataset import catalogs, load_context, load_design
@@ -143,9 +212,11 @@ def predict_design(settings, design_id: int, draft: dict | None = None,
     draft = validate_draft(draft, baseline, catalogs(settings))
     context = load_context(settings, draft)
     selected = context["selected"]
-    if body.designId not in _runtime.eligible:
-        raise ApiError(422, "model_input_unavailable", "이 모델에 필요한 유효한 원본 호버 입력이 없습니다.")
     features = draft_features(selected, draft)
+    if _runtime is None or body.designId not in _runtime.eligible:
+        # Either the bundle did not verify, or this design has no measured
+        # hover/20 m/s anchors. Answer from parameters instead of refusing.
+        return _predict_from_parameters(features, draft, baseline, body)
     try:
         matrix, unknown, outside = transform([{**features, "speed": speed} for speed in body.speeds], _runtime.preprocessing)
         values = _runtime.predict(matrix)

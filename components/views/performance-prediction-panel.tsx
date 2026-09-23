@@ -133,10 +133,23 @@ export function PerformancePredictionPanel({
         </div>
       ) : row && result ? (
         <>
+          {result.source === 'parameter-only' && (
+            <p className="mt-3 rounded-xl bg-[#f5f5f7] px-3 py-2 text-[11px] leading-5 text-[#6e6e73]">
+              <span className="font-medium text-[#3c3c43]">파라미터 기반 추정</span> — 이 설계에는 원본 호버·20m/s 측정값이 없어 설계 파라미터만으로 예측했습니다. 오차가 큰 항목은 값을 비워 둡니다.
+            </p>
+          )}
           <div className={`mt-4 grid gap-2 ${compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
             {metrics.map((item) => (
               <div key={item.key} className="min-w-0 rounded-xl bg-[#f5f5f7] p-2.5">
-                <p className="text-[11px] text-[#6e6e73]">{item.label}</p>
+                <p className="text-[11px] text-[#6e6e73]">
+                  {item.label}
+                  {result.withheldTargets?.includes(item.key) && (
+                    <span className="ml-1 text-[10px] text-[#86868b]" title="이 설계 유형에서는 오차가 커서 값을 표시하지 않습니다.">· 미표시</span>
+                  )}
+                  {result.notForRanking?.includes(item.key) && (
+                    <span className="ml-1 text-[10px] text-amber-700" title="긴 쪽을 낮게 추정합니다. 설계 순위 비교에 쓰지 마세요.">· 순위 비교 부적합</span>
+                  )}
+                </p>
                 <p className="mt-1 break-words font-mono text-base font-semibold text-[#1d1d1f]">{row[item.key] == null ? '—' : formatMetric(row[item.key]!, item.digits)} <span className="text-[10px] font-normal text-[#86868b]">{item.unit}</span></p>
               </div>
             ))}

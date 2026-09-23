@@ -1,0 +1,1646 @@
+{
+  "now": "2026-09-21T00:00:00.000Z",
+  "cases": [
+    {
+      "name": "base2",
+      "id": 2,
+      "expected": {
+        "fingerprint": "7cd835dbc7ab627f",
+        "designId": 2,
+        "createdAt": "2026-09-21T00:00:00.000Z",
+        "items": [
+          {
+            "id": "motor:0b241f6259405c68",
+            "kind": "motor",
+            "model": "t_motor_AT4120KV500",
+            "quantity": 1,
+            "instances": [
+              "Motor_1"
+            ],
+            "specs": {
+              "motorKv": 500
+            },
+            "issues": []
+          },
+          {
+            "id": "motor:b60014e357a1aabd",
+            "kind": "motor",
+            "model": "t_motor_AT4130KV450",
+            "quantity": 4,
+            "instances": [
+              "Motor_2",
+              "Motor_3",
+              "Motor_4",
+              "Motor_5"
+            ],
+            "specs": {
+              "motorKv": 450
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:1d55a94c7777b016",
+            "kind": "propeller",
+            "model": "apc_propellers_21x10W",
+            "quantity": 1,
+            "instances": [
+              "Propeller_1"
+            ],
+            "specs": {
+              "diameterIn": 21,
+              "pitchIn": 10
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:b905959ca5d7ec9c",
+            "kind": "propeller",
+            "model": "apc_propellers_15x7",
+            "quantity": 4,
+            "instances": [
+              "Propeller_2",
+              "Propeller_3",
+              "Propeller_4",
+              "Propeller_5"
+            ],
+            "specs": {
+              "diameterIn": 15,
+              "pitchIn": 7
+            },
+            "issues": []
+          },
+          {
+            "id": "battery:b75e9f90593f7290",
+            "kind": "battery",
+            "model": "TurnigyGraphene1500mAh3S75C",
+            "quantity": 2,
+            "instances": [
+              "Battery_1",
+              "Battery_2"
+            ],
+            "specs": {
+              "capacityMah": 1500,
+              "cells": 3,
+              "dischargeC": 75
+            },
+            "issues": []
+          },
+          {
+            "id": "servo:befbc53d65341c3b",
+            "kind": "servo",
+            "model": "Hitec_D485HW",
+            "quantity": 4,
+            "instances": [
+              "Servo_1",
+              "Servo_2",
+              "Servo_3",
+              "Servo_4"
+            ],
+            "specs": {},
+            "issues": [
+              "모델명에서 확인 가능한 규격이 없어 상품 규격을 별도로 확인해야 합니다."
+            ]
+          }
+        ],
+        "exclusions": [
+          "기체 제작물과 설계에 기록되지 않은 부품은 견적에 포함되지 않습니다."
+        ]
+      }
+    },
+    {
+      "name": "base17297",
+      "id": 17297,
+      "expected": {
+        "fingerprint": "6779b55380b15bd5",
+        "designId": 17297,
+        "createdAt": "2026-09-21T00:00:00.000Z",
+        "items": [
+          {
+            "id": "motor:ca93dbd549c9068d",
+            "kind": "motor",
+            "model": "kde_direct_KDE3520XF_400",
+            "quantity": 6,
+            "instances": [
+              "Motor_1",
+              "Motor_2",
+              "Motor_3",
+              "Motor_4",
+              "Motor_5",
+              "Motor_6"
+            ],
+            "specs": {},
+            "issues": [
+              "모델명에서 확인 가능한 규격이 없어 상품 규격을 별도로 확인해야 합니다."
+            ]
+          },
+          {
+            "id": "propeller:7d6b5b297e67b787",
+            "kind": "propeller",
+            "model": "apc_propellers_15x5_5MR",
+            "quantity": 6,
+            "instances": [
+              "Propeller_1",
+              "Propeller_2",
+              "Propeller_3",
+              "Propeller_4",
+              "Propeller_5",
+              "Propeller_6"
+            ],
+            "specs": {
+              "diameterIn": 15,
+              "pitchIn": 5.5
+            },
+            "issues": []
+          },
+          {
+            "id": "battery:1316fa3b21afd0f1",
+            "kind": "battery",
+            "model": "Tattu5C28000mAh6S1P",
+            "quantity": 1,
+            "instances": [
+              "Battery_1"
+            ],
+            "specs": {
+              "capacityMah": 28000,
+              "cells": 6,
+              "dischargeC": 5
+            },
+            "issues": []
+          }
+        ],
+        "exclusions": [
+          "기체 제작물과 설계에 기록되지 않은 부품은 견적에 포함되지 않습니다."
+        ]
+      }
+    },
+    {
+      "name": "base20015",
+      "id": 20015,
+      "expected": {
+        "fingerprint": "4adf5438f1cae9d8",
+        "designId": 20015,
+        "createdAt": "2026-09-21T00:00:00.000Z",
+        "items": [
+          {
+            "id": "motor:71404725101bec73",
+            "kind": "motor",
+            "model": "kde_direct_KDE700XF_295_G3",
+            "quantity": 4,
+            "instances": [
+              "Motor_1",
+              "Motor_2",
+              "Motor_3",
+              "Motor_4"
+            ],
+            "specs": {},
+            "issues": [
+              "모델명에서 확인 가능한 규격이 없어 상품 규격을 별도로 확인해야 합니다."
+            ]
+          },
+          {
+            "id": "propeller:b8b7b6f8ce5a679c",
+            "kind": "propeller",
+            "model": "apc_propellers_13x4_7SF",
+            "quantity": 4,
+            "instances": [
+              "Propeller_1",
+              "Propeller_2",
+              "Propeller_3",
+              "Propeller_4"
+            ],
+            "specs": {
+              "diameterIn": 13,
+              "pitchIn": 4.7
+            },
+            "issues": []
+          },
+          {
+            "id": "battery:423448b0dfd82ca6",
+            "kind": "battery",
+            "model": "Tattu35C6000mAh6S1P",
+            "quantity": 2,
+            "instances": [
+              "Battery_1",
+              "Battery_2"
+            ],
+            "specs": {
+              "capacityMah": 6000,
+              "cells": 6,
+              "dischargeC": 35
+            },
+            "issues": []
+          }
+        ],
+        "exclusions": [
+          "기체 제작물과 설계에 기록되지 않은 부품은 견적에 포함되지 않습니다."
+        ]
+      }
+    },
+    {
+      "name": "edited",
+      "id": 2,
+      "expected": {
+        "fingerprint": "6a020d5d0bc04393",
+        "designId": 2,
+        "createdAt": "2026-09-21T00:00:00.000Z",
+        "items": [
+          {
+            "id": "motor:0b241f6259405c68",
+            "kind": "motor",
+            "model": "t_motor_AT4120KV500",
+            "quantity": 1,
+            "instances": [
+              "Motor_1"
+            ],
+            "specs": {
+              "motorKv": 500
+            },
+            "issues": []
+          },
+          {
+            "id": "motor:972978f44bbfc0be",
+            "kind": "motor",
+            "model": "t_motor_AT4120KV560",
+            "quantity": 1,
+            "instances": [
+              "Motor_2"
+            ],
+            "specs": {
+              "motorKv": 560
+            },
+            "issues": []
+          },
+          {
+            "id": "motor:b60014e357a1aabd",
+            "kind": "motor",
+            "model": "t_motor_AT4130KV450",
+            "quantity": 3,
+            "instances": [
+              "Motor_3",
+              "Motor_4",
+              "Motor_5"
+            ],
+            "specs": {
+              "motorKv": 450
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:1d55a94c7777b016",
+            "kind": "propeller",
+            "model": "apc_propellers_21x10W",
+            "quantity": 1,
+            "instances": [
+              "Propeller_1"
+            ],
+            "specs": {
+              "diameterIn": 21,
+              "pitchIn": 10
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:ec198f6874df05ac",
+            "kind": "propeller",
+            "model": "apc_propellers_13x4_5MR",
+            "quantity": 1,
+            "instances": [
+              "Propeller_2"
+            ],
+            "specs": {
+              "diameterIn": 13,
+              "pitchIn": 4.5
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:b905959ca5d7ec9c",
+            "kind": "propeller",
+            "model": "apc_propellers_15x7",
+            "quantity": 3,
+            "instances": [
+              "Propeller_3",
+              "Propeller_4",
+              "Propeller_5"
+            ],
+            "specs": {
+              "diameterIn": 15,
+              "pitchIn": 7
+            },
+            "issues": []
+          },
+          {
+            "id": "battery:b75e9f90593f7290",
+            "kind": "battery",
+            "model": "TurnigyGraphene1500mAh3S75C",
+            "quantity": 1,
+            "instances": [
+              "Battery_1"
+            ],
+            "specs": {
+              "capacityMah": 1500,
+              "cells": 3,
+              "dischargeC": 75
+            },
+            "issues": []
+          },
+          {
+            "id": "battery:11d4f8b99c581faf",
+            "kind": "battery",
+            "model": "Tattu15C16000mAh4S1P",
+            "quantity": 1,
+            "instances": [
+              "Battery_2"
+            ],
+            "specs": {
+              "capacityMah": 16000,
+              "cells": 4,
+              "dischargeC": 15
+            },
+            "issues": []
+          },
+          {
+            "id": "servo:befbc53d65341c3b",
+            "kind": "servo",
+            "model": "Hitec_D485HW",
+            "quantity": 4,
+            "instances": [
+              "Servo_1",
+              "Servo_2",
+              "Servo_3",
+              "Servo_4"
+            ],
+            "specs": {},
+            "issues": [
+              "모델명에서 확인 가능한 규격이 없어 상품 규격을 별도로 확인해야 합니다."
+            ]
+          }
+        ],
+        "exclusions": [
+          "기체 제작물과 설계에 기록되지 않은 부품은 견적에 포함되지 않습니다."
+        ]
+      }
+    },
+    {
+      "name": "duplicate",
+      "id": 2,
+      "expected": {
+        "fingerprint": "5521663d4f6d819f",
+        "designId": 2,
+        "createdAt": "2026-09-21T00:00:00.000Z",
+        "items": [
+          {
+            "id": "motor:0b241f6259405c68",
+            "kind": "motor",
+            "model": "t_motor_AT4120KV500",
+            "quantity": 1,
+            "instances": [
+              "Motor_1"
+            ],
+            "specs": {
+              "motorKv": 500
+            },
+            "issues": []
+          },
+          {
+            "id": "motor:b60014e357a1aabd",
+            "kind": "motor",
+            "model": "t_motor_AT4130KV450",
+            "quantity": 4,
+            "instances": [
+              "Motor_2",
+              "Motor_3",
+              "Motor_4",
+              "Motor_5"
+            ],
+            "specs": {
+              "motorKv": 450
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:1d55a94c7777b016",
+            "kind": "propeller",
+            "model": "apc_propellers_21x10W",
+            "quantity": 1,
+            "instances": [
+              "Propeller_1"
+            ],
+            "specs": {
+              "diameterIn": 21,
+              "pitchIn": 10
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:b905959ca5d7ec9c",
+            "kind": "propeller",
+            "model": "apc_propellers_15x7",
+            "quantity": 4,
+            "instances": [
+              "Propeller_2",
+              "Propeller_3",
+              "Propeller_4",
+              "Propeller_5"
+            ],
+            "specs": {
+              "diameterIn": 15,
+              "pitchIn": 7
+            },
+            "issues": []
+          },
+          {
+            "id": "battery:b75e9f90593f7290",
+            "kind": "battery",
+            "model": "TurnigyGraphene1500mAh3S75C",
+            "quantity": 2,
+            "instances": [
+              "Battery_1",
+              "Battery_2"
+            ],
+            "specs": {
+              "capacityMah": 1500,
+              "cells": 3,
+              "dischargeC": 75
+            },
+            "issues": []
+          },
+          {
+            "id": "servo:befbc53d65341c3b",
+            "kind": "servo",
+            "model": "Hitec_D485HW",
+            "quantity": 4,
+            "instances": [
+              "Servo_1",
+              "Servo_2",
+              "Servo_3",
+              "Servo_4"
+            ],
+            "specs": {},
+            "issues": [
+              "모델명에서 확인 가능한 규격이 없어 상품 규격을 별도로 확인해야 합니다."
+            ]
+          }
+        ],
+        "exclusions": [
+          "기체 제작물과 설계에 기록되지 않은 부품은 견적에 포함되지 않습니다."
+        ]
+      }
+    },
+    {
+      "name": "conflict",
+      "id": 2,
+      "expected": {
+        "fingerprint": "7437d74efe681746",
+        "designId": 2,
+        "createdAt": "2026-09-21T00:00:00.000Z",
+        "items": [
+          {
+            "id": "motor:0b241f6259405c68",
+            "kind": "motor",
+            "model": "t_motor_AT4120KV500",
+            "quantity": null,
+            "instances": [
+              "Motor_1"
+            ],
+            "specs": {
+              "motorKv": 500
+            },
+            "issues": [
+              "동일 인스턴스에 서로 다른 모델 변경이 연결되어 있습니다."
+            ]
+          },
+          {
+            "id": "motor:b60014e357a1aabd",
+            "kind": "motor",
+            "model": "t_motor_AT4130KV450",
+            "quantity": 4,
+            "instances": [
+              "Motor_2",
+              "Motor_3",
+              "Motor_4",
+              "Motor_5"
+            ],
+            "specs": {
+              "motorKv": 450
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:1d55a94c7777b016",
+            "kind": "propeller",
+            "model": "apc_propellers_21x10W",
+            "quantity": 1,
+            "instances": [
+              "Propeller_1"
+            ],
+            "specs": {
+              "diameterIn": 21,
+              "pitchIn": 10
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:b905959ca5d7ec9c",
+            "kind": "propeller",
+            "model": "apc_propellers_15x7",
+            "quantity": 4,
+            "instances": [
+              "Propeller_2",
+              "Propeller_3",
+              "Propeller_4",
+              "Propeller_5"
+            ],
+            "specs": {
+              "diameterIn": 15,
+              "pitchIn": 7
+            },
+            "issues": []
+          },
+          {
+            "id": "battery:811c9dc59e3779b9",
+            "kind": "battery",
+            "model": "",
+            "quantity": 1,
+            "instances": [
+              "Battery_1"
+            ],
+            "specs": {},
+            "issues": [
+              "부품 모델명이 없어 검색할 수 없습니다.",
+              "모델명에서 확인 가능한 규격이 없어 상품 규격을 별도로 확인해야 합니다."
+            ]
+          },
+          {
+            "id": "battery:b75e9f90593f7290",
+            "kind": "battery",
+            "model": "TurnigyGraphene1500mAh3S75C",
+            "quantity": 1,
+            "instances": [
+              "Battery_2"
+            ],
+            "specs": {
+              "capacityMah": 1500,
+              "cells": 3,
+              "dischargeC": 75
+            },
+            "issues": []
+          },
+          {
+            "id": "servo:befbc53d65341c3b",
+            "kind": "servo",
+            "model": "Hitec_D485HW",
+            "quantity": 4,
+            "instances": [
+              "Servo_1",
+              "Servo_2",
+              "Servo_3",
+              "Servo_4"
+            ],
+            "specs": {},
+            "issues": [
+              "모델명에서 확인 가능한 규격이 없어 상품 규격을 별도로 확인해야 합니다."
+            ]
+          }
+        ],
+        "exclusions": [
+          "기체 제작물과 설계에 기록되지 않은 부품은 견적에 포함되지 않습니다."
+        ]
+      }
+    },
+    {
+      "name": "unlinked",
+      "id": 2,
+      "expected": {
+        "fingerprint": "fa99907237c8952a",
+        "designId": 2,
+        "createdAt": "2026-09-21T00:00:00.000Z",
+        "items": [
+          {
+            "id": "motor:0b241f6259405c68",
+            "kind": "motor",
+            "model": "t_motor_AT4120KV500",
+            "quantity": null,
+            "instances": [],
+            "specs": {
+              "motorKv": 500
+            },
+            "issues": [
+              "실제 부품 인스턴스를 확인할 수 없어 수량을 확정하지 않았습니다."
+            ]
+          },
+          {
+            "id": "propeller:1d55a94c7777b016",
+            "kind": "propeller",
+            "model": "apc_propellers_21x10W",
+            "quantity": null,
+            "instances": [],
+            "specs": {
+              "diameterIn": 21,
+              "pitchIn": 10
+            },
+            "issues": [
+              "실제 부품 인스턴스를 확인할 수 없어 수량을 확정하지 않았습니다."
+            ]
+          },
+          {
+            "id": "battery:b75e9f90593f7290",
+            "kind": "battery",
+            "model": "TurnigyGraphene1500mAh3S75C",
+            "quantity": null,
+            "instances": [],
+            "specs": {
+              "capacityMah": 1500,
+              "cells": 3,
+              "dischargeC": 75
+            },
+            "issues": [
+              "실제 부품 인스턴스를 확인할 수 없어 수량을 확정하지 않았습니다."
+            ]
+          }
+        ],
+        "exclusions": [
+          "기체 제작물과 설계에 기록되지 않은 부품은 견적에 포함되지 않습니다.",
+          "추진계 실제 부품 목록이 부족합니다. 대칭 개수나 도면 템플릿으로 수량을 추정하지 않았습니다."
+        ]
+      }
+    },
+    {
+      "name": "servo",
+      "id": 2,
+      "expected": {
+        "fingerprint": "f2df1b5ed3bf81bc",
+        "designId": 2,
+        "createdAt": "2026-09-21T00:00:00.000Z",
+        "items": [
+          {
+            "id": "motor:0b241f6259405c68",
+            "kind": "motor",
+            "model": "t_motor_AT4120KV500",
+            "quantity": 1,
+            "instances": [
+              "Motor_1"
+            ],
+            "specs": {
+              "motorKv": 500
+            },
+            "issues": []
+          },
+          {
+            "id": "motor:b60014e357a1aabd",
+            "kind": "motor",
+            "model": "t_motor_AT4130KV450",
+            "quantity": 4,
+            "instances": [
+              "Motor_2",
+              "Motor_3",
+              "Motor_4",
+              "Motor_5"
+            ],
+            "specs": {
+              "motorKv": 450
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:1d55a94c7777b016",
+            "kind": "propeller",
+            "model": "apc_propellers_21x10W",
+            "quantity": 1,
+            "instances": [
+              "Propeller_1"
+            ],
+            "specs": {
+              "diameterIn": 21,
+              "pitchIn": 10
+            },
+            "issues": []
+          },
+          {
+            "id": "propeller:b905959ca5d7ec9c",
+            "kind": "propeller",
+            "model": "apc_propellers_15x7",
+            "quantity": 4,
+            "instances": [
+              "Propeller_2",
+              "Propeller_3",
+              "Propeller_4",
+              "Propeller_5"
+            ],
+            "specs": {
+              "diameterIn": 15,
+              "pitchIn": 7
+            },
+            "issues": []
+          },
+          {
+            "id": "battery:b75e9f90593f7290",
+            "kind": "battery",
+            "model": "TurnigyGraphene1500mAh3S75C",
+            "quantity": 2,
+            "instances": [
+              "Battery_1",
+              "Battery_2"
+            ],
+            "specs": {
+              "capacityMah": 1500,
+              "cells": 3,
+              "dischargeC": 75
+            },
+            "issues": []
+          },
+          {
+            "id": "servo:befbc53d65341c3b",
+            "kind": "servo",
+            "model": "Hitec_D485HW",
+            "quantity": 3,
+            "instances": [
+              "Servo_1",
+              "Servo_3",
+              "Servo_4"
+            ],
+            "specs": {},
+            "issues": [
+              "모델명에서 확인 가능한 규격이 없어 상품 규격을 별도로 확인해야 합니다."
+            ]
+          },
+          {
+            "id": "servo:6282601e4f3d493c",
+            "kind": "servo",
+            "model": "Hitec_HS_65MG",
+            "quantity": 1,
+            "instances": [
+              "Servo_2"
+            ],
+            "specs": {},
+            "issues": [
+              "모델명에서 확인 가능한 규격이 없어 상품 규격을 별도로 확인해야 합니다."
+            ]
+          }
+        ],
+        "exclusions": [
+          "기체 제작물과 설계에 기록되지 않은 부품은 견적에 포함되지 않습니다."
+        ]
+      }
+    }
+  ],
+  "specs": [
+    {
+      "kind": "motor",
+      "model": "980KV 4pcs",
+      "expected": {
+        "motorKv": 980
+      }
+    },
+    {
+      "kind": "motor",
+      "model": "980KV 4 pcs",
+      "expected": {
+        "motorKv": 980
+      }
+    },
+    {
+      "kind": "motor",
+      "model": "t_motor_MN4012KV400",
+      "expected": {
+        "motorKv": 400
+      }
+    },
+    {
+      "kind": "motor",
+      "model": "KV900 / 1pcs",
+      "expected": {
+        "motorKv": 900
+      }
+    },
+    {
+      "kind": "motor",
+      "model": "t_motor_U7_V2.0KV490",
+      "expected": {
+        "motorKv": 490
+      }
+    },
+    {
+      "kind": "motor",
+      "model": "980.5 KV / 2 pcs",
+      "expected": {
+        "motorKv": 980.5
+      }
+    },
+    {
+      "kind": "motor",
+      "model": "KV-980 / 4pcs",
+      "expected": {
+        "motorKv": 980
+      }
+    },
+    {
+      "kind": "motor",
+      "model": "kde_direct_KDE4012XF_400",
+      "expected": {}
+    },
+    {
+      "kind": "motor",
+      "model": "900KV / 1000KV",
+      "expected": {}
+    },
+    {
+      "kind": "motor",
+      "model": "900-1000KV",
+      "expected": {}
+    },
+    {
+      "kind": "motor",
+      "model": "KV900-1000",
+      "expected": {}
+    },
+    {
+      "kind": "motor",
+      "model": "900, 1000KV",
+      "expected": {}
+    },
+    {
+      "kind": "motor",
+      "model": "900..1000KV",
+      "expected": {}
+    },
+    {
+      "kind": "motor",
+      "model": "1,000KV",
+      "expected": {}
+    },
+    {
+      "kind": "motor",
+      "model": "KV1,000",
+      "expected": {}
+    },
+    {
+      "kind": "motor",
+      "model": "KV980pcs",
+      "expected": {}
+    },
+    {
+      "kind": "propeller",
+      "model": "apc_propellers_9_625x3_75N",
+      "expected": {
+        "diameterIn": 9.625,
+        "pitchIn": 3.75
+      }
+    },
+    {
+      "kind": "battery",
+      "model": "Tattu15C16000mAh4S1P",
+      "expected": {
+        "capacityMah": 16000,
+        "cells": 4,
+        "dischargeC": 15
+      }
+    },
+    {
+      "kind": "battery",
+      "model": "TurnigyGraphene1600mAh4S75CSquare",
+      "expected": {
+        "capacityMah": 1600,
+        "cells": 4,
+        "dischargeC": 75
+      }
+    },
+    {
+      "kind": "servo",
+      "model": "Hitec_HS_65MG",
+      "expected": {}
+    }
+  ],
+  "offers": [
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "products": [
+        {
+          "productId": "1005001234567",
+          "title": "SunnySky X2212 980KV brushless motor 1pc",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "price": 12000,
+          "currency": "KRW",
+          "description": "",
+          "skus": []
+        }
+      ],
+      "assessments": [],
+      "expected": [
+        {
+          "id": "1005001234567:unverified",
+          "productId": "1005001234567",
+          "title": "SunnySky X2212 980KV brushless motor 1pc",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "promotionUrl": null,
+          "priceKind": "listing",
+          "provider": "aliexpress_affiliate",
+          "market": {
+            "country": "KR",
+            "currencyRequested": "KRW"
+          },
+          "optionId": null,
+          "optionLabel": null,
+          "optionVerified": false,
+          "packPrice": 12000,
+          "packQuantity": 1,
+          "currency": "KRW",
+          "match": "needs_review",
+          "reasons": [
+            "상품 정보에서 요청 모델 문자열을 확인했습니다.",
+            "선택 옵션과 부품 규격 확인이 필요합니다. 표시 가격은 확정 견적에 포함되지 않습니다.",
+            "한국 배송 가능 여부와 배송비는 구매 페이지에서 확인하세요."
+          ],
+          "specs": {
+            "motorKv": 980
+          },
+          "shippingAvailable": null,
+          "shippingCost": null,
+          "shippingCurrency": null,
+          "stock": null,
+          "retrievedAt": "2026-09-21T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "products": [
+        {
+          "productId": "1005001234567",
+          "title": "SunnySky X2212 980KV brushless motor 1pc",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "price": 12000,
+          "currency": "KRW",
+          "description": "",
+          "skus": [
+            {
+              "id": "1",
+              "label": "980KV 4pcs",
+              "price": 43000,
+              "currency": "KRW",
+              "stock": 2
+            }
+          ]
+        }
+      ],
+      "assessments": [],
+      "expected": [
+        {
+          "id": "1005001234567:1",
+          "productId": "1005001234567",
+          "title": "SunnySky X2212 980KV brushless motor 1pc",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "promotionUrl": null,
+          "priceKind": "sku",
+          "provider": "aliexpress_ds",
+          "market": {
+            "country": "KR",
+            "currencyRequested": "KRW"
+          },
+          "optionId": "1",
+          "optionLabel": "980KV 4pcs",
+          "optionVerified": true,
+          "packPrice": 43000,
+          "packQuantity": 4,
+          "currency": "KRW",
+          "match": "exact",
+          "reasons": [
+            "상품 정보에서 요청 모델 문자열을 확인했습니다.",
+            "한국 배송 가능 여부와 배송비는 구매 페이지에서 확인하세요."
+          ],
+          "specs": {
+            "motorKv": 980
+          },
+          "shippingAvailable": null,
+          "shippingCost": null,
+          "shippingCurrency": null,
+          "stock": 2,
+          "retrievedAt": "2026-09-21T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "products": [
+        {
+          "productId": "1005001234567",
+          "title": "SunnySky X2212 980KV brushless motor 1pc",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "price": 12000,
+          "currency": "KRW",
+          "description": "",
+          "skus": [
+            {
+              "id": "1",
+              "label": "1400KV 1pc",
+              "price": 43000,
+              "currency": "KRW",
+              "stock": 2
+            }
+          ]
+        }
+      ],
+      "assessments": [],
+      "expected": []
+    },
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "products": [
+        {
+          "productId": "1005001234567",
+          "title": "SunnySky X2212 980KV brushless motor 1pc",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "price": 12000,
+          "currency": "KRW",
+          "description": "",
+          "skus": [
+            {
+              "id": "1",
+              "label": "Black",
+              "price": 43000,
+              "currency": "KRW",
+              "stock": 2
+            }
+          ]
+        }
+      ],
+      "assessments": [],
+      "expected": [
+        {
+          "id": "1005001234567:1",
+          "productId": "1005001234567",
+          "title": "SunnySky X2212 980KV brushless motor 1pc",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "promotionUrl": null,
+          "priceKind": "sku",
+          "provider": "aliexpress_ds",
+          "market": {
+            "country": "KR",
+            "currencyRequested": "KRW"
+          },
+          "optionId": "1",
+          "optionLabel": "Black",
+          "optionVerified": false,
+          "packPrice": 43000,
+          "packQuantity": null,
+          "currency": "KRW",
+          "match": "needs_review",
+          "reasons": [
+            "상품 정보에서 요청 모델 문자열을 확인했습니다.",
+            "선택 옵션과 부품 규격 확인이 필요합니다. 표시 가격은 확정 견적에 포함되지 않습니다.",
+            "한 판매 묶음에 포함된 수량을 확인하지 못했습니다.",
+            "한국 배송 가능 여부와 배송비는 구매 페이지에서 확인하세요."
+          ],
+          "specs": {
+            "motorKv": 980
+          },
+          "shippingAvailable": null,
+          "shippingCost": null,
+          "shippingCurrency": null,
+          "stock": 2,
+          "retrievedAt": "2026-09-21T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "products": [
+        {
+          "productId": "1005001234567",
+          "title": "SunnySky X2212 980KV brushless motor 1pc",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "price": 12000,
+          "currency": "KRW",
+          "description": "",
+          "skus": [
+            {
+              "id": "1",
+              "label": "Screws only",
+              "price": 43000,
+              "currency": "KRW",
+              "stock": 2
+            }
+          ]
+        }
+      ],
+      "assessments": [],
+      "expected": []
+    },
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "products": [
+        {
+          "productId": "1005001234567",
+          "title": "SunnySky X2212 980KV brushless motor 1pc",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "price": 12000,
+          "currency": "KRW",
+          "description": "",
+          "skus": [
+            {
+              "id": "1",
+              "label": "980KV 1400KV 1pc",
+              "price": 43000,
+              "currency": "KRW",
+              "stock": 2
+            }
+          ]
+        }
+      ],
+      "assessments": [],
+      "expected": [
+        {
+          "id": "1005001234567:1",
+          "productId": "1005001234567",
+          "title": "SunnySky X2212 980KV brushless motor 1pc",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "promotionUrl": null,
+          "priceKind": "sku",
+          "provider": "aliexpress_ds",
+          "market": {
+            "country": "KR",
+            "currencyRequested": "KRW"
+          },
+          "optionId": "1",
+          "optionLabel": "980KV 1400KV 1pc",
+          "optionVerified": false,
+          "packPrice": 43000,
+          "packQuantity": 1,
+          "currency": "KRW",
+          "match": "needs_review",
+          "reasons": [
+            "상품 정보에서 요청 모델 문자열을 확인했습니다.",
+            "선택 옵션과 부품 규격 확인이 필요합니다. 표시 가격은 확정 견적에 포함되지 않습니다.",
+            "한국 배송 가능 여부와 배송비는 구매 페이지에서 확인하세요."
+          ],
+          "specs": {
+            "motorKv": 980
+          },
+          "shippingAvailable": null,
+          "shippingCost": null,
+          "shippingCurrency": null,
+          "stock": 2,
+          "retrievedAt": "2026-09-21T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "products": [
+        {
+          "productId": "1005001234567",
+          "title": "Emax AT2826 980KV brushless motor",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "price": 12000,
+          "currency": "KRW",
+          "description": "",
+          "skus": [
+            {
+              "id": "1",
+              "label": "AT2826 980KV 1pc",
+              "price": 5000,
+              "currency": "KRW",
+              "stock": 5
+            }
+          ]
+        }
+      ],
+      "assessments": [
+        {
+          "productId": "1005001234567",
+          "relation": "alternative",
+          "evidence": "Emax AT2826 980KV"
+        }
+      ],
+      "expected": [
+        {
+          "id": "1005001234567:1",
+          "productId": "1005001234567",
+          "title": "Emax AT2826 980KV brushless motor",
+          "url": "https://www.aliexpress.com/item/1005001234567.html",
+          "promotionUrl": null,
+          "priceKind": "sku",
+          "provider": "aliexpress_ds",
+          "market": {
+            "country": "KR",
+            "currencyRequested": "KRW"
+          },
+          "optionId": "1",
+          "optionLabel": "AT2826 980KV 1pc",
+          "optionVerified": true,
+          "packPrice": 5000,
+          "packQuantity": 1,
+          "currency": "KRW",
+          "match": "alternative",
+          "reasons": [
+            "동일 모델이 확인되지 않았습니다. 호환성을 직접 확인하세요.",
+            "상품 근거: Emax AT2826 980KV",
+            "선택 옵션의 규격과 가격을 확인한 대체 후보입니다. 장착 규격과 전기적 호환성을 확인한 뒤 직접 선택하세요.",
+            "한국 배송 가능 여부와 배송비는 구매 페이지에서 확인하세요."
+          ],
+          "specs": {
+            "motorKv": 980
+          },
+          "shippingAvailable": null,
+          "shippingCost": null,
+          "shippingCurrency": null,
+          "stock": 5,
+          "retrievedAt": "2026-09-21T00:00:00.000Z"
+        }
+      ]
+    }
+  ],
+  "pricing": [
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "offer": {
+        "id": "1005001234567:unverified",
+        "productId": "1005001234567",
+        "title": "SunnySky X2212 980KV brushless motor 1pc",
+        "url": "https://www.aliexpress.com/item/1005001234567.html",
+        "promotionUrl": null,
+        "priceKind": "listing",
+        "provider": "aliexpress_affiliate",
+        "market": {
+          "country": "KR",
+          "currencyRequested": "KRW"
+        },
+        "optionId": null,
+        "optionLabel": null,
+        "optionVerified": false,
+        "packPrice": 12000,
+        "packQuantity": 1,
+        "currency": "KRW",
+        "match": "needs_review",
+        "reasons": [
+          "상품 정보에서 요청 모델 문자열을 확인했습니다.",
+          "선택 옵션과 부품 규격 확인이 필요합니다. 표시 가격은 확정 견적에 포함되지 않습니다.",
+          "한국 배송 가능 여부와 배송비는 구매 페이지에서 확인하세요."
+        ],
+        "specs": {
+          "motorKv": 980
+        },
+        "shippingAvailable": null,
+        "shippingCost": null,
+        "shippingCurrency": null,
+        "stock": null,
+        "retrievedAt": "2026-09-21T00:00:00.000Z"
+      },
+      "expected": {
+        "packCount": null,
+        "unitPrice": null,
+        "subtotal": null,
+        "shipping": null
+      }
+    },
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "offer": {
+        "id": "1005001234567:1",
+        "productId": "1005001234567",
+        "title": "SunnySky X2212 980KV brushless motor 1pc",
+        "url": "https://www.aliexpress.com/item/1005001234567.html",
+        "promotionUrl": null,
+        "priceKind": "sku",
+        "provider": "aliexpress_ds",
+        "market": {
+          "country": "KR",
+          "currencyRequested": "KRW"
+        },
+        "optionId": "1",
+        "optionLabel": "980KV 4pcs",
+        "optionVerified": true,
+        "packPrice": 43000,
+        "packQuantity": 4,
+        "currency": "KRW",
+        "match": "exact",
+        "reasons": [
+          "상품 정보에서 요청 모델 문자열을 확인했습니다.",
+          "한국 배송 가능 여부와 배송비는 구매 페이지에서 확인하세요."
+        ],
+        "specs": {
+          "motorKv": 980
+        },
+        "shippingAvailable": null,
+        "shippingCost": null,
+        "shippingCurrency": null,
+        "stock": 2,
+        "retrievedAt": "2026-09-21T00:00:00.000Z"
+      },
+      "expected": {
+        "packCount": 1,
+        "unitPrice": 10750,
+        "subtotal": 43000,
+        "shipping": null
+      }
+    },
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "offer": {
+        "id": "1005001234567:1",
+        "productId": "1005001234567",
+        "title": "SunnySky X2212 980KV brushless motor 1pc",
+        "url": "https://www.aliexpress.com/item/1005001234567.html",
+        "promotionUrl": null,
+        "priceKind": "sku",
+        "provider": "aliexpress_ds",
+        "market": {
+          "country": "KR",
+          "currencyRequested": "KRW"
+        },
+        "optionId": "1",
+        "optionLabel": "Black",
+        "optionVerified": false,
+        "packPrice": 43000,
+        "packQuantity": null,
+        "currency": "KRW",
+        "match": "needs_review",
+        "reasons": [
+          "상품 정보에서 요청 모델 문자열을 확인했습니다.",
+          "선택 옵션과 부품 규격 확인이 필요합니다. 표시 가격은 확정 견적에 포함되지 않습니다.",
+          "한 판매 묶음에 포함된 수량을 확인하지 못했습니다.",
+          "한국 배송 가능 여부와 배송비는 구매 페이지에서 확인하세요."
+        ],
+        "specs": {
+          "motorKv": 980
+        },
+        "shippingAvailable": null,
+        "shippingCost": null,
+        "shippingCurrency": null,
+        "stock": 2,
+        "retrievedAt": "2026-09-21T00:00:00.000Z"
+      },
+      "expected": {
+        "packCount": null,
+        "unitPrice": null,
+        "subtotal": null,
+        "shipping": null
+      }
+    },
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "offer": {
+        "id": "1005001234567:1",
+        "productId": "1005001234567",
+        "title": "SunnySky X2212 980KV brushless motor 1pc",
+        "url": "https://www.aliexpress.com/item/1005001234567.html",
+        "promotionUrl": null,
+        "priceKind": "sku",
+        "provider": "aliexpress_ds",
+        "market": {
+          "country": "KR",
+          "currencyRequested": "KRW"
+        },
+        "optionId": "1",
+        "optionLabel": "980KV 1400KV 1pc",
+        "optionVerified": false,
+        "packPrice": 43000,
+        "packQuantity": 1,
+        "currency": "KRW",
+        "match": "needs_review",
+        "reasons": [
+          "상품 정보에서 요청 모델 문자열을 확인했습니다.",
+          "선택 옵션과 부품 규격 확인이 필요합니다. 표시 가격은 확정 견적에 포함되지 않습니다.",
+          "한국 배송 가능 여부와 배송비는 구매 페이지에서 확인하세요."
+        ],
+        "specs": {
+          "motorKv": 980
+        },
+        "shippingAvailable": null,
+        "shippingCost": null,
+        "shippingCurrency": null,
+        "stock": 2,
+        "retrievedAt": "2026-09-21T00:00:00.000Z"
+      },
+      "expected": {
+        "packCount": null,
+        "unitPrice": null,
+        "subtotal": null,
+        "shipping": null
+      }
+    },
+    {
+      "item": {
+        "id": "motor:test",
+        "kind": "motor",
+        "model": "SunnySky X2212 980KV",
+        "quantity": 4,
+        "specs": {
+          "motorKv": 980
+        },
+        "instances": [
+          "m1",
+          "m2",
+          "m3",
+          "m4"
+        ],
+        "issues": []
+      },
+      "offer": {
+        "id": "1005001234567:1",
+        "productId": "1005001234567",
+        "title": "Emax AT2826 980KV brushless motor",
+        "url": "https://www.aliexpress.com/item/1005001234567.html",
+        "promotionUrl": null,
+        "priceKind": "sku",
+        "provider": "aliexpress_ds",
+        "market": {
+          "country": "KR",
+          "currencyRequested": "KRW"
+        },
+        "optionId": "1",
+        "optionLabel": "AT2826 980KV 1pc",
+        "optionVerified": true,
+        "packPrice": 5000,
+        "packQuantity": 1,
+        "currency": "KRW",
+        "match": "alternative",
+        "reasons": [
+          "동일 모델이 확인되지 않았습니다. 호환성을 직접 확인하세요.",
+          "상품 근거: Emax AT2826 980KV",
+          "선택 옵션의 규격과 가격을 확인한 대체 후보입니다. 장착 규격과 전기적 호환성을 확인한 뒤 직접 선택하세요.",
+          "한국 배송 가능 여부와 배송비는 구매 페이지에서 확인하세요."
+        ],
+        "specs": {
+          "motorKv": 980
+        },
+        "shippingAvailable": null,
+        "shippingCost": null,
+        "shippingCurrency": null,
+        "stock": 5,
+        "retrievedAt": "2026-09-21T00:00:00.000Z"
+      },
+      "expected": {
+        "packCount": 4,
+        "unitPrice": 5000,
+        "subtotal": 20000,
+        "shipping": null
+      }
+    }
+  ]
+}

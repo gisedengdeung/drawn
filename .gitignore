@@ -28,6 +28,7 @@ yarn-error.log*
 
 # local environment
 .env*
+!.env.example
 
 # deployment and generated files
 .vercel
@@ -48,14 +49,26 @@ next-env.d.ts
 /**/cadfile.stl
 /corpus_dic
 
-# ML training artifacts (see docs/HANDOFF.md)
+# Python backend caches and local environments
+/backend/.venv/
+**/__pycache__/
+.pytest_cache/
+*.pyc
+
+# Local ML environment only; model sources, archives and bundles remain trackable.
+/ml/.venv
+
+# 로컬 확인용 STL. 배포하지 않습니다 (scripts/prepare-local-stl.mjs 가 만듭니다).
+/public/models/local/
+
+# Local ML scratch from the point cloud / parameter model work.
+# Scoped to these directories on purpose: develop tracks model artifacts under
+# ml/sources, ml/archive and backend/model_bundle, so a global *.pt or *.npz
+# rule would block them.
 /ml/.venv/
 /ml/data/
 /ml/runs/
 /ml/checkpoints/
-__pycache__/
-*.npz
-*.pt
-*.pth
-*.ckpt
-*.onnx
+/ml/trim-validity-v2/**/*.npz
+/ml/trim-validity-v2/**/*.pt
+/ml/trim-validity-v2/**/*.onnx

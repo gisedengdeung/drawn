@@ -1,337 +1,128 @@
-# ml/ — Point Cloud 성능 예측 모델
+# 모델·학습 자료
 
-[docs/HANDOFF.md](../docs/HANDOFF.md)의 작업 단계를 구현합니다.
-도메인 배경은 [docs/DRONE_PRIMER.md](../docs/DRONE_PRIMER.md), 현재 추정기의 한계는 [docs/MODEL_CARD.md](../docs/MODEL_CARD.md)를 참고하세요.
+현재 웹 서비스가 사용하는 모델은 `backend/model_bundle`의 조건부 trim MLP다.
+FastAPI가 PyTorch CPU로 직접 추론한다. 원본 `.pt`와 pickle 파일을 요청마다
+읽거나 브라우저에서 추론하지 않는다. 배포 번들은 원본 체크포인트에서 추출한
+동일한 가중치와 전처리 값이며, 시작할 때 해시와 실제 예측값을 검사한다.
 
-| 단계 | 파일 | 상태 |
+```text
+backend/model_bundle/                 실행용 가중치·전처리·golden·버전
+ml/
+  artifact-inventory.json              이동 전후 29개 파일의 SHA256 기록
+  sources/dongha/                     제공받은 원본 자료, 내부 구조 그대로 보존
+    dataset_510k.csv                   현재 모델과 해시가 일치하는 학습 데이터
+    20260920_160522/                   체크포인트·전처리·설정·평가·샘플
+    v2/                               별도 데이터 버전, 현재 모델에 사용하지 않음
+    make_dl_dataset.py                제공된 과거 코드
+    train_dl_model.py                  제공된 과거 코드
+    train_dl_model (1).py              제공된 과거 코드
+  archive/root-artifacts/              이전 루트 파일의 보존본
+    best_model.pt                     위 run의 체크포인트와 바이트 단위로 동일
+    model_preprocessor.pkl            위 run의 전처리와 바이트 단위로 동일
+    dl_preprocessor.pkl               과거 데이터 전처리 파일, 런타임 미사용
+  data/                               기존 PointNet 데이터, 변경 없음
+  runs/                               기존 PointNet 체크포인트·ONNX·평가, 변경 없음
+```
+
+원본 자료와 루트 파일은 총 29개, 96,870,025바이트다. 이동 전후 SHA256을 모두
+대조했다. 중복 파일도 삭제하지 않았으며 원래 위치·새 위치·크기·해시는
+[`artifact-inventory.json`](artifact-inventory.json)에 기록했다. 기존 PointNet
+자료는 22개, 425,889,033바이트이며 현재 MLP 실행과 별개로 보존한다.
+
+## 검증과 재패키징
+
+저장소 루트에서 아래 명령은 원본 체크포인트·전처리·설정·데이터의 해시와
+실행 번들의 CPU golden 20개를 검증한다. 파일을 다시 생성하거나 pickle을
+역직렬화하지 않는다. `backend/.venv`의 런타임 의존성만 있으면 된다.
+
+```powershell
+backend/.venv/Scripts/python.exe scripts/package-performance-model.py --verify-only
+```
+
+Linux에서는 `backend/.venv/bin/python`을 사용한다. 서버가 실행 중이면
+`GET http://localhost:3000/api/performance/model`에서도 모델 버전, 준비 상태와
+golden 검증 결과를 확인할 수 있다. 실제 추론은 `POST /api/performance/predict`다.
+
+번들을 다시 추출할 때 사용하는 기본 경로는 아래와 같다. `--run`, `--dataset`,
+`--output`, `--torch-python`으로 다른 위치를 명시할 수 있다.
+
+```text
+--run      ml/sources/dongha/20260920_160522
+--dataset  ml/sources/dongha/dataset_510k.csv
+--output   backend/model_bundle
+```
+
+실제 재패키징에는 numpy, pandas, scikit-learn 1.6.1과 PyTorch가 필요하다.
+원래 CUDA 예측과의 엄격한 대조를 먼저 통과해야 새 CPU golden을 승인한다.
+검증된 환경은 PyTorch 2.13.0+cu130, RTX 5070 Ti, 행렬 정밀도 `high`다.
+패키징 스크립트는 학습이나 전처리 재학습을 수행하지 않는다.
+
+원본 `config.json`, `metrics.json`, `dataset_summary.json`의 과거 절대 경로는
+학습 당시 증거로 그대로 남겼다. 현재 실행·패키징은 이 경로 문자열 대신 위의
+명시적인 경로를 사용한다. `v2/dataset_510k.csv`는 현재 체크포인트의 데이터
+해시와 다르므로 대신 사용할 수 없다.
+
+## 재현 범위와 남은 과거 자료
+
+현재 체크포인트의 추론과 원본 예측 대조는 검증됐다. 하지만 제공된 과거 학습
+스크립트는 해당 run의 274차원 입력·SiLU 구조·설계별 분할을 재현하는 코드가
+아니다. 이 파일들을 현재 모델의 학습 코드로 취급하지 않는다.
+
+`tests/test_make_dl_dataset.py`와 `tests/test_train_dl_model.py`는 현재 없는
+`test-ai-modeling`의 개선된 학습 구현을 참조한다. 이 두 과거 테스트는 원형을
+유지했으며 현재 추론 검증 통과에 포함하지 않는다. 전체 재학습을 재현하려면
+이 테스트가 대상으로 삼는 원래 구현을 복구해야 한다. 상위 폴더에서 확인한
+`make_dl_dataset.py`도 구형 코드였고 `train_dl_model.py`는 없었다.
+
+기존 `ml/.venv`는 사라진 `test-ai-modeling/.venv`를 가리키는 junction이다.
+이전 환경의 흔적으로 보존했고 현재 실행에는 사용하지 않는다. 런타임은
+`backend/.venv` 또는 Docker의 Python 환경을 사용한다.
+
+ML 아티팩트와 배포 번들은 Git에서 추적 가능하게 두었다. `.gitignore`는 로컬
+가상환경·캐시만 제외하며, Docker 이미지에는 `ml/` 전체를 넣지 않는다.
+실행에 필요한 작은 `backend/model_bundle`만 API 이미지에 포함한다.
+
+## 형상 기반 모델과 파라미터 모델 (feature/hw-drone)
+
+`backend/model_bundle`의 조건부 trim MLP와 별개로 진행한 두 갈래다. 실행 경로에는
+들어가 있지 않으며, 어디까지 되고 어디서 막혔는지를 남긴다.
+
+| 갈래 | 스크립트 | 결과 |
 | --- | --- | --- |
-| 0 | `verify_stage0.py` | 완료 |
-| 1 | `prepare_targets.py` | 완료 — 타깃 추출, 유효성 필터, split 고정 |
-| 2 | `prepare_pointclouds.py` | 완료 — STL → (N, 1024, 3) + scale |
-| — | `geometry_baseline.py` | 완료 — 3·4단계가 넘어야 할 바닥 |
-| 3 | `dataset.py`, `model.py`, `train.py` | 완료 — PointNet |
-| 4 | `evaluate.py` | 완료 — test 채점, prediction interval, model version |
-| 5 | `export_onnx.py` | 완료 — 자기완결 ONNX. FastAPI 연결은 미착수 |
-| — | `verify_onnx.py` | 완료 — 받는 쪽 검증. PyTorch·학습 데이터 불필요 |
-| — | `predict_stl.py` | 완료 — STL 하나로 예측. `--repeat N`으로 재샘플링 분산 확인 |
-| **6** | **속도 조건부 trim 모델** | **미착수 — 설계서 [../docs/TRIM_MODEL_PLAN.md](../docs/TRIM_MODEL_PLAN.md)** |
+| PointNet (형상) | `prepare_pointclouds.py`, `train.py`, `evaluate.py`, `export_onnx.py` | `Mass` R² 0.879, `Max_Distance` R² 0.623 |
+| 속도 조건부 trim | `trim-validity-v2/source/ml/` | `drag` 0.952, `thrust` 0.808. 유효성 헤드는 UI 미달 |
+| 파라미터 (XGBoost) | `param_features.py`, `train_param_model.py`, `evaluate_param_model.py` | `mass` R² 0.990, `maxDistance` 0.750 |
 
-**모델 설명은 [../docs/POINTNET_MODEL.md](../docs/POINTNET_MODEL.md)에 있습니다** —
-입력 변수, 구조, 왜 그 결과가 나왔는지.
+### 형상 모델은 편집 설계에 쓸 수 없다
 
-**다음 작업을 맡았다면 [../docs/TRIM_MODEL_PLAN.md](../docs/TRIM_MODEL_PLAN.md)부터 읽으세요.**
-형상 + 속도로 Performance Simulator의 비행 상태 값을 예측하는 모델의 작업 설계서입니다.
+편집한 설계에는 `cadfile.stl`이 없다. 브라우저가 가진 것은
+`components/parametric-uav-viewer.tsx`가 원기둥·상자·구로 조립한 개념 형상뿐이고,
+거기서 뽑은 점은 학습 분포 밖이다. showcase 12개로 재보면 `Max_Distance`가 중앙 64%,
+최악 90% 달라진다. 재샘플링만으로 생기는 변동이 10.3%인 것과 비교하면 쓸 수 없는
+수준이다. 근거는 `reports/parametric_gap.json`.
 
-최종 결과는 test split 기준 `Mass` R² **0.879**, `Max_Distance` R² **0.623**입니다.
-
-```powershell
-ml\.venv\Scripts\python.exe ml\train.py --targets Mass,Max_Distance `
-    --pool maxmean --epochs 200 --patience 30 --tag rung3_mass_distance
-ml\.venv\Scripts\python.exe ml\evaluate.py
-```
-
-`evaluate.py`가 **test split을 읽는 유일한 스크립트**입니다. 그 전 단계는 전부 val로만 선택했습니다.
-결과는 `ml/reports/stage4_evaluation.json`에 저장되며 prediction interval과 model version을 포함합니다.
-
-## 5단계 — ONNX 배포
-
-```powershell
-ml\.venv\Scripts\python.exe ml\export_onnx.py
-```
-
-전처리·후처리를 그래프에 편입한 자기완결 파일 `ml/runs/pointnet-geometry-v1.onnx`(5.2MB)가
-나옵니다. **mm 좌표 (batch, N, 3)을 넣으면 (batch, 2) = [kg, m]이 나옵니다.**
-PyTorch와 최대 상대차 6.6e-06, 점 순서 무관성 3.2e-06으로 검증했습니다.
-
-### 받는 쪽은 이것만 하면 됩니다
-
-`.onnx`는 gitignore라 레포에 없습니다. 팀 드라이브에서 받아 `ml/runs/`에 두고:
+그래서 편집 설계는 형상이 아니라 **파라미터**를 입력으로 받는다. 필요한 데이터가
+`public/data`에 전부 있어 85GB 원본도 GPU도 없이 노트북에서 재현된다.
 
 ```bash
-pip install numpy onnxruntime      # PyTorch도 학습 데이터도 불필요
-python ml/verify_onnx.py
+python ml/train_param_model.py      # backend/models/ 와 ml/runs/param_model_per_target/
+python ml/evaluate_param_model.py   # reports/param_model_evaluation.json
 ```
 
-파일 해시, 입출력 시그니처, 검증 벡터 3개, 점 순서 무관성, **축 순서 오용**까지 5개를 검사합니다.
-마지막 것은 `(batch, 3, N)`으로 잘못 넣었을 때 **에러 없이** `Mass −2.4kg`가 나오는 걸 시연합니다.
-
-전달할 때 ONNX 파일만 보내지 마세요 — 샘플링 규약(면적 가중 1,024점, mm)과 사용 한계가
-함께 가야 합니다. 자세한 절차는 [POINTNET_MODEL.md](../docs/POINTNET_MODEL.md) 9절에 있습니다.
-
-> **`Max_Distance`를 랭킹에 쓰지 마세요.** 예측 상한이 19,824m인데 데이터셋 최대는 40,905m입니다.
-> Pareto knee design 20015(40,905m)를 1,400m로 예측합니다. 6절 참고.
-
-## 환경
-
-이 데스크탑에는 원래 Python도 Node.js도 없었습니다(`python.exe`는 Microsoft Store 스텁).
-아래는 실제로 실행한 설치 절차입니다.
-
-```powershell
-winget install --id Python.Python.3.12 -e --accept-source-agreements --accept-package-agreements
-winget install --id OpenJS.NodeJS.LTS  -e --accept-source-agreements --accept-package-agreements
-```
-
-### `python` 대신 `py`를 쓰는 이유
-
-사용자 PATH 최상단이 `C:\Users\<user>\AppData\Local\Microsoft\WindowsApps`이고,
-python.org 설치 프로그램은 PATH 뒤에 경로를 추가합니다. 그래서 설치 후에도 맨 이름 `python`을 치면
-0바이트 Store 스텁이 먼저 잡힐 수 있습니다.
-
-**`py` 런처(System32에 설치, 머신 PATH)와 venv의 명시 경로만 사용하세요.**
-
-```powershell
-py -3.12 -m venv ml\.venv
-ml\.venv\Scripts\python.exe -m pip install --upgrade pip
-ml\.venv\Scripts\python.exe -m pip install -r ml\requirements.txt
-```
-
-### PyTorch
-
-CUDA 휠은 별도 인덱스가 필요해 `requirements.txt`에 넣지 않았습니다.
-
-```powershell
-ml\.venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cu126
-```
-
-RTX 3070 + 드라이버 560.94 기준으로 cu126 휠을 씁니다. `torch.cuda.is_available()`이 `False`면
-cu124로 내려서 재시도하세요.
-
-```powershell
-ml\.venv\Scripts\python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available())"
-```
-
-## 데이터 위치
-
-`AircraftVerse_1/2/3`이 이 레포와 형제 위치에 있으면 인자 없이 동작합니다.
-
-```
-drone/
-├── AircraftVerse_1/   9,238 designs
-├── AircraftVerse_2/   9,238
-├── AircraftVerse_3/   9,238
-└── drone-craft/       ← 이 레포
-```
-
-다른 곳에 있다면 `--data-root`를 세 번 지정하세요.
-
-```powershell
-ml\.venv\Scripts\python.exe ml\verify_stage0.py --data-root D:\av1 --data-root D:\av2 --data-root D:\av3
-```
-
-## 0단계 — 검증
-
-```powershell
-ml\.venv\Scripts\python.exe ml\verify_stage0.py
-```
-
-27,714개를 전수 순회하며 1~2분 안에 끝납니다. 결과는 `ml/reports/stage0_report.json`에 저장되고
-종료 코드는 통과 시 0, 실패 시 1입니다.
-
-검증 항목:
-
-| 항목 | 내용 |
-| --- | --- |
-| 파일 무결성 | 설계마다 `cadfile.stl`, `output.json`, `design_low_level.json`, `pointCloud.npy`, `trims.npy` 존재 |
-| NPY 스키마 | 헤더를 직접 파싱해 `pointCloud.npy` = `<f4 (100,3)`, `trims.npy` = `<f8 (51,12)` 단언 |
-| ID 유일성 | 세 파트에 걸쳐 design ID 중복 여부. split 누수 방지에 필요 |
-| 타깃 유효성 | `isfinite(v) and v > 0` 규칙으로 HANDOFF의 유효 설계 수 재현 |
-| trim 열 순서 | design 17297의 thrust/distance/drag를 HANDOFF 검증값과 대조 |
-| STL | 로드 가능 여부, 단위(mm/m), `sample_surface` 동작 |
-| CUDA | `torch.cuda.is_available()` |
-
-### 주의
-
-- `corpus_dic`은 신뢰되지 않은 Python pickle입니다. **`pickle.load`를 호출하지 마세요.**
-  이 폴더의 어떤 스크립트도 건드리지 않습니다.
-- `Geom.stp`는 파싱하지 않습니다. 용량 대부분을 차지하지만 이번 작업 범위 밖입니다.
-- `ml/data/`, `*.npz`, `*.pt`, `ml/.venv/`는 `.gitignore`에 있습니다.
-  **340MB `.npz`를 커밋하지 마세요.** `ml/reports/`는 작으므로 커밋합니다.
-
-## 1단계 — 타깃 추출과 split
-
-```powershell
-ml\.venv\Scripts\python.exe ml\prepare_targets.py
-```
-
-27,714개의 `output.json`과 `design_low_level.json`을 읽어 약 25초에 끝납니다.
-
-| 산출물 | 내용 |
-| --- | --- |
-| `ml/data/targets.csv` | 27,714행 × 65열. git 제외 |
-| `ml/reports/stage1_report.json` | 요약·baseline·근거. 커밋 |
-
-### 학습 필터는 `*_valid`가 아니라 `trainable`입니다
-
-`*_valid`는 `isfinite(v) and v > 0` 규칙만 적용합니다. 필요조건이지 충분조건이 아닙니다.
-`Mass`는 27,714개 전부 이 규칙을 통과하지만, **11개 설계가 60,000~240,000 kg**을 보고합니다.
-정상 집단의 최대값은 35.3 kg이고 그다음 값이 60,044 kg이라 사이 어디를 끊어도 같습니다.
-
-`prepare_targets.py`의 `trainable(row, key)`가 유일한 정의입니다. 2~4단계는 이것으로 거르세요.
-`mass_plausible` 열이 CSV에 있고, 11개는 삭제하지 않고 표시만 해두었습니다 (리포트에 ID 나열).
-
-### split은 design이 아니라 family 단위입니다
-
-`design_low_level.json`의 `name`은 `design_<n>_<uuid>_<variant>` 형식입니다.
-**8,084개 family가 `dw`/`dw_dl` 쌍을 가지며, 이는 전체의 58.3%(16,168개)입니다.**
-
-형제는 완전 중복이 아닙니다 — topology·부품·시드는 같고 치수만 다릅니다.
-
-| 타깃 | 형제 간 상대차 중앙값 | p90 |
-| --- | --- | --- |
-| `Mass` | 5.7% | 8.3% |
-| `Max_Distance` | 7.3% | 27.4% |
-| `Hover_Time` | 6.2% | 12.2% |
-
-이 정도면 design 단위로 나눌 때 형제 절반이 train/test를 가로질러 점수가 부풀려집니다.
-그래서 **family 단위로 배정**합니다. 완전 중복(파라미터·부품 바이트 동일)은 0건이므로 exact hash만으로는 못 잡습니다.
-
-배정은 `sha256(salt + family)` 기반이라 **split 파일 없이 어느 기계에서나 동일하게 재현**됩니다.
-비율은 80/10/10이고 실제로는 train 22,187 / val 2,803 / test 2,724가 나옵니다.
-
-### 4단계 baseline
-
-"타깃 평균으로만 예측"이 넘어야 할 바닥입니다. 리포트의 `mean_baseline`에 들어 있습니다.
-
-| 타깃 | train 평균 | test MAE | test RMSE |
-| --- | --- | --- | --- |
-| `Mass` | 7.78 kg | 3.71 | 5.13 |
-| `Max_Distance` | 3,098 m | 2,554 | 3,653 |
-| `Hover_Time` | 175.1 s | 123.0 | 168.1 |
-
-### 디버깅 사다리 1번 타깃
-
-STL 없이 설계 변수에서 바로 뽑았습니다. 전 설계에 존재합니다 (단위 mm).
-
-| 타깃 | min | p50 | max |
-| --- | --- | --- | --- |
-| `fuselage_length` | 84.0 | 180.0 | 559.0 |
-| `fuselage_horz_diameter` | 311.4 | 372.9 | 804.9 |
-| `arm_length_max` | 50.1 | 397.8 | 500.0 |
-| `arm_length_sum` | 50.1 | 753.4 | 7,070.5 |
-
-HANDOFF가 말하는 "전체 span"은 STL bounding box라 2단계에서 함께 기록합니다.
-
-## 2단계 — point cloud 샘플링
-
-```powershell
-ml\.venv\Scripts\python.exe ml\prepare_pointclouds.py
-ml\.venv\Scripts\python.exe ml\prepare_pointclouds.py --limit 200   # 스모크 테스트
-```
-
-i9-10900KF 18워커에서 **2.7분**(173 designs/s), 실패 0건. 산출물은 `ml/data/pointclouds.npz` **333MB**(git 제외).
-
-### 배열
-
-| 키 | shape | 단위 | 비고 |
-| --- | --- | --- | --- |
-| `points` | (27714, 1024, 3) f4 | 정규화 | 단위구 내부 |
-| `scale` | (27714,) f4 | mm | **버리면 안 되는 크기 정보** |
-| `centroid` | (27714, 3) f4 | mm | |
-| `bbox_min` / `bbox_max` / `extents` | (27714, 3) f4 | mm | 메시 bounding box |
-| `span` | (27714,) f4 | mm | `extents.max()`. 사다리 1번 타깃 |
-| `targets` | (27714, 5) f4 | | 학습 불가면 `NaN` |
-| `geometry` | (27714, 5) f4 | mm | 설계 변수 기하량 |
-| `split` / `family` | (27714,) str | | 1단계와 동일 |
-| `n_propeller` / `has_wing` / `n_faces` / `area` | (27714,) | | |
-
-```python
-raw_mm = points * scale[:, None, None] + centroid[:, None, :]   # 완전 복원
-```
-
-**`targets`의 `NaN`이 학습 필터입니다.** `trainable` 규칙(유효성 + Mass 물리 타당성)을 이미 적용해
-`NaN`으로 채웠으므로, 손실 계산 시 `NaN` 마스킹만 하면 됩니다.
-
-### 검증 6항목
-
-전부 통과했습니다. `ml/reports/stage2_report.json`에 있습니다.
-
-`all_designs_sampled` · `points_finite` · `denormalises_into_bbox` ·
-`normalised_within_unit_cube` · `scale_positive` · `split_matches_stage1`
-
-0단계에서 trimesh로 따로 잰 design 17297의 STL extents `[1111.242, 1538.105, 306.82]`와
-2단계 `extents`가 소수점까지 일치합니다.
-
-| | min | p50 | max |
-| --- | --- | --- | --- |
-| `scale` (mm) | 165.7 | 594.3 | 3,027.7 |
-| `span` (mm) | 332.4 | 1,159.8 | 5,957.8 |
-
-## Baseline — 3·4단계가 넘어야 할 선
-
-```powershell
-ml\.venv\Scripts\python.exe ml\geometry_baseline.py
-```
-
-HANDOFF는 4단계 baseline을 "타깃 평균 예측"으로 정의합니다. 그 바닥은 너무 낮습니다.
-다만 **대체 기준을 잘못 잡기 쉽습니다.** 이 스크립트는 서로 다른 질문에 답하는 두 기준을 냅니다.
-
-| 기준 | 피처 | 답하는 질문 |
-| --- | --- | --- |
-| **`mesh`** (6) | bbox extents, span, scale, 표면적 | 메시를 훑어서 잴 수 있는 것만. **모델과 동일 정보** |
-| `mesh+cad` (11) | 위 + 동체 길이·직경, arm 길이 | 위 + `design_low_level.json`의 **CAD 생성 파라미터** |
-
-모든 R²는 **원래 단위(kg, m, s)에서 채점**했습니다. val / test 둘 다 리포트에 있습니다.
-
-| 타깃 (test) | n | 평균 | **`mesh`** | `mesh+cad` | mesh MAE | mesh+cad MAE |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Mass` | 2,723 | 0.000 | **0.397** | 0.919 | 2.73 | 1.06 |
-| `Max_Distance` | 1,083 | 0.000 | **0.046** | 0.535 | 2,472 | 1,385 |
-| `Hover_Time` | 804 | 0.000 | **0.017** | 0.598 | 121.2 | 69.6 |
-| `Max_Speed` | 1,083 | 0.000 | **0.178** | 0.228 | 7.53 | 7.29 |
-| `Power_MFD` | 1,090 | 0.000 | **0.203** | 0.438 | 814.8 | 655.4 |
-
-### `mesh+cad`를 합격선으로 쓰지 마세요
-
-`mesh+cad`의 힘은 **거의 전부 CAD 파라미터에서** 나옵니다 (`Mass` 0.40 → 0.92).
-그 5개는 메시에서 잰 값이 아니라 형상을 **생성한** 설계 변수이고, JSON에서 읽은 정답입니다.
-모델은 그걸 형상에서 추론한 다음에야 쓸 수 있으므로, 나란히 놓으면 공정하지 않습니다.
-
-**point cloud 모델은 `mesh` 열과 비교하세요.** 같은 정보를 받은 기준선입니다.
-`mesh+cad`는 합격선이 아니라 **지향점**입니다.
-
-실제로 이 구분이 판정을 뒤집습니다. 3단계 PointNet의 `Mass` val R²는 0.852인데,
-`mesh+cad` 0.923과 비교하면 "실패"로 보이고 `mesh` 0.447과 비교하면 거의 두 배입니다.
-더 직접적으로, `fuselage_vert_diameter`를 `mesh` 스칼라로 맞히면 R² 0.236인 반면
-PointNet은 0.885입니다 — 모델은 형상에서 CAD 파라미터를 잘 복원하고 있습니다.
-
-### 타깃을 로그 변환하지 마세요
-
-`log 적합` 열은 log 공간에서 적합한 뒤 `exp`로 되돌려 **원래 단위에서 채점**한 값입니다.
-**모든 타깃에서 raw 적합에 집니다.** `Max_Distance`는 −17.4로 완전히 붕괴하는데,
-p50 1,677m에 max 40,905m(24배)라 `exp`가 꼬리의 오차를 증폭시키기 때문입니다.
-
-리포트 JSON에는 `geometry_baseline_log_space_NOT_COMPARABLE` 항목도 있습니다.
-이건 log 공간에서 채점한 값이라 **분모가 다릅니다.** 위 표와 나란히 놓고 비교하면 안 됩니다
-(그렇게 비교하면 log가 이기는 것처럼 보입니다).
-
-꼬리 문제 자체는 남습니다. 해법은 타깃 변환이 아니라 **손실 변경**입니다 —
-타깃을 z-score 정규화하고 Huber loss를 쓰면 채점 공간을 유지한 채 꼬리 지배를 막습니다.
-
-`mesh+cad`의 `Mass` 0.919를 끌어올리는 건 span이 아니라 **동체 크기**입니다 —
-`fuselage_vert_diameter`와 질량의 상관이 0.881이고 span은 0.18에 불과합니다.
-배터리를 담는 동체가 질량을 지배합니다.
-
-`mesh+cad`의 `Max_Distance` 0.54 / `Hover_Time` 0.60은 HANDOFF 핵심 발견 3번이 예고한
-0.4~0.6 구간과 일치합니다. 단, 이건 **설계 변수를 알 때**의 수치입니다.
-형상만 주어졌을 때의 선형 기준(`mesh`)은 0.05 / 0.02로 훨씬 낮습니다.
-
-## trims.npy 열 순서
-
-파일에 열 이름이 없습니다. 아래 순서의 유일한 근거는
-[scripts/prepare-aircraftverse.mjs:33-46](../scripts/prepare-aircraftverse.mjs#L33-L46)이며,
-`verify_stage0.py`의 check D가 실측으로 확인합니다.
-
-```
-0 distance   1 flightTime  2 pitch    3 maxUc
-4 thrust     5 lift        6 drag     7 current
-8 power      9 motorCurrentRatio  10 motorPowerRatio  11 batteryCurrentRatio
-```
-
-행 인덱스는 속도(m/s) 0–50입니다. 모든 열이 0이거나 non-finite인 행은 무효이며,
-이는 계산 실패가 아니라 그 속도에서 균형해가 없다는 뜻입니다.
-
-## 값 0의 취급
-
-성능값 0은 물리량 0이 아니라 해석 실패 또는 비실현 상태입니다.
-유효성 규칙은 프론트엔드의 `isAvailableMetric`([lib/aerotwin-types.ts](../lib/aerotwin-types.ts))과
-동일하게 `isfinite(v) and v > 0`으로 맞춥니다. **0을 학습시키지 마세요.**
+피처 이름·순서와 타깃 순서, 백엔드가 고쳐야 할 항목은
+`reports/param_model_contract.json`에 있다. 파생 피처 `discLoadingProxy`와
+`battWhApprox`는 프롭·배터리를 바꾸면 **함께 다시 계산해야 한다.** 값이 남아 있으면
+모순된 입력이 되지만 오류로 잡히지 않는다.
+
+### 랭킹에 쓰면 안 되는 출력
+
+두 모델 모두 상위 분위를 과소예측한다. `power` −73%, `maxSpeed` −50%,
+`maxDistance` −41%다. 표시는 괜찮지만 정렬·탐색에 쓰면 퇴보한다. `mass`(+2%)와
+`hoverTime`만 안전하다. 상세는 `reports/param_model_evaluation.json`의
+`shrinkage_watch`.
+
+### 기각된 시도
+
+`check_hover_anchor.py` — 예측 Mass로 호버 추력을 앵커링하면 thrust MAE가
+3.22 → 6.52 N으로 악화된다. 실제 Mass면 1.25 N이므로 개념은 맞지만 Mass 모델
+오차가 더 커서 순손실이다. 다시 시도하지 않도록 재현 가능하게 남겼다.

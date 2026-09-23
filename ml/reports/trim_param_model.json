@@ -1,0 +1,159 @@
+{
+  "model": "trim-param-v1",
+  "purpose": "Fallback for designs the anchored model refuses. backend/app/performance.py returns 422 model_input_unavailable for anything outside its 6,409 eligible designs, and for every edited design, because the five anchor values do not exist until a CAD trim analysis has been run.",
+  "created_at": "2026-09-24T01:45:40+0900",
+  "task": "conditional_speed_to_trim_regression, without baseline anchors",
+  "targets": [
+    "drag",
+    "lift",
+    "thrust",
+    "pitch",
+    "power",
+    "current",
+    "flightTime",
+    "distance"
+  ],
+  "feature_names": [
+    "speed",
+    "armLength",
+    "battCRate",
+    "battMah",
+    "battParallel",
+    "battSeries",
+    "battWhApprox",
+    "discLoadingProxy",
+    "fuselageHorizontalDiameter",
+    "fuselageLength",
+    "fuselageVerticalDiameter",
+    "hubArity",
+    "hubSymmetric",
+    "maxArmLength",
+    "meanArmLength",
+    "meanWingChord",
+    "motorKv",
+    "numPropellers",
+    "numWings",
+    "parameterCount",
+    "propDiameterIn",
+    "propPitchIn",
+    "totalWingSpan"
+  ],
+  "dropped_anchor_features": [
+    "dragAt20",
+    "powerAt20",
+    "powerAt0",
+    "thrustAt0",
+    "currentAt0"
+  ],
+  "why_anchors_are_dropped": "dragAt20, powerAt20, powerAt0, thrustAt0 and currentAt0 are measured trim values from the design's own table. Feeding them back makes the task interpolation between known points, which is why the anchored model reaches 0.99, and why it cannot serve a design that has no table yet.",
+  "split": {
+    "source": "ml/sources/dongha/20260920_160522/split_design_ids.json",
+    "note": "Dongha's exact split, so the numbers compare directly.",
+    "designs": {
+      "train": 6793,
+      "val": 820,
+      "test": 879
+    },
+    "rows": {
+      "train": 132500,
+      "val": 15978,
+      "test": 17647
+    }
+  },
+  "per_target": {
+    "drag": {
+      "val_r2": 0.974603,
+      "test_r2": 0.975296,
+      "test_mae": 0.7783,
+      "best_iteration": 188,
+      "rows": {
+        "train": 131850,
+        "test": 17597
+      },
+      "anchored_model_val_r2": 0.9901,
+      "cost_of_dropping_anchors": -0.015497
+    },
+    "thrust": {
+      "val_r2": 0.946674,
+      "test_r2": 0.93829,
+      "test_mae": 3.5451,
+      "best_iteration": 526,
+      "rows": {
+        "train": 132500,
+        "test": 17647
+      },
+      "anchored_model_val_r2": 0.9944,
+      "cost_of_dropping_anchors": -0.047726
+    },
+    "pitch": {
+      "val_r2": 0.523192,
+      "test_r2": 0.501055,
+      "test_mae": 3.1691,
+      "best_iteration": 192,
+      "rows": {
+        "train": 132500,
+        "test": 17647
+      },
+      "anchored_model_val_r2": 0.4721,
+      "cost_of_dropping_anchors": 0.051092
+    },
+    "power": {
+      "val_r2": 0.876318,
+      "test_r2": 0.831839,
+      "test_mae": 227.529,
+      "best_iteration": 150,
+      "rows": {
+        "train": 132500,
+        "test": 17647
+      },
+      "anchored_model_val_r2": 0.9691,
+      "cost_of_dropping_anchors": -0.092782
+    },
+    "current": {
+      "val_r2": 0.833555,
+      "test_r2": 0.840999,
+      "test_mae": 16.022,
+      "best_iteration": 168,
+      "rows": {
+        "train": 132500,
+        "test": 17647
+      },
+      "anchored_model_val_r2": 0.971,
+      "cost_of_dropping_anchors": -0.137445
+    },
+    "flightTime": {
+      "val_r2": 0.922058,
+      "test_r2": 0.890418,
+      "test_mae": 27.0324,
+      "best_iteration": 433,
+      "rows": {
+        "train": 132500,
+        "test": 17647
+      },
+      "anchored_model_val_r2": 0.9902,
+      "cost_of_dropping_anchors": -0.068142
+    }
+  },
+  "runtime": {
+    "library": "xgboost",
+    "version": "2.1.1",
+    "format": "native json"
+  },
+  "files": {
+    "drag": "ml/runs/trim_param/drag.json",
+    "lift": "ml/runs/trim_param/lift.json",
+    "thrust": "ml/runs/trim_param/thrust.json",
+    "pitch": "ml/runs/trim_param/pitch.json",
+    "power": "ml/runs/trim_param/power.json",
+    "current": "ml/runs/trim_param/current.json",
+    "flightTime": "ml/runs/trim_param/flightTime.json",
+    "distance": "ml/runs/trim_param/distance.json"
+  },
+  "source": "ml\\data\\trims.npz",
+  "targets_not_retrained": [
+    "lift",
+    "distance"
+  ],
+  "max_depth": 8,
+  "elapsed_seconds": 13.2
+}

@@ -139,7 +139,15 @@ def iter_design_dirs(root: Path):
 
 
 def default_roots() -> list[Path]:
-    """AircraftVerse_1/2/3 as siblings of the repo, per docs/HANDOFF.md."""
+    """Where AircraftVerse_1/2/3 live, preferring the in-repo location.
+
+    scripts/prepare-aircraftverse.mjs looks in `data/raw` first and falls back
+    to the repo's parent, and `.gitignore` excludes `/data/`. This mirrors that
+    order so both pipelines read the same tree.
+    """
+    inside = [REPO_ROOT / "data" / "raw" / f"AircraftVerse_{n}" for n in (1, 2, 3)]
+    if all(path.is_dir() for path in inside):
+        return inside
     return [REPO_ROOT.parent / f"AircraftVerse_{n}" for n in (1, 2, 3)]
 
 

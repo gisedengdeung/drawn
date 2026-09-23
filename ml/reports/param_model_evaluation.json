@@ -1,0 +1,457 @@
+{
+  "model": "param-performance-v1",
+  "shape": "B_per_target",
+  "evaluated_at": "2026-09-20T22:29:27+0900",
+  "note": "Test split read once, after the shape choice and hyperparameters were fixed on validation.",
+  "scoring_rule": "R2 in the raw unit over each target's valid test rows, referenced to the mean of those rows. A KPI of 0 is a failed analysis and is excluded.",
+  "split_rule": "sha256('aircraftverse-pointcloud-v1:' + family) -> 80/10/10, by design family, identical to ml/prepare_targets.py so scores stay comparable with the point cloud models.",
+  "feature_names_alphabetical": [
+    "armLength",
+    "battCRate",
+    "battMah",
+    "battParallel",
+    "battSeries",
+    "battWhApprox",
+    "discLoadingProxy",
+    "fuselageHorizontalDiameter",
+    "fuselageLength",
+    "fuselageVerticalDiameter",
+    "hubArity",
+    "hubSymmetric",
+    "maxArmLength",
+    "meanArmLength",
+    "meanWingChord",
+    "motorKv",
+    "numPropellers",
+    "numWings",
+    "parameterCount",
+    "propDiameterIn",
+    "propPitchIn",
+    "totalWingSpan"
+  ],
+  "targets": {
+    "maxDistance": {
+      "response_field": "max_distance_m",
+      "unit": "m",
+      "rows": {
+        "train": 8604,
+        "val": 1050,
+        "test": 1083
+      },
+      "test": {
+        "r2": 0.750216,
+        "mae": 759.2878,
+        "rmse": 1825.66,
+        "median_abs_error": 284.5173,
+        "median_relative_error": 0.1603
+      },
+      "val_r2": 0.80174,
+      "baselines": {
+        "train_mean_r2": -0.000304,
+        "shape_a_multi_output_r2": 0.703118
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          4.6,
+          0.8,
+          -0.4,
+          -0.7,
+          0.1,
+          -2.3,
+          -4.2,
+          -5.4,
+          -10.8,
+          -40.7
+        ],
+        "actual_max": 40904.9414,
+        "predicted_max": 19757.8594,
+        "predicted_max_over_actual_max": 0.483
+      },
+      "prediction_interval": {
+        "0.5": {
+          "low_multiplier": 0.8376,
+          "high_multiplier": 1.1745,
+          "nominal": 0.5,
+          "empirical_on_test": 0.5199
+        },
+        "0.8": {
+          "low_multiplier": 0.5367,
+          "high_multiplier": 1.4015,
+          "nominal": 0.8,
+          "empirical_on_test": 0.8006
+        },
+        "0.9": {
+          "low_multiplier": 0.3234,
+          "high_multiplier": 1.6037,
+          "nominal": 0.9,
+          "empirical_on_test": 0.9104
+        }
+      },
+      "point_cloud_model": {
+        "test_r2": 0.6233,
+        "delta": 0.126916,
+        "note": "same test split, so directly comparable"
+      }
+    },
+    "hoverTime": {
+      "response_field": "hover_time_s",
+      "unit": "s",
+      "rows": {
+        "train": 6247,
+        "val": 738,
+        "test": 804
+      },
+      "test": {
+        "r2": 0.916179,
+        "mae": 27.4869,
+        "rmse": 48.6629,
+        "median_abs_error": 14.5708,
+        "median_relative_error": 0.1279
+      },
+      "val_r2": 0.933493,
+      "baselines": {
+        "train_mean_r2": -9.5e-05,
+        "shape_a_multi_output_r2": 0.874761
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          3.7,
+          1.9,
+          -0.6,
+          -0.9,
+          0.1,
+          6.1,
+          -1.2,
+          -6.7,
+          -3.1,
+          -29.1
+        ],
+        "actual_max": 1139.0769,
+        "predicted_max": 1125.5575,
+        "predicted_max_over_actual_max": 0.9881
+      },
+      "prediction_interval": {
+        "0.5": {
+          "low_multiplier": 0.8528,
+          "high_multiplier": 1.0992,
+          "nominal": 0.5,
+          "empirical_on_test": 0.4813
+        },
+        "0.8": {
+          "low_multiplier": 0.7348,
+          "high_multiplier": 1.238,
+          "nominal": 0.8,
+          "empirical_on_test": 0.7749
+        },
+        "0.9": {
+          "low_multiplier": 0.6268,
+          "high_multiplier": 1.3212,
+          "nominal": 0.9,
+          "empirical_on_test": 0.8744
+        }
+      }
+    },
+    "maxSpeed": {
+      "response_field": "max_speed_mps",
+      "unit": "m/s",
+      "rows": {
+        "train": 8604,
+        "val": 1050,
+        "test": 1083
+      },
+      "test": {
+        "r2": 0.449486,
+        "mae": 5.8696,
+        "rmse": 7.6872,
+        "median_abs_error": 4.5517,
+        "median_relative_error": 0.1758
+      },
+      "val_r2": 0.368488,
+      "baselines": {
+        "train_mean_r2": -0.007576,
+        "shape_a_multi_output_r2": 0.192625
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          88.3,
+          29.7,
+          9.8,
+          7.5,
+          -1.9,
+          -8.6,
+          -14.8,
+          -28.7,
+          -41.9,
+          -49.6
+        ],
+        "actual_max": 50.0,
+        "predicted_max": 43.5143,
+        "predicted_max_over_actual_max": 0.8703
+      },
+      "prediction_interval": {
+        "0.5": {
+          "low_multiplier": 0.8279,
+          "high_multiplier": 1.19,
+          "nominal": 0.5,
+          "empirical_on_test": 0.4829
+        },
+        "0.8": {
+          "low_multiplier": 0.5297,
+          "high_multiplier": 1.4023,
+          "nominal": 0.8,
+          "empirical_on_test": 0.8042
+        },
+        "0.9": {
+          "low_multiplier": 0.3395,
+          "high_multiplier": 1.5714,
+          "nominal": 0.9,
+          "empirical_on_test": 0.9012
+        }
+      }
+    },
+    "power": {
+      "response_field": "power_w",
+      "unit": "W",
+      "rows": {
+        "train": 8692,
+        "val": 1054,
+        "test": 1090
+      },
+      "test": {
+        "r2": 0.641883,
+        "mae": 457.5818,
+        "rmse": 793.0675,
+        "median_abs_error": 269.6158,
+        "median_relative_error": 0.187
+      },
+      "val_r2": 0.705599,
+      "baselines": {
+        "train_mean_r2": -0.0,
+        "shape_a_multi_output_r2": 0.585806
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          11.3,
+          9.4,
+          7.9,
+          6.1,
+          9.6,
+          5.0,
+          -3.2,
+          -6.4,
+          -11.0,
+          -73.0
+        ],
+        "actual_max": 10224.25,
+        "predicted_max": 9654.1191,
+        "predicted_max_over_actual_max": 0.9442
+      },
+      "prediction_interval": {
+        "0.5": {
+          "low_multiplier": 0.7721,
+          "high_multiplier": 1.1448,
+          "nominal": 0.5,
+          "empirical_on_test": 0.5138
+        },
+        "0.8": {
+          "low_multiplier": 0.6371,
+          "high_multiplier": 1.3613,
+          "nominal": 0.8,
+          "empirical_on_test": 0.8064
+        },
+        "0.9": {
+          "low_multiplier": 0.5655,
+          "high_multiplier": 1.5318,
+          "nominal": 0.9,
+          "empirical_on_test": 0.9055
+        }
+      }
+    },
+    "dragAt20": {
+      "response_field": "drag_at_20_n",
+      "unit": "N",
+      "rows": {
+        "train": 3768,
+        "val": 459,
+        "test": 491
+      },
+      "test": {
+        "r2": 0.525196,
+        "mae": 1.0284,
+        "rmse": 2.2265,
+        "median_abs_error": 0.5783,
+        "median_relative_error": 0.0429
+      },
+      "val_r2": 0.63114,
+      "baselines": {
+        "train_mean_r2": -0.004824,
+        "shape_a_multi_output_r2": 0.47309
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          10.0,
+          14.4,
+          9.1,
+          5.1,
+          5.4,
+          3.7,
+          2.0,
+          -11.7,
+          -20.3,
+          -39.2
+        ],
+        "actual_max": 56.17,
+        "predicted_max": 34.1535,
+        "predicted_max_over_actual_max": 0.608
+      },
+      "prediction_interval": {
+        "0.5": {
+          "low_multiplier": 0.9473,
+          "high_multiplier": 1.0286,
+          "nominal": 0.5,
+          "empirical_on_test": 0.4521
+        },
+        "0.8": {
+          "low_multiplier": 0.8789,
+          "high_multiplier": 1.0747,
+          "nominal": 0.8,
+          "empirical_on_test": 0.7902
+        },
+        "0.9": {
+          "low_multiplier": 0.8443,
+          "high_multiplier": 1.107,
+          "nominal": 0.9,
+          "empirical_on_test": 0.8941
+        }
+      }
+    },
+    "mass": {
+      "response_field": "mass_kg",
+      "unit": "kg",
+      "rows": {
+        "train": 22177,
+        "val": 2803,
+        "test": 2723
+      },
+      "test": {
+        "r2": 0.990298,
+        "mae": 0.3407,
+        "rmse": 0.5048,
+        "median_abs_error": 0.2233,
+        "median_relative_error": 0.0339
+      },
+      "val_r2": 0.990179,
+      "baselines": {
+        "train_mean_r2": -0.00053,
+        "shape_a_multi_output_r2": 0.943701
+      },
+      "calibration_test": {
+        "deciles_pct_of_iqr": [
+          2.3,
+          1.2,
+          0.0,
+          -0.3,
+          -0.5,
+          0.7,
+          -1.2,
+          0.3,
+          -3.7,
+          1.6
+        ],
+        "actual_max": 30.2962,
+        "predicted_max": 29.8325,
+        "predicted_max_over_actual_max": 0.9847
+      },
+      "prediction_interval": {
+        "0.5": {
+          "low_multiplier": 0.9632,
+          "high_multiplier": 1.0335,
+          "nominal": 0.5,
+          "empirical_on_test": 0.5068
+        },
+        "0.8": {
+          "low_multiplier": 0.9155,
+          "high_multiplier": 1.0955,
+          "nominal": 0.8,
+          "empirical_on_test": 0.8278
+        },
+        "0.9": {
+          "low_multiplier": 0.8807,
+          "high_multiplier": 1.1406,
+          "nominal": 0.9,
+          "empirical_on_test": 0.9141
+        }
+      },
+      "point_cloud_model": {
+        "test_r2": 0.8792,
+        "delta": 0.111098,
+        "note": "same test split, so directly comparable"
+      }
+    }
+  },
+  "shrinkage_watch": {
+    "why": "Both point cloud models under-predicted the top decile enough that ranking designs by their output was unsafe. Check this before any Optimizer or search feature uses these numbers.",
+    "per_target": {
+      "maxDistance": {
+        "top_decile_bias_pct_of_iqr": -40.7,
+        "predicted_max_over_actual_max": 0.483
+      },
+      "hoverTime": {
+        "top_decile_bias_pct_of_iqr": -29.1,
+        "predicted_max_over_actual_max": 0.9881
+      },
+      "maxSpeed": {
+        "top_decile_bias_pct_of_iqr": -49.6,
+        "predicted_max_over_actual_max": 0.8703
+      },
+      "power": {
+        "top_decile_bias_pct_of_iqr": -73.0,
+        "predicted_max_over_actual_max": 0.9442
+      },
+      "dragAt20": {
+        "top_decile_bias_pct_of_iqr": -39.2,
+        "predicted_max_over_actual_max": 0.608
+      },
+      "mass": {
+        "top_decile_bias_pct_of_iqr": 1.6,
+        "predicted_max_over_actual_max": 0.9847
+      }
+    }
+  },
+  "known_issues": [
+    {
+      "id": "maxDistance_top_decile_shrinkage",
+      "severity": "blocker_for_ranking",
+      "detail": "maxDistance under-predicts its top decile by 41% of the IQR, so it must not be used to rank or search designs."
+    },
+    {
+      "id": "hoverTime_top_decile_shrinkage",
+      "severity": "blocker_for_ranking",
+      "detail": "hoverTime under-predicts its top decile by 29% of the IQR, so it must not be used to rank or search designs."
+    },
+    {
+      "id": "maxSpeed_weak",
+      "severity": "reporting",
+      "detail": "maxSpeed reaches only R2 0.449 on test. Report it as a rough indication or leave it out of the UI."
+    },
+    {
+      "id": "maxSpeed_top_decile_shrinkage",
+      "severity": "blocker_for_ranking",
+      "detail": "maxSpeed under-predicts its top decile by 50% of the IQR, so it must not be used to rank or search designs."
+    },
+    {
+      "id": "power_top_decile_shrinkage",
+      "severity": "blocker_for_ranking",
+      "detail": "power under-predicts its top decile by 73% of the IQR, so it must not be used to rank or search designs."
+    },
+    {
+      "id": "dragAt20_top_decile_shrinkage",
+      "severity": "blocker_for_ranking",
+      "detail": "dragAt20 under-predicts its top decile by 39% of the IQR, so it must not be used to rank or search designs."
+    }
+  ],
+  "data_sources": [
+    "public/data/design-index.json",
+    "public/data/design-trees/shard-*.json (internal name, for the split)"
+  ]
+}

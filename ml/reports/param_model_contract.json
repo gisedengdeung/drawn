@@ -1,0 +1,176 @@
+{
+  "model_name": "param-performance-v1",
+  "created_at": "2026-09-20T22:29:23+0900",
+  "what_this_is": "Gradient-boosted trees over design parameters, not geometry. It replaces the point cloud path for edited designs, which cannot be predicted from shape because the browser has no CAD mesh - see ml/reports/parametric_gap.json.",
+  "runtime": {
+    "library": "xgboost",
+    "version": "2.1.1",
+    "format": "native json"
+  },
+  "shapes": {
+    "A_multi_output": {
+      "file": "backend/models/performance_model.json",
+      "sha256": "be7842213752ae7a0ebf56a44c393788",
+      "output": "one vector per row, in target_order below",
+      "train_rows": 3357,
+      "note": "what backend/app/model.py expects today"
+    },
+    "B_per_target": {
+      "directory": "ml/runs/param_model_per_target",
+      "files": {
+        "maxDistance": "maxDistance.json",
+        "hoverTime": "hoverTime.json",
+        "maxSpeed": "maxSpeed.json",
+        "power": "power.json",
+        "dragAt20": "dragAt20.json",
+        "mass": "mass.json"
+      },
+      "sha256": {
+        "maxDistance": "041d83533b8c6e7cddd44f8480e9a6f8",
+        "hoverTime": "fc1959d81fccd0ac67e277aeac46e87a",
+        "maxSpeed": "0a887f20f2944b07c165d64557e12232",
+        "power": "34366195a6be3d7e0571a8697a6cbc71",
+        "dragAt20": "272a1d5d6ccfc7f71297bc77db526cd1",
+        "mass": "2d78fca523859b575b9b55337e68a440"
+      },
+      "train_rows": {
+        "maxDistance": 8604,
+        "hoverTime": 6247,
+        "maxSpeed": 8604,
+        "power": 8692,
+        "dragAt20": 3768,
+        "mass": 22177
+      },
+      "note": "needs backend/app/model.py to load and call five boosters"
+    }
+  },
+  "recommended_shape": "B_per_target",
+  "shape_comparison_val": {
+    "maxDistance": {
+      "val_rows": 1050,
+      "shape_a_val_r2": 0.749667,
+      "shape_b_val_r2": 0.803595,
+      "delta": 0.053928,
+      "shape_a_val_r2_on_intersection": 0.965428
+    },
+    "hoverTime": {
+      "val_rows": 738,
+      "shape_a_val_r2": 0.894328,
+      "shape_b_val_r2": 0.93394,
+      "delta": 0.039612,
+      "shape_a_val_r2_on_intersection": 0.909502
+    },
+    "maxSpeed": {
+      "val_rows": 1050,
+      "shape_a_val_r2": 0.053262,
+      "shape_b_val_r2": 0.375395,
+      "delta": 0.322133,
+      "shape_a_val_r2_on_intersection": 0.415528
+    },
+    "power": {
+      "val_rows": 1054,
+      "shape_a_val_r2": 0.576438,
+      "shape_b_val_r2": 0.706546,
+      "delta": 0.130108,
+      "shape_a_val_r2_on_intersection": 0.644105
+    },
+    "dragAt20": {
+      "val_rows": 459,
+      "shape_a_val_r2": 0.600955,
+      "shape_b_val_r2": 0.636003,
+      "delta": 0.035047,
+      "shape_a_val_r2_on_intersection": 0.578829
+    },
+    "mass": {
+      "val_rows": 2803,
+      "shape_a_val_r2": 0.945944,
+      "shape_b_val_r2": 0.990204,
+      "delta": 0.04426,
+      "shape_a_val_r2_on_intersection": 0.959288
+    }
+  },
+  "how_the_shapes_were_compared": "On each target's own valid validation rows, which is the population the deployed model faces. Scoring only on rows where all six analyses succeeded flatters shape A, because that subset is tamer and shape A is trained on exactly it - by that measure shape A led slightly, and by the honest measure shape B leads clearly.",
+  "feature_names_alphabetical": [
+    "armLength",
+    "battCRate",
+    "battMah",
+    "battParallel",
+    "battSeries",
+    "battWhApprox",
+    "discLoadingProxy",
+    "fuselageHorizontalDiameter",
+    "fuselageLength",
+    "fuselageVerticalDiameter",
+    "hubArity",
+    "hubSymmetric",
+    "maxArmLength",
+    "meanArmLength",
+    "meanWingChord",
+    "motorKv",
+    "numPropellers",
+    "numWings",
+    "parameterCount",
+    "propDiameterIn",
+    "propPitchIn",
+    "totalWingSpan"
+  ],
+  "feature_contract": "backend/app/model.py builds its DMatrix from sorted(features.keys()), so the caller must send exactly these names. XGBoost validates the names and raises on a mismatch rather than scrambling columns.",
+  "feature_notes": {
+    "units": "lengths in mm, motorKv in rpm/V, propeller sizes in inches, battMah in mAh",
+    "missing_values": "NaN is allowed; xgboost handles it natively",
+    "excluded_on_purpose": {
+      "interferences": "computed by the CAD pipeline, so an edited design in the browser cannot supply it. Training on it would produce a model that cannot be deployed.",
+      "mass": "not an input. It is a target - the user does not know the mass of a design they just edited."
+    }
+  },
+  "target_order": [
+    {
+      "index": 0,
+      "key": "maxDistance",
+      "response_field": "max_distance_m",
+      "unit": "m"
+    },
+    {
+      "index": 1,
+      "key": "hoverTime",
+      "response_field": "hover_time_s",
+      "unit": "s"
+    },
+    {
+      "index": 2,
+      "key": "maxSpeed",
+      "response_field": "max_speed_mps",
+      "unit": "m/s"
+    },
+    {
+      "index": 3,
+      "key": "power",
+      "response_field": "power_w",
+      "unit": "W"
+    },
+    {
+      "index": 4,
+      "key": "dragAt20",
+      "response_field": "drag_at_20_n",
+      "unit": "N"
+    },
+    {
+      "index": 5,
+      "key": "mass",
+      "response_field": "mass_kg",
+      "unit": "kg"
+    }
+  ],
+  "backend_changes_required": [
+    "mass_kg currently returns features.get('mass'); it must come from the model instead, at raw[5] in shape A. The user cannot supply the mass of a design they are still editing.",
+    "If shape B is adopted, load the five boosters from the directory and call each one, instead of a single booster returning a vector.",
+    "No frontend code calls /predict yet on origin/develop."
+  ],
+  "validity_rule": "A KPI of 0 is a failed analysis, not a physical zero, so zero rows are excluded per target. Mass is additionally capped at 50.0 kg because 11 designs report a blown-up analysis.",
+  "split_rule": "sha256('aircraftverse-pointcloud-v1:' + family) -> 80/10/10, by design family, identical to ml/prepare_targets.py so scores stay comparable with the point cloud models.",
+  "data_sources": [
+    "public/data/design-index.json",
+    "public/data/design-trees/shard-*.json (internal name, for the split)"
+  ],
+  "elapsed_seconds": 10.3
+}

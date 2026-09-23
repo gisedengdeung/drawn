@@ -1,0 +1,649 @@
+{
+  "model_version": {
+    "tag": "trim_pointnet_v1",
+    "best_epoch": 97,
+    "best_score": 0.8402921739055664,
+    "selection_rule": "mean_raw_unit_val_R2_train_mean_reference + 0.2 * val_F1_at_0.5",
+    "elapsed_seconds": 489.7755724000017,
+    "test_used_during_training": false,
+    "data_version": {
+      "points_sha256": "9260473514a10ab9b6bb08b95c893d65744f7ac7ddf2789865e3b2e41ce679e2",
+      "trims_sha256": "ed9d1d3dad91bdc652b755450498ea481fa03f889337a2b1e0d36bfed0211b40",
+      "points": "C:\\Dev\\drawn\\drawn\\ml\\data\\pointclouds.npz",
+      "trims": "C:\\Dev\\drawn\\drawn\\ml\\data\\trims.npz"
+    },
+    "onnx": {
+      "trim-encoder-v1.onnx": "9a752edfa111155ae212a6b3570e7805",
+      "trim-head-v1.onnx": "e200dea613b7baa7a2ad4b56d1d02fd4"
+    },
+    "validity_threshold": 0.7899999999999999,
+    "test_designs": 2724,
+    "speeds": 51,
+    "valid_trim_rows": 17647,
+    "total_rows": 138924
+  },
+  "targets": {
+    "pitch": {
+      "val": {
+        "n": 15978,
+        "r2": 0.634122,
+        "mae": 3.1133,
+        "rmse": 7.3401
+      },
+      "test": {
+        "n": 17647,
+        "r2": 0.620771,
+        "mae": 3.1366,
+        "rmse": 7.712,
+        "median_abs_error": 1.3992
+      },
+      "test_speed_gt0": {
+        "n": 16958,
+        "r2": 0.621911,
+        "mae": 3.1401,
+        "rmse": 7.6734,
+        "median_abs_error": 1.4202
+      },
+      "baselines": {
+        "per_speed_mean": 0.402374,
+        "model": 0.620771,
+        "shape_contribution": 0.218397,
+        "note": "per_speed_mean knows only the speed. shape_contribution is what the point cloud added on top of that."
+      },
+      "calibration_test": {
+        "method": "median(predicted) - median(actual) per decile, as % of the actual IQR",
+        "deciles_pct_of_iqr": [
+          24.5,
+          5.9,
+          -0.7,
+          -3.5,
+          -5.3,
+          -5.9,
+          -6.9,
+          -9.4,
+          -8.8,
+          -5.9
+        ],
+        "actual_max": 89.88,
+        "predicted_max": 64.2378,
+        "predicted_max_over_actual_max": 0.7147
+      }
+    },
+    "drag": {
+      "val": {
+        "n": 15978,
+        "r2": 0.948072,
+        "mae": 1.3648,
+        "rmse": 2.4133
+      },
+      "test": {
+        "n": 17597,
+        "r2": 0.951649,
+        "mae": 1.4457,
+        "rmse": 2.5095,
+        "median_abs_error": 0.8773
+      },
+      "test_speed_gt0": {
+        "n": 16909,
+        "r2": 0.950578,
+        "mae": 1.4721,
+        "rmse": 2.5495,
+        "median_abs_error": 0.8935
+      },
+      "baselines": {
+        "per_speed_mean": 0.926013,
+        "model": 0.951649,
+        "shape_contribution": 0.025635,
+        "note": "per_speed_mean knows only the speed. shape_contribution is what the point cloud added on top of that."
+      },
+      "calibration_test": {
+        "method": "median(predicted) - median(actual) per decile, as % of the actual IQR",
+        "deciles_pct_of_iqr": [
+          5.5,
+          8.2,
+          6.9,
+          3.6,
+          2.0,
+          2.3,
+          0.7,
+          -3.5,
+          -8.1,
+          -18.9
+        ],
+        "actual_max": 111.74,
+        "predicted_max": 76.5534,
+        "predicted_max_over_actual_max": 0.6851
+      }
+    },
+    "thrust": {
+      "val": {
+        "n": 15978,
+        "r2": 0.778927,
+        "mae": 7.563,
+        "rmse": 11.815
+      },
+      "test": {
+        "n": 17647,
+        "r2": 0.807636,
+        "mae": 7.3929,
+        "rmse": 11.1549,
+        "median_abs_error": 4.7272
+      },
+      "test_speed_gt0": {
+        "n": 16958,
+        "r2": 0.80818,
+        "mae": 7.4076,
+        "rmse": 11.1795,
+        "median_abs_error": 4.7308
+      },
+      "baselines": {
+        "per_speed_mean": 0.133057,
+        "model": 0.807636,
+        "shape_contribution": 0.674579,
+        "note": "per_speed_mean knows only the speed. shape_contribution is what the point cloud added on top of that."
+      },
+      "calibration_test": {
+        "method": "median(predicted) - median(actual) per decile, as % of the actual IQR",
+        "deciles_pct_of_iqr": [
+          16.5,
+          11.2,
+          4.9,
+          2.9,
+          -0.6,
+          -10.9,
+          -10.3,
+          -13.7,
+          -21.4,
+          -29.5
+        ],
+        "actual_max": 247.21,
+        "predicted_max": 200.0183,
+        "predicted_max_over_actual_max": 0.8091
+      }
+    },
+    "flightTime": {
+      "val": {
+        "n": 15978,
+        "r2": 0.666122,
+        "mae": 60.581,
+        "rmse": 95.8987
+      },
+      "test": {
+        "n": 17647,
+        "r2": 0.688589,
+        "mae": 59.0101,
+        "rmse": 91.5411,
+        "median_abs_error": 39.6936
+      },
+      "test_speed_gt0": {
+        "n": 16958,
+        "r2": 0.688415,
+        "mae": 58.807,
+        "rmse": 91.4411,
+        "median_abs_error": 39.4681
+      },
+      "baselines": {
+        "per_speed_mean": 0.003208,
+        "model": 0.688589,
+        "shape_contribution": 0.685381,
+        "note": "per_speed_mean knows only the speed. shape_contribution is what the point cloud added on top of that."
+      },
+      "calibration_test": {
+        "method": "median(predicted) - median(actual) per decile, as % of the actual IQR",
+        "deciles_pct_of_iqr": [
+          25.4,
+          21.9,
+          19.1,
+          11.3,
+          4.2,
+          -3.4,
+          -4.3,
+          -13.4,
+          -26.1,
+          -75.7
+        ],
+        "actual_max": 1139.08,
+        "predicted_max": 821.5384,
+        "predicted_max_over_actual_max": 0.7212
+      }
+    },
+    "power": {
+      "val": {
+        "n": 15978,
+        "r2": 0.619677,
+        "mae": 326.1164,
+        "rmse": 787.1081
+      },
+      "test": {
+        "n": 17647,
+        "r2": 0.740567,
+        "mae": 294.1226,
+        "rmse": 508.4236,
+        "median_abs_error": 159.7201
+      },
+      "test_speed_gt0": {
+        "n": 16958,
+        "r2": 0.741485,
+        "mae": 295.1306,
+        "rmse": 511.0882,
+        "median_abs_error": 159.5931
+      },
+      "baselines": {
+        "per_speed_mean": 0.348176,
+        "model": 0.740567,
+        "shape_contribution": 0.392391,
+        "note": "per_speed_mean knows only the speed. shape_contribution is what the point cloud added on top of that."
+      },
+      "calibration_test": {
+        "method": "median(predicted) - median(actual) per decile, as % of the actual IQR",
+        "deciles_pct_of_iqr": [
+          10.8,
+          10.7,
+          11.8,
+          7.3,
+          5.2,
+          2.0,
+          0.7,
+          -7.5,
+          -21.3,
+          -48.7
+        ],
+        "actual_max": 9910.6602,
+        "predicted_max": 8204.4713,
+        "predicted_max_over_actual_max": 0.8278
+      }
+    },
+    "current": {
+      "val": {
+        "n": 15978,
+        "r2": 0.669569,
+        "mae": 23.2159,
+        "rmse": 34.9513
+      },
+      "test": {
+        "n": 17647,
+        "r2": 0.683346,
+        "mae": 24.3969,
+        "rmse": 36.7264,
+        "median_abs_error": 15.7693
+      },
+      "test_speed_gt0": {
+        "n": 16958,
+        "r2": 0.683555,
+        "mae": 24.4684,
+        "rmse": 36.8318,
+        "median_abs_error": 15.8487
+      },
+      "baselines": {
+        "per_speed_mean": 0.225728,
+        "model": 0.683346,
+        "shape_contribution": 0.457618,
+        "note": "per_speed_mean knows only the speed. shape_contribution is what the point cloud added on top of that."
+      },
+      "calibration_test": {
+        "method": "median(predicted) - median(actual) per decile, as % of the actual IQR",
+        "deciles_pct_of_iqr": [
+          15.3,
+          12.9,
+          9.0,
+          2.5,
+          1.7,
+          -1.2,
+          -10.8,
+          -21.6,
+          -27.9,
+          -64.8
+        ],
+        "actual_max": 562.63,
+        "predicted_max": 406.6738,
+        "predicted_max_over_actual_max": 0.7228
+      }
+    }
+  },
+  "validity": {
+    "threshold": 0.79,
+    "precision": 0.6163,
+    "recall": 0.7465,
+    "f1": 0.6752,
+    "accuracy": 0.9088,
+    "confusion": {
+      "tp": 13173,
+      "fp": 8200,
+      "fn": 4474,
+      "tn": 113077
+    },
+    "positive_rate": 0.127,
+    "best_threshold_in_sweep": 0.8,
+    "best_f1_in_sweep": 0.6746,
+    "best_possible_f1_any_threshold": 0.6771,
+    "threshold_sweep": [
+      {
+        "threshold": 0.05,
+        "precision": 0.3011,
+        "recall": 0.9699,
+        "f1": 0.4595,
+        "accuracy": 0.7101,
+        "confusion": {
+          "tp": 17115,
+          "fp": 39736,
+          "fn": 532,
+          "tn": 81541
+        }
+      },
+      {
+        "threshold": 0.1,
+        "precision": 0.3399,
+        "recall": 0.957,
+        "f1": 0.5016,
+        "accuracy": 0.7584,
+        "confusion": {
+          "tp": 16889,
+          "fp": 32805,
+          "fn": 758,
+          "tn": 88472
+        }
+      },
+      {
+        "threshold": 0.15,
+        "precision": 0.3675,
+        "recall": 0.9476,
+        "f1": 0.5297,
+        "accuracy": 0.7862,
+        "confusion": {
+          "tp": 16723,
+          "fp": 28777,
+          "fn": 924,
+          "tn": 92500
+        }
+      },
+      {
+        "threshold": 0.2,
+        "precision": 0.3895,
+        "recall": 0.9393,
+        "f1": 0.5507,
+        "accuracy": 0.8053,
+        "confusion": {
+          "tp": 16576,
+          "fp": 25977,
+          "fn": 1071,
+          "tn": 95300
+        }
+      },
+      {
+        "threshold": 0.25,
+        "precision": 0.4095,
+        "recall": 0.9309,
+        "f1": 0.5688,
+        "accuracy": 0.8207,
+        "confusion": {
+          "tp": 16428,
+          "fp": 23693,
+          "fn": 1219,
+          "tn": 97584
+        }
+      },
+      {
+        "threshold": 0.3,
+        "precision": 0.4272,
+        "recall": 0.9206,
+        "f1": 0.5835,
+        "accuracy": 0.8331,
+        "confusion": {
+          "tp": 16245,
+          "fp": 21785,
+          "fn": 1402,
+          "tn": 99492
+        }
+      },
+      {
+        "threshold": 0.35,
+        "precision": 0.4435,
+        "recall": 0.9114,
+        "f1": 0.5967,
+        "accuracy": 0.8435,
+        "confusion": {
+          "tp": 16084,
+          "fp": 20183,
+          "fn": 1563,
+          "tn": 101094
+        }
+      },
+      {
+        "threshold": 0.4,
+        "precision": 0.4585,
+        "recall": 0.9006,
+        "f1": 0.6076,
+        "accuracy": 0.8523,
+        "confusion": {
+          "tp": 15893,
+          "fp": 18770,
+          "fn": 1754,
+          "tn": 102507
+        }
+      },
+      {
+        "threshold": 0.45,
+        "precision": 0.4737,
+        "recall": 0.8892,
+        "f1": 0.6181,
+        "accuracy": 0.8604,
+        "confusion": {
+          "tp": 15692,
+          "fp": 17436,
+          "fn": 1955,
+          "tn": 103841
+        }
+      },
+      {
+        "threshold": 0.5,
+        "precision": 0.4876,
+        "recall": 0.8761,
+        "f1": 0.6265,
+        "accuracy": 0.8673,
+        "confusion": {
+          "tp": 15461,
+          "fp": 16247,
+          "fn": 2186,
+          "tn": 105030
+        }
+      },
+      {
+        "threshold": 0.55,
+        "precision": 0.5039,
+        "recall": 0.8628,
+        "f1": 0.6362,
+        "accuracy": 0.8747,
+        "confusion": {
+          "tp": 15225,
+          "fp": 14992,
+          "fn": 2422,
+          "tn": 106285
+        }
+      },
+      {
+        "threshold": 0.6,
+        "precision": 0.5203,
+        "recall": 0.8473,
+        "f1": 0.6447,
+        "accuracy": 0.8814,
+        "confusion": {
+          "tp": 14952,
+          "fp": 13785,
+          "fn": 2695,
+          "tn": 107492
+        }
+      },
+      {
+        "threshold": 0.65,
+        "precision": 0.54,
+        "recall": 0.8305,
+        "f1": 0.6544,
+        "accuracy": 0.8886,
+        "confusion": {
+          "tp": 14655,
+          "fp": 12486,
+          "fn": 2992,
+          "tn": 108791
+        }
+      },
+      {
+        "threshold": 0.7,
+        "precision": 0.5645,
+        "recall": 0.8098,
+        "f1": 0.6653,
+        "accuracy": 0.8965,
+        "confusion": {
+          "tp": 14291,
+          "fp": 11026,
+          "fn": 3356,
+          "tn": 110251
+        }
+      },
+      {
+        "threshold": 0.75,
+        "precision": 0.5926,
+        "recall": 0.7827,
+        "f1": 0.6745,
+        "accuracy": 0.904,
+        "confusion": {
+          "tp": 13812,
+          "fp": 9495,
+          "fn": 3835,
+          "tn": 111782
+        }
+      },
+      {
+        "threshold": 0.8,
+        "precision": 0.6228,
+        "recall": 0.7359,
+        "f1": 0.6746,
+        "accuracy": 0.9098,
+        "confusion": {
+          "tp": 12987,
+          "fp": 7866,
+          "fn": 4660,
+          "tn": 113411
+        }
+      },
+      {
+        "threshold": 0.85,
+        "precision": 0.6604,
+        "recall": 0.6564,
+        "f1": 0.6584,
+        "accuracy": 0.9135,
+        "confusion": {
+          "tp": 11584,
+          "fp": 5956,
+          "fn": 6063,
+          "tn": 115321
+        }
+      },
+      {
+        "threshold": 0.9,
+        "precision": 0.7321,
+        "recall": 0.5262,
+        "f1": 0.6123,
+        "accuracy": 0.9153,
+        "confusion": {
+          "tp": 9285,
+          "fp": 3398,
+          "fn": 8362,
+          "tn": 117879
+        }
+      },
+      {
+        "threshold": 0.95,
+        "precision": 0.8697,
+        "recall": 0.2761,
+        "f1": 0.4192,
+        "accuracy": 0.9028,
+        "confusion": {
+          "tp": 4873,
+          "fp": 730,
+          "fn": 12774,
+          "tn": 120547
+        }
+      }
+    ],
+    "interval": {
+      "designs_with_valid_interval": 879,
+      "exact_interval_match": 38,
+      "exact_interval_match_pct": 4.3,
+      "no_interval_predicted": 210,
+      "lower_bound_error_median_m_s": 0.0,
+      "upper_bound_error_median_m_s": -1.0,
+      "upper_bound_overpredicted_pct": 41.0,
+      "upper_bound_underpredicted_pct": 52.9,
+      "actual_interval_contiguous_pct": 56.2,
+      "why_it_matters": "The simulator shows one usable speed range per design. Overpredicting the upper bound tells the user a speed the aircraft cannot reach."
+    },
+    "accuracy_warning": "Accuracy is inflated: only 12.7% of rows are valid, so always answering 'cannot fly' already scores about 0.87."
+  },
+  "physics": {
+    "hover_thrust_equals_weight": {
+      "rule": "at 0 m/s, thrust must equal mass * 9.8",
+      "designs": [
+        {
+          "design_id": 20015,
+          "mass_kg": 7.3712,
+          "weight_n": 72.24
+        },
+        {
+          "design_id": 20716,
+          "mass_kg": 4.5388,
+          "weight_n": 44.48
+        },
+        {
+          "design_id": 17297,
+          "mass_kg": 6.9967,
+          "weight_n": 68.57
+        }
+      ],
+      "model_is_already_close": "On showcase designs with a trustworthy hover row the model sits at a median thrust/weight of 1.005, range 0.876-1.072. There is no large physics violation to fix.",
+      "anchoring_was_tested_and_rejected": {
+        "measured_by": "ml/check_hover_anchor.py",
+        "report": "ml/reports/hover_anchor_check.json",
+        "thrust_mae_n": {
+          "no_anchor": 3.22,
+          "anchored_with_predicted_mass": 6.52,
+          "anchored_with_true_mass": 1.25
+        },
+        "verdict": "Anchoring with pointnet-geometry-v1's Mass doubles thrust MAE. The concept works with the true Mass (-61%), but the Mass model's error (median ~10%, +22.8% on design 17297) exceeds the hover error being corrected. Do not ship this post-processing; put the constraint in the training loss or improve the Mass model first."
+      }
+    }
+  },
+  "known_issues": [
+    {
+      "id": "drag_is_mostly_speed",
+      "severity": "reporting",
+      "detail": "drag test R2 is 0.9516, but predicting the per-speed mean already scores 0.9260. The shape contributes only +0.026. Do not present 0.95 as a shape-prediction result."
+    },
+    {
+      "id": "validity_head_too_weak_for_ui",
+      "severity": "blocker",
+      "detail": "Exact interval match is 4.3% and 41% of designs get an upper bound above the true one. Threshold tuning cannot fix this: the best F1 any threshold can reach is 0.6771 against 0.6746 today. Retraining is required."
+    },
+    {
+      "id": "upper_decile_shrinkage",
+      "severity": "blocker_for_ranking",
+      "detail": "Top-decile predictions fall short by 76% of the IQR for flightTime, 65% for current and 49% for power. Predicted maxima reach only 69-83% of the true maxima. Do not rank or search designs with these outputs, the same limit that applies to Max_Distance in POINTNET_MODEL.md section 6."
+    },
+    {
+      "id": "degenerate_hover_rows_in_the_dataset",
+      "severity": "data_quality",
+      "detail": "Some 0 m/s trim rows pass the row-level validity rule but are not physical: drag is null, maxUc sits at exactly 0.5, the motor power ratio is near zero and thrust falls far below weight. Design 20015 reports 19.27 N for a 72.24 N aircraft and design 3803 reports 64.92 N for 91.95 N. Rare in test (1 of 689 hover rows) but they are in the training data, and they make the model look like it violates physics when it does not. Judge hover behaviour only against clean rows."
+    },
+    {
+      "id": "hover_thrust_anchoring_does_not_work",
+      "severity": "closed_negative_result",
+      "detail": "Scaling the thrust curve so thrust at 0 m/s equals the predicted Mass times 9.8 raises thrust MAE from 3.22 N to 6.52 N. With the true Mass it would fall to 1.25 N, so the idea is sound but the Mass estimate is too noisy to carry it. Recorded so it is not retried: ml/check_hover_anchor.py."
+    },
+    {
+      "id": "training_code_not_in_repo",
+      "severity": "process",
+      "detail": "prepare_trims.py, dataset_trim.py, model_trim.py, train_trim.py, evaluate_trim.py and export_onnx_trim.py are not in ml/. Only the run artefacts were handed over, so the result cannot be reproduced or improved from this repo."
+    }
+  ],
+  "scoring_rule": "R2 in the raw target unit over valid trim rows only, referenced to the mean of the scored rows. Rows that are all zero are failed analyses, not physical zeros, and are excluded by actual_mask.",
+  "note": "Scored from ml/runs/trim_pointnet_v1_evaluation/test_predictions.npz, which the training run produced with test_used=false. The ONNX pair was checked against these PyTorch predictions to a maximum relative difference of 9.2e-04, the residual coming from where the point cloud is normalised."
+}

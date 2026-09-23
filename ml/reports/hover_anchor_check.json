@@ -1,0 +1,127 @@
+{
+  "question": "Does scaling the thrust curve so thrust at 0 m/s equals Mass * 9.8 help?",
+  "answer": "No. With the current Mass model it makes thrust worse.",
+  "method": "Sample 1024 points from each showcase STL with the training seed, run trim-encoder + trim-head for the thrust curve and pointnet-geometry-v1 for Mass, then score the scaled curve against the dataset's own trims over that design's valid speeds.",
+  "designs": {
+    "clean": [
+      411,
+      1985,
+      8893,
+      16491,
+      17297,
+      20716
+    ],
+    "excluded_degenerate_hover_row": [
+      3803,
+      20015
+    ],
+    "rows_scored": 163
+  },
+  "hover_thrust_calibration": {
+    "note": "The trim model is already close to physics on clean designs. The 38% violation reported earlier came from design 20015, whose own trim data says 19.27 N for a 72.24 N aircraft.",
+    "model_thrust_over_weight_median": 1.005,
+    "model_thrust_over_weight_range": [
+      0.876,
+      1.072
+    ]
+  },
+  "variants": {
+    "none": {
+      "mae_n": 3.217,
+      "improvement_pct": 0.0
+    },
+    "predicted_mass": {
+      "mae_n": 6.518,
+      "improvement_pct": -102.6
+    },
+    "half": {
+      "mae_n": 2.87,
+      "improvement_pct": 10.8
+    },
+    "true_mass": {
+      "mae_n": 1.246,
+      "improvement_pct": 61.3
+    }
+  },
+  "conclusion": "The concept is sound - anchoring to the true Mass cuts thrust MAE by 61%. The blocker is the Mass estimate. pointnet-geometry-v1 has a median relative error near 10% and reaches +22.8% on design 17297, which is larger than the hover error being corrected, so the anchor injects more error than it removes. Revisit only with a better Mass model, or train the trim model with the constraint in the loss.",
+  "per_design": [
+    {
+      "design_id": 411,
+      "rows_scored": 41,
+      "mass_kg": 7.468,
+      "predicted_mass_kg": 7.779,
+      "mass_error_pct": 4.2,
+      "model_thrust_at_0": 71.37,
+      "weight_n": 73.19,
+      "thrust_over_weight": 0.975,
+      "anchor_scale_predicted_mass": 1.068,
+      "mae_before": 1.779,
+      "mae_after": 3.518
+    },
+    {
+      "design_id": 1985,
+      "rows_scored": 31,
+      "mass_kg": 8.836,
+      "predicted_mass_kg": 8.814,
+      "mass_error_pct": -0.2,
+      "model_thrust_at_0": 89.62,
+      "weight_n": 86.59,
+      "thrust_over_weight": 1.035,
+      "anchor_scale_predicted_mass": 0.964,
+      "mae_before": 2.689,
+      "mae_after": 0.993
+    },
+    {
+      "design_id": 8893,
+      "rows_scored": 15,
+      "mass_kg": 7.311,
+      "predicted_mass_kg": 8.014,
+      "mass_error_pct": 9.6,
+      "model_thrust_at_0": 76.79,
+      "weight_n": 71.65,
+      "thrust_over_weight": 1.072,
+      "anchor_scale_predicted_mass": 1.023,
+      "mae_before": 5.819,
+      "mae_after": 7.586
+    },
+    {
+      "design_id": 16491,
+      "rows_scored": 27,
+      "mass_kg": 5.276,
+      "predicted_mass_kg": 5.764,
+      "mass_error_pct": 9.2,
+      "model_thrust_at_0": 50.13,
+      "weight_n": 51.71,
+      "thrust_over_weight": 0.97,
+      "anchor_scale_predicted_mass": 1.127,
+      "mae_before": 1.127,
+      "mae_after": 5.338
+    },
+    {
+      "design_id": 17297,
+      "rows_scored": 30,
+      "mass_kg": 6.997,
+      "predicted_mass_kg": 8.593,
+      "mass_error_pct": 22.8,
+      "model_thrust_at_0": 60.06,
+      "weight_n": 68.57,
+      "thrust_over_weight": 0.876,
+      "anchor_scale_predicted_mass": 1.402,
+      "mae_before": 5.991,
+      "mae_after": 19.506
+    },
+    {
+      "design_id": 20716,
+      "rows_scored": 19,
+      "mass_kg": 4.539,
+      "predicted_mass_kg": 4.691,
+      "mass_error_pct": 3.4,
+      "model_thrust_at_0": 47.34,
+      "weight_n": 44.48,
+      "thrust_over_weight": 1.064,
+      "anchor_scale_predicted_mass": 0.971,
+      "mae_before": 3.722,
+      "mae_after": 2.331
+    }
+  ]
+}

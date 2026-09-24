@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleGauge,
+  Database,
   Gauge,
   GitCompareArrows,
   Info,
@@ -66,15 +67,17 @@ import type {
   PartPlacement,
   ShowcaseDesign,
   ShowcaseMap,
+  TrimRow,
   WingParameters,
 } from '@/lib/drawn-types';
 import { formatBatteryLabel, formatComponent, formatEnergyConfiguration, formatMetric, formatMotorLabel, formatPropellerLabel, isAvailableMetric, percentChange } from '@/lib/drawn-types';
-import type { PerformancePrediction, PerformanceResult } from '@/lib/performance-client';
+import { formatValidSpeedRanges, type PerformancePrediction, type PerformanceResult } from '@/lib/performance-client';
 import { DataDisclaimer } from '@/components/views/shared';
 import { copyViewerCamera } from '@/lib/viewer-camera-sync';
 
 type MobilePanel = 'parameters' | 'preview' | 'performance';
 type BaselineCompareView = 'baseline' | 'draft' | 'dual';
+type PerformanceSource = 'ai' | 'dataset';
 
 const GROUP_LABELS: Record<ParameterGroup, string> = {
   structure: '기체 구조',
@@ -161,6 +164,7 @@ export function DesignLabView({
   const [chartsOpen, setChartsOpen] = useState(false);
   const [speed, setSpeed] = useState(20);
   const [aiPredictionOpen, setAiPredictionOpen] = useState(false);
+  const [performanceSource, setPerformanceSource] = useState<PerformanceSource>('ai');
   const [sideViewLocked, setSideViewLocked] = useState(false);
   const [sideViewResetKey, setSideViewResetKey] = useState(0);
   /** 선택한 속도의 AI 출력. STL이 아니라 현재 파라메트릭 형상에만 적용한다. */
@@ -172,6 +176,8 @@ export function DesignLabView({
   const estimateTimeoutRef = useRef<number | null>(null);
   const aiPredictionPanelRef = useRef<HTMLDivElement>(null);
   const packagedReference = referenceDesign ?? ('modelPath' in selected ? selected as ShowcaseDesign : null);
+  const originalTrimAvailable = Boolean(packagedReference?.trim.some((row) => row.valid));
+  const originalTrimRow = packagedReference?.trim.find((row) => row.speed === speed) ?? null;
   // 배포된 STL이 없어도 개발 PC의 원본에서 받아올 수 있다.
   const originalStlUrl = packagedReference?.modelPath ?? `/local-model/${selected.id}`;
   const comparisonCameraGroup = `design-compare-${selected.id}`;
@@ -276,11 +282,22 @@ export function DesignLabView({
   }, []);
   const showAiPrediction = showPerformancePanel && aiPredictionOpen;
   const showAiFlight = showAiPrediction && aiFlightState !== null;
-  const aiForces = useMemo(() => showAiFlight ? {
-    drag: aiFlightState.drag,
-    lift: aiFlightState.lift,
-    thrust: aiFlightState.thrust,
-  } : undefined, [aiFlightState, showAiFlight]);
+  const boardUsesOriginal = chartsOpen && performanceSource === 'dataset';
+  const showOriginalFlight = showAiPrediction && boardUsesOriginal && Boolean(originalTrimRow?.valid);
+  const activeFlightState = boardUsesOriginal
+    ? showOriginalFlight ? originalTrimRow : null
+    : showAiFlight ? aiFlightState : null;
+  const visualizationSource: PerformanceSource = boardUsesOriginal ? 'dataset' : 'ai';
+  const activeForces = useMemo(() => activeFlightState ? {
+    drag: activeFlightState.drag,
+    lift: activeFlightState.lift,
+    thrust: activeFlightState.thrust,
+  } : undefined, [activeFlightState]);
+  useEffect(() => {
+    if (!originalTrimAvailable && performanceSource === 'dataset') {
+      window.queueMicrotask(() => setPerformanceSource('ai'));
+    }
+  }, [originalTrimAvailable, performanceSource]);
   useEffect(() => {
     if (!aiPredictionOpen) return;
     const frame = window.requestAnimationFrame(() => {
@@ -589,9 +606,9 @@ export function DesignLabView({
               ) : draft && baseline && sideBySide ? (
                 <div className="absolute inset-0 grid grid-cols-2 divide-x divide-[#e5e5ea]">
                   <div className="relative">
-                    <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} cameraSync={{ group: comparisonCameraGroup, id: 'parametric', linked: cameraLinked }} viewPreset={showAiPrediction ? 'side' : 'perspective'} sideViewLocked={sideViewLocked} sideViewResetKey={sideViewResetKey} pitchDegrees={showAiFlight ? aiFlightState.pitch ?? 0 : 0} forceVectors={aiForces} showForces={showAiFlight} />
+                    <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} cameraSync={{ group: comparisonCameraGroup, id: 'parametric', linked: cameraLinked }} viewPreset={showAiPrediction ? 'side' : 'perspective'} sideViewLocked={sideViewLocked} sideViewResetKey={sideViewResetKey} pitchDegrees={activeFlightState?.pitch ?? 0} forceVectors={activeForces} showForces={Boolean(activeFlightState)} />
                     <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#3182f6] backdrop-blur">파라메트릭스</span>
-                    {showAiFlight && !chartsOpen && <FlightVisualizationLegend prediction={aiFlightState} />}
+                    {activeFlightState && !chartsOpen && <FlightVisualizationLegend row={activeFlightState} source={visualizationSource} />}
                   </div>
                   <div className="relative">
                     <StlViewer key={originalStlUrl} src={originalStlUrl} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} cameraSync={{ group: comparisonCameraGroup, id: 'stl', linked: cameraLinked }} showControls={false} />
@@ -600,8 +617,8 @@ export function DesignLabView({
                 </div>
               ) : draft && baseline && mode === 'parametric-preview' ? (
                 <>
-                  <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} viewPreset={showAiPrediction ? 'side' : 'perspective'} sideViewLocked={sideViewLocked} sideViewResetKey={sideViewResetKey} pitchDegrees={showAiFlight ? aiFlightState.pitch ?? 0 : 0} forceVectors={aiForces} showForces={showAiFlight} />
-                  {showAiFlight && !chartsOpen && <FlightVisualizationLegend prediction={aiFlightState} />}
+                  <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} viewPreset={showAiPrediction ? 'side' : 'perspective'} sideViewLocked={sideViewLocked} sideViewResetKey={sideViewResetKey} pitchDegrees={activeFlightState?.pitch ?? 0} forceVectors={activeForces} showForces={Boolean(activeFlightState)} />
+                  {activeFlightState && !chartsOpen && <FlightVisualizationLegend row={activeFlightState} source={visualizationSource} />}
                 </>
               ) : (
                 <StlViewer key={originalStlUrl} src={originalStlUrl} paused={suspended || compareOpen || chartsOpen} />
@@ -657,7 +674,7 @@ export function DesignLabView({
         </aside>}
 
         {showPerformancePanel && <aside
-          className={`absolute right-3 z-20 flex w-[300px] flex-col overflow-hidden border border-[#e5e5ea] bg-white/92 backdrop-blur ${
+          className={`absolute right-3 z-20 flex w-[320px] flex-col overflow-hidden border border-[#e5e5ea] bg-white/92 backdrop-blur ${
             chartsOpen && aiPredictionOpen
               ? 'hidden'
               : `top-3 rounded-2xl shadow-lg ${rightOpen ? 'bottom-3' : 'max-h-11'}`
@@ -689,8 +706,11 @@ export function DesignLabView({
                   <PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} speed={speed} onSpeedChange={setSpeed} onPredictionChange={handlePredictionChange} onResultChange={handlePerformanceResultChange} compact />
                   <Button
                     type="button"
-                    onClick={() => setChartsOpen((open) => !open)}
-                    disabled={!aiPerformanceResult}
+                    onClick={() => {
+                      if (!chartsOpen && !aiPerformanceResult && originalTrimAvailable) setPerformanceSource('dataset');
+                      setChartsOpen((open) => !open);
+                    }}
+                    disabled={!aiPerformanceResult && !originalTrimAvailable}
                     aria-expanded={chartsOpen}
                     className={`mt-3 h-10 w-full ${chartsOpen ? 'border border-[#d1d1d6] bg-white text-[#3c3c43] hover:bg-[#f5f5f7]' : 'bg-[#1d1d1f] text-white hover:bg-[#343437]'}`}
                   >
@@ -767,49 +787,81 @@ export function DesignLabView({
 
         {showAiPrediction && chartsOpen && draft && baseline && <section className="absolute bottom-[72px] left-3 right-3 top-[72px] z-20 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#dbe4ea] bg-white/96 shadow-2xl backdrop-blur-xl">
           <header className="flex h-11 shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3">
-            <BrainCircuit className="size-4 text-[#3182f6]" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-[#1d1d1f]">AI 비행 성능 분석</p>
-              <p className="truncate text-[9px] text-[#86868b]">현재 편집 Draft · {speed} m/s · 파라메트릭 자세와 전체 속도 곡선</p>
+            {performanceSource === 'ai' ? <BrainCircuit className="size-4 text-[#3182f6]" /> : <Database className="size-4 text-emerald-600" />}
+            <div className="flex min-w-0 flex-1 items-center">
+              <div className="min-w-0 shrink-0">
+                <p className="text-sm font-semibold text-[#1d1d1f]">비행 성능 분석</p>
+              <p className="truncate text-[10px] text-[#86868b]">{performanceSource === 'ai' ? '현재 편집 Draft의 AI 예측' : `기준 설계 #${selected.id}의 저장된 원본 trim`} · {speed} m/s</p>
+              </div>
+              <fieldset className="m-0 ml-8 flex min-w-0 shrink-0 rounded-lg border-0 bg-[#f5f5f7] p-0.5" aria-label="성능 데이터 소스">
+                <ModeButton active={performanceSource === 'ai'} onClick={() => setPerformanceSource('ai')}>AI 예측</ModeButton>
+                <Tooltip>
+                  <TooltipTrigger render={<span />}>
+                    <ModeButton active={performanceSource === 'dataset'} disabled={!originalTrimAvailable} onClick={() => setPerformanceSource('dataset')}>원본 시뮬레이션</ModeButton>
+                  </TooltipTrigger>
+                  {!originalTrimAvailable && <TooltipContent>이 설계에는 배포된 원본 trim 데이터가 없습니다.</TooltipContent>}
+                </Tooltip>
+              </fieldset>
             </div>
             <Button size="icon-sm" variant="ghost" onClick={() => setChartsOpen(false)} aria-label="분석 보드 닫기" className="text-[#6e6e73]">
               <X />
             </Button>
           </header>
-          <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px]">
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_340px]">
             <div className="grid min-h-0 grid-rows-[minmax(220px,1fr)_300px]">
               <div className="relative min-h-0 overflow-hidden border-b border-[#e5e5ea] bg-[#eef3f6]">
-                <ParametricUavViewer
-                  draft={draft}
-                  baseline={baseline}
-                  showGhost={showGhost}
-                  changedGroup={changedGroup}
-                  assembly={placements}
-                  bladeCount={bladeCount}
-                  selection={selectedParts}
-                  onSelectionChange={setSelectedParts}
-                  paused={suspended || compareOpen}
-                  cameraFitPadding={1.7}
-                  viewPreset="side"
-                  sideViewLocked={sideViewLocked}
-                  sideViewResetKey={sideViewResetKey}
-                  pitchDegrees={showAiFlight ? aiFlightState.pitch ?? 0 : 0}
-                  forceVectors={aiForces}
-                  showForces={showAiFlight}
-                />
-                <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#3182f6] backdrop-blur">현재 파라메트릭 비행 자세</span>
-                {showAiFlight && <FlightVisualizationLegend prediction={aiFlightState} />}
+                {performanceSource === 'dataset' && packagedReference ? (
+                  <StlViewer
+                    key={packagedReference.modelPath}
+                    src={packagedReference.modelPath}
+                    pitchDegrees={showOriginalFlight ? originalTrimRow?.pitch ?? 0 : 0}
+                    forceVectors={showOriginalFlight ? activeForces : undefined}
+                    showForceVectors={showOriginalFlight}
+                    cameraFitPadding={1.7}
+                    showControls={false}
+                    paused={suspended || compareOpen}
+                  />
+                ) : (
+                  <ParametricUavViewer
+                    draft={draft}
+                    baseline={baseline}
+                    showGhost={showGhost}
+                    changedGroup={changedGroup}
+                    assembly={placements}
+                    bladeCount={bladeCount}
+                    selection={selectedParts}
+                    onSelectionChange={setSelectedParts}
+                    paused={suspended || compareOpen}
+                    cameraFitPadding={1.7}
+                    viewPreset="side"
+                    sideViewLocked={sideViewLocked}
+                    sideViewResetKey={sideViewResetKey}
+                    pitchDegrees={showAiFlight ? aiFlightState.pitch ?? 0 : 0}
+                    forceVectors={showAiFlight ? activeForces : undefined}
+                    showForces={showAiFlight}
+                  />
+                )}
+                <div className={`pointer-events-none absolute left-3 top-3 z-20 rounded-xl border bg-white/92 px-3 py-2 shadow-sm backdrop-blur ${performanceSource === 'ai' ? 'border-[#bfdbfe] text-[#1b64da]' : 'border-emerald-200 text-emerald-700'}`}>
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold">{performanceSource === 'ai' ? <BrainCircuit className="size-3.5" /> : <Database className="size-3.5" />}{performanceSource === 'ai' ? 'AI 예측 · 현재 Draft' : `원본 시뮬레이션 · 기준 #${selected.id}`}</p>
+                  <p className="mt-0.5 text-[10px] font-medium text-[#6e6e73]">{performanceSource === 'ai' ? '파라메트릭 형상' : '원본 STL 형상'} · {speed} m/s</p>
+                </div>
+                {activeFlightState && <FlightVisualizationLegend row={activeFlightState} source={performanceSource} />}
+                {performanceSource === 'dataset' && !showOriginalFlight && <div className="absolute inset-0 z-10 grid place-items-center bg-white/25"><p className="rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-xs font-medium text-amber-900 shadow-sm">{speed} m/s에서는 원본 trim 해석이 수렴하지 않았습니다.</p></div>}
               </div>
               <div className="min-h-0 overflow-hidden p-4">
-                {aiPerformanceResult ? (
-                  <AiSpeedCurveSheet result={aiPerformanceResult} speed={speed} onSpeedChange={setSpeed} />
+                {performanceSource === 'dataset' && packagedReference ? (
+                  <SpeedCurveSheet rows={packagedReference.trim} source="dataset" speed={speed} onSpeedChange={setSpeed} />
+                ) : aiPerformanceResult ? (
+                  <SpeedCurveSheet rows={aiPerformanceResult.predictions} source="ai" speed={speed} onSpeedChange={setSpeed} />
                 ) : (
                   <p className="grid h-full place-items-center text-xs text-[#6e6e73]">현재 편집 설계의 AI 곡선을 계산하고 있습니다…</p>
                 )}
               </div>
             </div>
             <aside className="min-h-0 overflow-hidden border-l border-[#e5e5ea] bg-white p-3">
-              {aiPerformanceResult ? (
+              {performanceSource === 'dataset' && packagedReference ? (
+                <OriginalTrimPanel design={packagedReference} speed={speed} onSpeedChange={setSpeed} />
+              ) : aiPerformanceResult ? (
                 <PerformancePredictionPanel
                   designId={selected.id}
                   draft={draft}
@@ -931,19 +983,19 @@ export function DesignLabView({
   );
 }
 
-function FlightVisualizationLegend({ prediction }: { prediction: PerformancePrediction }) {
+function FlightVisualizationLegend({ row, source }: { row: PerformancePrediction | TrimRow; source: PerformanceSource }) {
   const value = (amount: number | null) => amount == null ? '—' : `${amount.toFixed(2)} N`;
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 z-20 rounded-xl border border-white/70 bg-white/88 px-3 py-2 shadow-sm backdrop-blur">
       <div className="flex items-center gap-2 text-[11px] font-semibold text-[#1d1d1f]">
-        <span className="rounded-md bg-[#eff6ff] px-1.5 py-0.5 text-[#1b64da]">AI 비행 자세</span>
-        <span className="tabular-nums">{prediction.speed} m/s</span>
-        <span className="text-[#86868b]">피치 {prediction.pitch == null ? '—' : `${prediction.pitch.toFixed(1)}°`}</span>
+        <span className={`rounded-md px-1.5 py-0.5 ${source === 'ai' ? 'bg-[#eff6ff] text-[#1b64da]' : 'bg-emerald-50 text-emerald-700'}`}>{source === 'ai' ? 'AI 비행 자세' : '원본 trim 자세'}</span>
+        <span className="tabular-nums">{row.speed} m/s</span>
+        <span className="text-[#86868b]">피치 {row.pitch == null ? '—' : `${row.pitch.toFixed(1)}°`}</span>
       </div>
-      <div className="mt-1.5 flex items-center gap-3 text-[10px] text-[#6e6e73]">
-        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-[#e97942]" />항력 {value(prediction.drag)}</span>
-        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-[#1c9b62]" />양력 {value(prediction.lift)}</span>
-        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-[#6d5bd0]" />추력 {value(prediction.thrust)}</span>
+      <div className="mt-1.5 flex items-center gap-3 text-[11px] text-[#6e6e73]">
+        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-[#e97942]" />항력 {value(row.drag)}</span>
+        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-[#1c9b62]" />양력 {value(row.lift)}</span>
+        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-[#6d5bd0]" />추력 {value(row.thrust)}</span>
       </div>
     </div>
   );
@@ -974,6 +1026,86 @@ function FlightCameraControls({
         측면 고정
       </button>
     </div>
+  );
+}
+
+const performanceMetricCards = [
+  { key: 'drag', label: '항력', unit: 'N', digits: 2 },
+  { key: 'lift', label: '양력', unit: 'N', digits: 2 },
+  { key: 'thrust', label: '추력', unit: 'N', digits: 2 },
+  { key: 'pitch', label: '피치각', unit: 'deg', digits: 1 },
+  { key: 'power', label: '전력', unit: 'W', digits: 1 },
+  { key: 'current', label: '전류', unit: 'A', digits: 2 },
+  { key: 'flightTime', label: '비행 시간', unit: 's', digits: 1 },
+  { key: 'distance', label: '비행거리', unit: 'm', digits: 1 },
+] as const;
+
+function OriginalTrimPanel({ design, speed, onSpeedChange }: { design: ShowcaseDesign; speed: number; onSpeedChange: (speed: number) => void }) {
+  const [speedDraft, setSpeedDraft] = useState<string | null>(null);
+  const row = design.trim.find((item) => item.speed === speed) ?? null;
+  const validSpeeds = useMemo(() => design.trim.filter((item) => item.valid).map((item) => item.speed), [design]);
+  const commitSpeed = (raw: string) => {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) onSpeedChange(Math.min(50, Math.max(0, Math.round(parsed))));
+    setSpeedDraft(null);
+  };
+
+  return (
+    <section className="min-w-0 rounded-2xl border border-emerald-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-[#1d1d1f]"><Database className="size-4 text-emerald-600" /> 원본 속도별 trim</h2>
+        <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">AircraftVerse 저장값</span>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-[#6e6e73]">기준 설계 #{design.id}의 저장된 시뮬레이션 결과입니다. 현재 Draft의 편집 내용은 반영되지 않습니다.</p>
+      <div className="mt-4">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="font-medium text-[#3c3c43]">trim 속도</span>
+          <label className="flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 py-1 text-emerald-700 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={50}
+              step={1}
+              aria-label="원본 trim 속도 직접 입력"
+              value={speedDraft ?? String(speed)}
+              onFocus={(event) => { setSpeedDraft(String(speed)); event.currentTarget.select(); }}
+              onChange={(event) => setSpeedDraft(event.currentTarget.value)}
+              onBlur={(event) => commitSpeed(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+                if (event.key === 'Escape') setSpeedDraft(null);
+              }}
+              className="w-10 bg-transparent text-right font-mono font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <span className="font-mono font-semibold">m/s</span>
+          </label>
+        </div>
+        <Slider value={[speed]} min={0} max={50} step={1} onValueChange={(value) => onSpeedChange(Number(Array.isArray(value) ? value[0] : value))} className="mt-3 [&_[data-slot=slider-range]]:bg-emerald-600 [&_[data-slot=slider-thumb]]:border-emerald-600" />
+        <div className="mt-1 flex justify-between font-mono text-[11px] text-[#86868b]"><span>0 m/s</span><span>50 m/s</span></div>
+        <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-[11px] leading-4 text-emerald-800">
+          유효 trim 구간 <strong className="ml-1 font-mono">{formatValidSpeedRanges(validSpeeds)}</strong>
+        </div>
+      </div>
+
+      {row?.valid ? (
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {performanceMetricCards.map((metric) => {
+            const amount = row[metric.key];
+            return <div key={metric.key} className="min-w-0 rounded-xl bg-[#f5f5f7] p-2.5">
+              <p className="text-[11px] text-[#6e6e73]">{metric.label}</p>
+              <p className="mt-1 break-words font-mono text-base font-semibold text-[#1d1d1f]">{amount == null ? '—' : formatMetric(amount, metric.digits)} <span className="text-[11px] font-normal text-[#86868b]">{metric.unit}</span></p>
+            </div>;
+          })}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
+          <p className="font-semibold">이 속도에서는 원본 해석값이 없습니다.</p>
+          <p className="mt-1">Design #{design.id}의 {speed} m/s trim 계산이 수렴하지 않았습니다.</p>
+        </div>
+      )}
+      <p className="mt-3 text-[11px] text-[#86868b]">원본 데이터 · 기준 설계 #{design.id}</p>
+    </section>
   );
 }
 
@@ -1153,10 +1285,12 @@ const speedEnduranceConfig = {
 
 type SpeedCurveMode = 'overview' | 'aero' | 'electric' | 'endurance';
 
-/** 현재 편집 Draft를 AI 모델에 넣어 얻은 0–50 m/s 전체 예측을 넓은 하단 시트에서 본다. */
-function AiSpeedCurveSheet({ result, speed, onSpeedChange }: { result: PerformanceResult; speed: number; onSpeedChange: (speed: number) => void }) {
+/** 같은 차트에서 AI 예측과 저장된 원본 trim을 전환해 비교한다. */
+function SpeedCurveSheet({ rows, source, speed, onSpeedChange }: { rows: Array<PerformancePrediction | TrimRow>; source: PerformanceSource; speed: number; onSpeedChange: (speed: number) => void }) {
   const [curveMode, setCurveMode] = useState<SpeedCurveMode>('overview');
-  const selectedRow = result.predictions.find((prediction) => prediction.speed === speed) ?? null;
+  const selectedCandidate = rows.find((row) => row.speed === speed) ?? null;
+  const selectedRow = selectedCandidate && (!('valid' in selectedCandidate) || selectedCandidate.valid) ? selectedCandidate : null;
+  const chartRows = useMemo(() => rows.map((row) => 'valid' in row && !row.valid ? { speed: row.speed } : row), [rows]);
   const config = curveMode === 'overview'
     ? speedOverviewConfig
     : curveMode === 'aero'
@@ -1168,7 +1302,7 @@ function AiSpeedCurveSheet({ result, speed, onSpeedChange }: { result: Performan
   return (
     <div className="min-w-0">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-[#6e6e73]">현재 Draft의 AI 예측 · 세로선은 선택한 속도 <strong className="ml-1 font-mono text-[#1b64da]">{speed} m/s</strong> · 차트를 눌러 변경</p>
+          <p className="text-xs text-[#6e6e73]">{source === 'ai' ? '현재 Draft의 AI 예측' : '기준 설계의 원본 trim'} · 세로선은 선택한 속도 <strong className={`ml-1 font-mono ${source === 'ai' ? 'text-[#1b64da]' : 'text-emerald-700'}`}>{speed} m/s</strong> · 차트를 눌러 변경</p>
           <div className="flex rounded-lg bg-[#f5f5f7] p-1">
             {([
               ['overview', '요약'],
@@ -1182,7 +1316,7 @@ function AiSpeedCurveSheet({ result, speed, onSpeedChange }: { result: Performan
         </div>
         <ChartContainer config={config} className="h-[240px] w-full aspect-auto" initialDimension={{ width: 700, height: 240 }}>
           <LineChart
-            data={result.predictions}
+            data={chartRows}
             margin={{ left: 0, right: 12, top: 8, bottom: 0 }}
             onClick={(chart) => {
               const nextSpeed = Number(chart?.activeLabel);
@@ -1196,9 +1330,9 @@ function AiSpeedCurveSheet({ result, speed, onSpeedChange }: { result: Performan
             <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
             <ReferenceLine
               x={speed}
-              stroke="#1b64da"
+              stroke={source === 'ai' ? '#1b64da' : '#178653'}
               strokeWidth={2}
-              label={{ value: `${speed} m/s`, position: 'insideTopRight', fill: '#1b64da', fontSize: 10 }}
+              label={{ value: `${speed} m/s`, position: 'insideTopRight', fill: source === 'ai' ? '#1b64da' : '#178653', fontSize: 10 }}
             />
             {curveMode === 'overview' && (
               <>

@@ -114,7 +114,7 @@ export function PerformancePredictionPanel({
         <h2 id={`${id}-title`} className="flex items-center gap-2 text-sm font-semibold text-[#1d1d1f]">
           <BrainCircuit className="size-4 text-[#3182f6]" /> AI 속도별 예측
         </h2>
-        <span className="rounded-full bg-[#eff6ff] px-2 py-1 text-[10px] font-medium text-[#1b64da]">기준 설계 조건부 예측</span>
+        <span className="rounded-full bg-[#eff6ff] px-2 py-1 text-[11px] font-medium text-[#1b64da]">기준 설계 조건부 예측</span>
       </div>
       <p className="mt-2 text-xs leading-5 text-[#6e6e73]">기준 설계의 물리 조건을 사용하는 학습 모델입니다. 예측 수치는 실제 비행 가능 여부를 판정하지 않습니다.</p>
       <div className="mt-4">
@@ -147,7 +147,7 @@ export function PerformancePredictionPanel({
           onValueChange={(value) => changeSpeed(Number(Array.isArray(value) ? value[0] : value))}
           className="mt-3 [&_[data-slot=slider-range]]:bg-[#3182f6]"
         />
-        <div className="mt-1 flex justify-between font-mono text-[10px] text-[#86868b]"><span>0 m/s</span><span>50 m/s</span></div>
+        <div className="mt-1 flex justify-between font-mono text-[11px] text-[#86868b]"><span>0 m/s</span><span>50 m/s</span></div>
       </div>
 
       {inputError ? (
@@ -177,7 +177,7 @@ export function PerformancePredictionPanel({
             {metrics.map((item) => (
               <div key={item.key} className="min-w-0 rounded-xl bg-[#f5f5f7] p-2.5">
                 <p className="text-[11px] text-[#6e6e73]">{item.label}</p>
-                <p className="mt-1 break-words font-mono text-base font-semibold text-[#1d1d1f]">{row[item.key] == null ? '—' : formatMetric(row[item.key]!, item.digits)} <span className="text-[10px] font-normal text-[#86868b]">{item.unit}</span></p>
+                <p className="mt-1 break-words font-mono text-base font-semibold text-[#1d1d1f]">{row[item.key] == null ? '—' : formatMetric(row[item.key]!, item.digits)} <span className="text-[11px] font-normal text-[#86868b]">{item.unit}</span></p>
               </div>
             ))}
           </div>
@@ -209,7 +209,7 @@ export function PerformancePredictionPanel({
               </ChartContainer>
             </div>
           )}
-          <p className="mt-3 break-all text-[10px] text-[#86868b]">모델 {result.modelVersion} · 기준 설계 #{result.designId}</p>
+          <p className="mt-3 break-all text-[11px] text-[#86868b]">모델 {result.modelVersion} · 기준 설계 #{result.designId}</p>
         </>
       ) : null}
     </section>

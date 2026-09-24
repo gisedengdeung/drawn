@@ -24,6 +24,8 @@ type StlViewerProps = {
   cameraFitPadding?: number;
   cameraSync?: { group: string; id: string; linked: boolean };
   showControls?: boolean;
+  /** 다른 전체 화면 UI에 가려졌을 때 WebGL 렌더링만 일시 정지한다. */
+  paused?: boolean;
 };
 
 export function StlViewer({
@@ -34,6 +36,7 @@ export function StlViewer({
   cameraFitPadding = 1.62,
   cameraSync,
   showControls = true,
+  paused = false,
 }: StlViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const dynamicsRef = useRef({ pitchDegrees, forceVectors, showForceVectors });
@@ -42,7 +45,12 @@ export function StlViewer({
   const [retryKey, setRetryKey] = useState(0);
   const [autoRotate, setAutoRotate] = useState(true);
   const autoRotateRef = useRef(true);
+  const pausedRef = useRef(paused);
   const cameraSyncRef = useRef(cameraSync);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   useEffect(() => {
     cameraSyncRef.current = cameraSync;
@@ -353,11 +361,13 @@ export function StlViewer({
     );
 
     const animate = () => {
-      updateDynamics();
-      controls.autoRotate = autoRotateRef.current && !cameraSyncRef.current?.linked;
-      controls.update();
-      updateInfiniteGrid(grid, camera);
-      renderer.render(scene, camera);
+      if (!pausedRef.current) {
+        updateDynamics();
+        controls.autoRotate = autoRotateRef.current && !cameraSyncRef.current?.linked;
+        controls.update();
+        updateInfiniteGrid(grid, camera);
+        renderer.render(scene, camera);
+      }
       frame = requestAnimationFrame(animate);
     };
     animate();

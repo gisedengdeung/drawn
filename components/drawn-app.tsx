@@ -12,6 +12,7 @@ import {
   Boxes,
   CheckCircle2,
   ChevronDown,
+  GitCompareArrows,
   HelpCircle,
   MapPin,
   Share2,
@@ -387,6 +388,7 @@ export function DrawnApp() {
                     focusedParameterId={focusedParameterId}
                     onOpenParts={openPartsAssistant}
                     activeTool={editorTool}
+                    suspended={compareDialogOpen}
                     onCloseTool={() => {
                       setEditorTool('menu');
                       setToolNavigationOpen(true);
@@ -447,18 +449,25 @@ export function DrawnApp() {
         />
         </div>
         <Dialog open={compareDialogOpen && Boolean(dataset && comparePair)} onOpenChange={setCompareDialogOpen}>
-          <DialogContent className="max-h-[92vh] overflow-y-auto border-[#e5e5ea] bg-[#f5f5f7] p-5 text-[#1d1d1f] sm:max-w-[1180px]">
-            <DialogHeader>
-              <DialogTitle className="text-xl">설계 비교</DialogTitle>
-              <DialogDescription>설계 구성의 차이를 먼저 확인한 뒤 AircraftVerse 성능 결과를 같은 단위로 비교합니다.</DialogDescription>
+          <DialogContent className="flex h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-h-none max-w-none flex-col gap-0 overflow-hidden border-[#dbe4ea] bg-white p-0 text-[#1d1d1f] sm:max-w-none">
+            <DialogHeader className="h-14 shrink-0 justify-center border-b border-[#e5e5ea] px-4 pr-14">
+              <div className="flex min-w-0 items-center gap-3">
+                <GitCompareArrows className="size-4 shrink-0 text-[#3182f6]" />
+                <div className="min-w-0">
+                  <DialogTitle className="text-sm font-semibold">설계 비교 분석</DialogTitle>
+                  <DialogDescription className="truncate text-[9px]">두 설계의 3D 형상, 구성 차이와 AircraftVerse 속도별 성능을 한 화면에서 비교합니다.</DialogDescription>
+                </div>
+              </div>
             </DialogHeader>
             {dataset && comparePair && (
-              <CompareView
-                dataset={dataset}
-                showcases={showcases}
-                pair={comparePair}
-                onPairChange={setComparePair}
-              />
+              <div className="min-h-0 flex-1">
+                <CompareView
+                  dataset={dataset}
+                  showcases={showcases}
+                  pair={comparePair}
+                  onPairChange={setComparePair}
+                />
+              </div>
             )}
           </DialogContent>
         </Dialog>

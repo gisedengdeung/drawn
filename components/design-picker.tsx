@@ -109,12 +109,15 @@ export function DesignPicker({
   selectedId,
   onSelect,
   onOpenModelInfo,
+  layout = 'stacked',
 }: {
   designs: DesignSummary[];
   showcases: ShowcaseMap;
   selectedId: number | null;
   onSelect: (id: number) => void;
   onOpenModelInfo?: () => void;
+  /** 비교 화면처럼 폭이 넓고 높이가 짧을 때 필터와 결과 목록을 나란히 둔다. */
+  layout?: 'stacked' | 'split';
 }) {
   const { classes } = useShapeClasses();
   const [section, setSection] = useState<Section>('browse');
@@ -240,7 +243,7 @@ export function DesignPicker({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex items-center gap-0.5 border-b border-[#e5e5ea] p-2">
-        {SECTIONS.map((item) => (
+        {SECTIONS.filter((item) => item.id !== 'model-info' || onOpenModelInfo).map((item) => (
           <button
             key={item.id}
             type="button"
@@ -257,8 +260,8 @@ export function DesignPicker({
 
       <div className={`min-h-0 flex-1 ${section === 'browse' ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'}`}>
         {section === 'browse' && (
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="shrink-0">
+          <div className={layout === 'split' ? 'grid h-full min-h-0 grid-cols-[minmax(260px,0.9fr)_minmax(240px,1.1fr)]' : 'flex h-full min-h-0 flex-col'}>
+            <div className={layout === 'split' ? 'min-h-0 overflow-y-auto border-r border-[#e5e5ea]' : 'shrink-0'}>
               <FilterSection
                 shape={shape}
                 onShapeChange={setShape}

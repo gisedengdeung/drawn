@@ -56,8 +56,18 @@ type ParametricUavViewerProps = {
   onSelectionChange?: (names: string[]) => void;
   /** 배경 장식용 등, 조작 없이 저절로 돌아가야 할 때. */
   autoRotate?: boolean;
+  /** 다른 전체 화면 UI에 가려졌을 때 WebGL 렌더링만 일시 정지한다. */
+  paused?: boolean;
+  /** 여러 뷰어를 동시에 표시할 때 GPU 사용량을 제한한다. */
+  maxFps?: number;
   /** 자동 프레이밍 여백 배율. 값이 클수록 카메라가 더 멀리 물러난다. */
   cameraFitPadding?: number;
+  /** 성능 확인에서는 기체의 피치와 힘 벡터가 읽히도록 정확한 측면에서 본다. */
+  viewPreset?: 'perspective' | 'side';
+  /** 측면 고정 중에는 상하 회전과 패닝을 막고 수평 궤도·확대만 허용한다. */
+  sideViewLocked?: boolean;
+  /** 값이 바뀔 때마다 현재 모델을 정확한 측면 홈 카메라로 다시 맞춘다. */
+  sideViewResetKey?: number;
   /** 서로 다른 종류의 뷰어와 정규화된 카메라 자세를 공유한다. */
   cameraSync?: { group: string; id: string; linked: boolean };
 };
@@ -128,7 +138,12 @@ export function ParametricUavViewer({
   selection,
   onSelectionChange,
   autoRotate = false,
+  paused = false,
+  maxFps = 60,
   cameraFitPadding = 1.24,
+  viewPreset = 'perspective',
+  sideViewLocked = false,
+  sideViewResetKey = 0,
   cameraSync,
 }: ParametricUavViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -161,6 +176,10 @@ export function ParametricUavViewer({
   useEffect(() => {
     autoRotateRef.current = autoRotate;
   }, [autoRotate]);
+  const pausedRef = useRef(paused);
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
   const cameraSyncRef = useRef(cameraSync);
   useEffect(() => {
     cameraSyncRef.current = cameraSync;
@@ -332,7 +351,9 @@ export function ParametricUavViewer({
       // 바운딩 "구"를 화면에 맞추면 항공기처럼 납작한 형상은 구의 빈 공간만큼
       // 작아져, 화면 가로의 35%밖에 쓰지 못했다. 시선 기준 가로·세로 축으로
       // 실제 부품 꼭짓점을 재서 맞춘다.
-      const view = new THREE.Vector3(1.12, 0.88, 1.2).normalize();
+      const view = viewPreset === 'side'
+        ? new THREE.Vector3(0, 0, 1)
+        : new THREE.Vector3(1.12, 0.88, 1.2).normalize();
       const right = new THREE.Vector3().crossVectors(view, UP).normalize();
       const up = new THREE.Vector3().crossVectors(right, view);
       // 점 하나가 화면에 들어오려면 |가로| ≤ (거리 − 깊이)·tan(시야/2) 여야
@@ -496,10 +517,15 @@ export function ParametricUavViewer({
     };
     renderer.domElement.addEventListener('webglcontextlost', handleContextLost);
 
-    const animate = () => {
-      controls.update();
-      updateInfiniteGrid(grid, camera);
-      renderer.render(scene, camera);
+    const frameInterval = 1000 / Math.min(Math.max(maxFps, 1), 60);
+    let nextRenderAt = 0;
+    const animate = (time = 0) => {
+      if (!pausedRef.current && time >= nextRenderAt) {
+        controls.update();
+        updateInfiniteGrid(grid, camera);
+        renderer.render(scene, camera);
+        nextRenderAt = time + frameInterval;
+      }
       frame = requestAnimationFrame(animate);
     };
     animate();
@@ -533,7 +559,19 @@ export function ParametricUavViewer({
       renderer.domElement.remove();
       runtimeRef.current = null;
     };
-  }, [cameraFitPadding, cameraSync?.group, cameraSync?.id, retryKey, syncGroup]);
+  }, [cameraFitPadding, cameraSync?.group, cameraSync?.id, maxFps, retryKey, syncGroup, viewPreset]);
+
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    runtime.controls.enablePan = !sideViewLocked;
+    runtime.controls.minPolarAngle = sideViewLocked ? Math.PI / 2 : 0.05;
+    runtime.controls.maxPolarAngle = sideViewLocked ? Math.PI / 2 : Math.PI - 0.05;
+    if (viewPreset === 'side' && runtime.hull.length) {
+      runtime.fitCamera(runtime.hull, true);
+    }
+    runtime.controls.update();
+  }, [sideViewLocked, sideViewResetKey, viewPreset]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -569,11 +607,13 @@ export function ParametricUavViewer({
         runtime.ghost = null;
       }
 
-      runtime.forces = showForces ? buildForceVectors(forceVectors) : null;
+      runtime.forces = showForces ? buildForceVectors(forceVectors, runtime.model) : null;
       if (runtime.forces) runtime.scene.add(runtime.forces);
 
+      const framingPoints = hullPointsOf(runtime.model);
+      if (runtime.forces) framingPoints.push(...hullPointsOf(runtime.forces));
       runtime.fitCamera(
-        hullPointsOf(runtime.model),
+        framingPoints,
         topologyChanged || runtime.radius === 0,
       );
       window.queueMicrotask(() => {
@@ -598,6 +638,7 @@ export function ParametricUavViewer({
     showForces,
     showGhost,
     retryKey,
+    viewPreset,
   ]);
 
   return (
@@ -2209,46 +2250,58 @@ function isWingSegment(segment: DesignSegment) {
   return Boolean(segment.wing || /WingArm/i.test(segment.nodeType));
 }
 
-function buildForceVectors(vectors?: ForceVectors) {
+function buildForceVectors(vectors?: ForceVectors, model?: THREE.Object3D | null) {
   const group = new THREE.Group();
   const drag = Math.max(vectors?.drag ?? 0, 0);
-  const lift = Math.max(vectors?.lift ?? 0, 0);
+  const hasLift = typeof vectors?.lift === 'number';
+  const lift = Math.abs(vectors?.lift ?? 0);
   const thrust = Math.max(vectors?.thrust ?? 0, 0);
   const max = Math.max(drag, lift, thrust, 1);
+  const bounds = model ? new THREE.Box3().setFromObject(model) : null;
+  const centre = bounds?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3(0, 0.8, 0);
+  const radius = Math.max(bounds?.getBoundingSphere(new THREE.Sphere()).radius ?? 2, 1);
+  const length = (amount: number) => radius * (0.58 + (amount / max) * 0.72);
+  const headLength = Math.max(radius * 0.12, 0.18);
+  const headWidth = Math.max(radius * 0.07, 0.11);
   if (drag > 0)
-    group.add(
-      new THREE.ArrowHelper(
-        new THREE.Vector3(-1, 0, 0),
-        new THREE.Vector3(0, 0.8, 0),
-        1.2 + (drag / max) * 1.8,
-        0xe97942,
-        0.24,
-        0.14,
-      ),
-    );
-  if (lift > 0)
-    group.add(
-      new THREE.ArrowHelper(
-        new THREE.Vector3(0, 1, 0),
-        new THREE.Vector3(0, 0.8, 0),
-        1.2 + (lift / max) * 1.8,
-        0x1c9b62,
-        0.24,
-        0.14,
-      ),
-    );
+    group.add(buildForceArrow(new THREE.Vector3(-1, 0, 0), centre, length(drag), 0xf4773c, headLength, headWidth, radius, 20));
+  if (hasLift)
+    group.add(buildForceArrow(new THREE.Vector3(0, 1, 0), centre, length(lift) * 1.12, 0x00a86b, headLength * 1.12, headWidth * 1.18, radius, 30));
   if (thrust > 0)
-    group.add(
-      new THREE.ArrowHelper(
-        new THREE.Vector3(1, 0, 0),
-        new THREE.Vector3(0, 0.8, 0),
-        1.2 + (thrust / max) * 1.8,
-        0x6d5bd0,
-        0.24,
-        0.14,
-      ),
+    group.add(buildForceArrow(new THREE.Vector3(1, 0, 0), centre, length(thrust), 0x6554d9, headLength, headWidth, radius, 20));
+  if (drag > 0 || hasLift || thrust > 0) {
+    const originMarker = new THREE.Mesh(
+      new THREE.SphereGeometry(Math.max(radius * 0.045, 0.065), 24, 16),
+      new THREE.MeshBasicMaterial({ color: 0xf6bf26, depthTest: false, depthWrite: false }),
     );
+    originMarker.position.copy(centre);
+    originMarker.renderOrder = 40;
+    group.add(originMarker);
+  }
   return group;
+}
+
+function buildForceArrow(
+  direction: THREE.Vector3,
+  origin: THREE.Vector3,
+  length: number,
+  color: number,
+  headLength: number,
+  headWidth: number,
+  radius: number,
+  renderOrder: number,
+) {
+  const arrow = new THREE.Group();
+  const unit = direction.clone().normalize();
+  const material = new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false });
+  const shaftEnd = origin.clone().addScaledVector(unit, Math.max(length - headLength, length * 0.55));
+  const shaft = cylinderBetween(origin, shaftEnd, Math.max(radius * 0.012, 0.025), material);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(headWidth, headLength, 20), material.clone());
+  cone.position.copy(origin).addScaledVector(unit, length - headLength / 2);
+  cone.quaternion.setFromUnitVectors(UP, unit);
+  arrow.add(shaft, cone);
+  arrow.traverse((node) => { node.renderOrder = renderOrder; });
+  return arrow;
 }
 
 function cylinderBetween(

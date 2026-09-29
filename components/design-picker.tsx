@@ -14,6 +14,7 @@ import {
   History,
   PackageCheck,
   Radar,
+  Search,
   ShieldCheck,
   Sparkles,
   Star,
@@ -31,6 +32,7 @@ import { classifyAirframe, formatHub, formatMetric } from '@/lib/drawn-types';
 import {
   DIRECTION_GROUPS,
   EMPTY_SHAPE_FILTERS,
+  PLACEMENTS,
   WING_PRESENCES,
   describeShape,
   matchesShape,
@@ -56,6 +58,7 @@ const PAGE = 40;
 const MASS_ANY = 31;
 const FAVORITES_STORAGE_KEY = 'drawn:favorite-designs';
 const RECENT_STORAGE_KEY = 'drawn:recent-designs';
+const FILTERS_STORAGE_KEY = 'drawn:design-picker-filters';
 const RECENT_LIMIT = 8;
 
 const PRESET_ICONS: Record<string, typeof PackageCheck> = {
@@ -136,6 +139,7 @@ export function DesignPicker({
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<ScoredDesign[]>([]);
   const runTimeoutRef = useRef<number | null>(null);
+  const filtersHydratedRef = useRef(false);
 
   useEffect(() => () => {
     if (runTimeoutRef.current != null) window.clearTimeout(runTimeoutRef.current);
@@ -147,6 +151,24 @@ export function DesignPicker({
       setRecent(readStoredIds(RECENT_STORAGE_KEY));
     });
   }, []);
+
+  useEffect(() => {
+    const stored = readStoredFilters();
+    window.queueMicrotask(() => {
+      if (stored) {
+        setShape(stored.shape);
+        setMassMax(stored.massMax);
+        setFeasibleOnly(stored.feasibleOnly);
+        setViewerOnly(stored.viewerOnly);
+      }
+      filtersHydratedRef.current = true;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!filtersHydratedRef.current) return;
+    writeStoredFilters({ shape, massMax, feasibleOnly, viewerOnly });
+  }, [feasibleOnly, massMax, shape, viewerOnly]);
 
   useEffect(() => {
     if (selectedId == null) return;
@@ -262,6 +284,7 @@ export function DesignPicker({
         {section === 'browse' && (
           <div className={layout === 'split' ? 'grid h-full min-h-0 grid-cols-[minmax(260px,0.9fr)_minmax(240px,1.1fr)]' : 'flex h-full min-h-0 flex-col'}>
             <div className={layout === 'split' ? 'min-h-0 overflow-y-auto border-r border-[#e5e5ea]' : 'shrink-0'}>
+              <DesignCodeSearch key={selectedId ?? 'none'} designs={designs} selectedId={selectedId} onSelect={selectDesign} />
               <FilterSection
                 shape={shape}
                 onShapeChange={setShape}
@@ -316,6 +339,132 @@ export function DesignPicker({
         )}
       </div>
     </div>
+  );
+}
+
+type StoredFilters = {
+  shape: ShapeFilters;
+  massMax: number;
+  feasibleOnly: boolean;
+  viewerOnly: boolean;
+};
+
+function readStoredFilters(): StoredFilters | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(FILTERS_STORAGE_KEY) ?? 'null');
+    if (!value || typeof value !== 'object') return null;
+    const source = value as Partial<StoredFilters>;
+    const rawShape = source.shape;
+    const directions = new Set(DIRECTION_GROUPS.map((item) => item.value));
+    const placements = new Set(PLACEMENTS.map((item) => item.value));
+    const wings = new Set(WING_PRESENCES.map((item) => item.value));
+    const shape: ShapeFilters = {
+      directions: Array.isArray(rawShape?.directions)
+        ? rawShape.directions.filter((item) => directions.has(item))
+        : [],
+      placements: Array.isArray(rawShape?.placements)
+        ? rawShape.placements.filter((item) => placements.has(item))
+        : [],
+      wings: Array.isArray(rawShape?.wings)
+        ? rawShape.wings.filter((item) => wings.has(item))
+        : [],
+    };
+    const massMax =
+      typeof source.massMax === 'number' && Number.isFinite(source.massMax)
+        ? Math.min(MASS_ANY, Math.max(2, source.massMax))
+        : MASS_ANY;
+    return {
+      shape,
+      massMax,
+      feasibleOnly: source.feasibleOnly === true,
+      viewerOnly: source.viewerOnly === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredFilters(filters: StoredFilters) {
+  try {
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  } catch {
+    // Storage unavailable — the mounted picker still keeps its in-memory state.
+  }
+}
+
+function DesignCodeSearch({
+  designs,
+  selectedId,
+  onSelect,
+}: {
+  designs: DesignSummary[];
+  selectedId: number | null;
+  onSelect: (id: number) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState('');
+  const designIds = useMemo(() => new Set(designs.map((design) => design.id)), [designs]);
+  const selectedDesign = useMemo(
+    () => designs.find((design) => design.id === selectedId) ?? null,
+    [designs, selectedId],
+  );
+  const placeholder = selectedDesign
+    ? `${classifyAirframe(selectedDesign).label} #${selectedDesign.id}`
+    : '모델 코드 입력';
+
+  const submit = () => {
+    const normalized = query.trim().replace(/^#\s*/, '');
+    if (!/^\d+$/.test(normalized)) {
+      setError('숫자 모델 코드를 입력해 주세요.');
+      return;
+    }
+    const id = Number(normalized);
+    if (!designIds.has(id)) {
+      setError(`#${id} 설계를 찾을 수 없습니다.`);
+      return;
+    }
+    setError('');
+    onSelect(id);
+  };
+
+  return (
+    <form
+      className="border-b border-[#e5e5ea] p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <label htmlFor="design-code-search" className="mb-1.5 block text-[10px] font-medium text-[#6e6e73]">
+        모델 코드로 바로가기
+      </label>
+      <div className="flex gap-1.5">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#8e8e93]" />
+          <Input
+            id="design-code-search"
+            inputMode="numeric"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              if (error) setError('');
+            }}
+            placeholder={placeholder}
+            aria-describedby={error ? 'design-code-search-error' : undefined}
+            aria-invalid={Boolean(error)}
+            className="h-8 border-[#e5e5ea] bg-white pl-8 font-mono text-xs text-[#1d1d1f]"
+          />
+        </div>
+        <Button type="submit" size="sm" className="h-8 bg-[#3182f6] px-3 text-xs text-white hover:bg-[#1b64da]">
+          이동
+        </Button>
+      </div>
+      {error && (
+        <p id="design-code-search-error" role="alert" className="mt-1.5 text-[10px] text-rose-600">
+          {error}
+        </p>
+      )}
+    </form>
   );
 }
 

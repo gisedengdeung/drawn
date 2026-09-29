@@ -7,8 +7,23 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 import { Button } from '@/components/ui/button';
-import { broadcastViewerCamera, registerViewerCamera } from '@/lib/viewer-camera-sync';
-import { configureInfiniteGrid, createInfiniteGrid, disposeInfiniteGrid, updateInfiniteGrid, type InfiniteGrid } from '@/lib/three-infinite-grid';
+import {
+  componentMeshKey,
+  componentInstanceMeshKey,
+  componentGeometry,
+  loadComponentMeshes,
+} from '@/lib/component-meshes';
+import {
+  broadcastViewerCamera,
+  registerViewerCamera,
+} from '@/lib/viewer-camera-sync';
+import {
+  configureInfiniteGrid,
+  createInfiniteGrid,
+  disposeInfiniteGrid,
+  updateInfiniteGrid,
+  type InfiniteGrid,
+} from '@/lib/three-infinite-grid';
 import type {
   AssemblyInfo,
   DesignDraft,
@@ -97,8 +112,9 @@ const UP = new THREE.Vector3(0, 1, 0);
 const VIEWER_SYNC_GROUPS = new Map<string, Set<ViewerRuntime>>();
 
 /**
- * 모델을 감쌀 때 실제로 바깥에 있는 점들. 부품마다 제 상자의 여덟 꼭짓점을
- * 월드 좌표로 옮겨 모은다.
+ * 모델을 감쌀 때 실제로 바깥에 있는 점들. 부품마다 실제 geometry 꼭짓점을
+ * 월드 좌표로 옮겨 모은다. 회전된 테이퍼 날개는 로컬 bounding box의 빈
+ * 모서리까지 변환하면 실제 형상보다 크게 잡혀 원본 STL 옆에서 작게 보인다.
  *
  * 모델 전체의 AABB 꼭짓점을 쓰면 안 된다. 그 꼭짓점은 서로 다른 부품의 극값을
  * 조합한 자리라 아무 부품도 거기 없고, 대각선으로 뻗은 기체일수록 실제보다
@@ -110,13 +126,27 @@ function hullPointsOf(model: THREE.Object3D) {
   model.traverse((node) => {
     const mesh = node as THREE.Mesh;
     if (!mesh.isMesh || !mesh.geometry) return;
+    const position = mesh.geometry.getAttribute('position');
+    if (position) {
+      for (let index = 0; index < position.count; index += 1) {
+        points.push(
+          new THREE.Vector3()
+            .fromBufferAttribute(position, index)
+            .applyMatrix4(mesh.matrixWorld),
+        );
+      }
+      return;
+    }
+    // 위치 attribute가 없는 특수 geometry만 경계 상자로 되돌아간다.
     if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
     const local = mesh.geometry.boundingBox;
     if (!local) return;
     for (const x of [local.min.x, local.max.x]) {
       for (const y of [local.min.y, local.max.y]) {
         for (const z of [local.min.z, local.max.z]) {
-          points.push(new THREE.Vector3(x, y, z).applyMatrix4(mesh.matrixWorld));
+          points.push(
+            new THREE.Vector3(x, y, z).applyMatrix4(mesh.matrixWorld),
+          );
         }
       }
     }
@@ -153,6 +183,7 @@ export function ParametricUavViewer({
   );
   const [errorMessage, setErrorMessage] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  const [componentMeshRevision, setComponentMeshRevision] = useState(0);
   // 바깥에서 선택을 넘겨주면 그것을 따르고, 아니면 혼자 들고 있는다.
   const [ownPicked, setOwnPicked] = useState<string[]>([]);
   const picked = selection ?? ownPicked;
@@ -165,6 +196,29 @@ export function ParametricUavViewer({
     },
     [onSelectionChange, picked],
   );
+
+  const exactComponentModels = useMemo(
+    () =>
+      assembly
+        ? assembly.placements
+            .filter((part) => /^(MOTOR|PROPELLER|WING)/i.test(part.n))
+            .flatMap((part) => [
+              componentInstanceMeshKey(draft.baselineId, part.n),
+              componentMeshKey(assembly.modelOf.get(part.n), part.s),
+            ])
+            .filter((key): key is string => Boolean(key))
+        : [],
+    [assembly, draft.baselineId],
+  );
+  useEffect(() => {
+    let current = true;
+    void loadComponentMeshes(exactComponentModels).then((loaded) => {
+      if (current && loaded) setComponentMeshRevision((value) => value + 1);
+    });
+    return () => {
+      current = false;
+    };
+  }, [exactComponentModels]);
   // 장면을 만드는 useEffect는 선택이 바뀔 때마다 다시 돌면 안 된다. 최신
   // 핸들러를 ref로 들고 있어 의존성에서 빼 둔다.
   const pickRef = useRef(setPicked);
@@ -193,7 +247,11 @@ export function ParametricUavViewer({
     const last = picked[picked.length - 1];
     const part = assembly.placements.find((item) => item.n === last);
     if (!part) return null;
-    const types = [...new Set(picked.map((name) => assembly.typeOf.get(name)).filter(Boolean))];
+    const types = [
+      ...new Set(
+        picked.map((name) => assembly.typeOf.get(name)).filter(Boolean),
+      ),
+    ];
     return {
       name: part.n,
       type: assembly.typeOf.get(part.n) ?? null,
@@ -282,7 +340,8 @@ export function ParametricUavViewer({
       const start = pressedAt;
       pressedAt = null;
       if (!start) return;
-      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4)
+        return;
       const model = runtimeRef.current?.model;
       if (!model) return;
       const bounds = renderer.domElement.getBoundingClientRect();
@@ -335,7 +394,10 @@ export function ParametricUavViewer({
       if (!runtime || !points.length) return;
       const box = new THREE.Box3().setFromPoints(points);
       const centre = box.getCenter(new THREE.Vector3());
-      const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 2.5);
+      const radius = Math.max(
+        box.getBoundingSphere(new THREE.Sphere()).radius,
+        2.5,
+      );
       const previous = runtime.lastFittedRadius;
       runtime.radius = radius;
       const changedMaterially =
@@ -351,9 +413,10 @@ export function ParametricUavViewer({
       // 바운딩 "구"를 화면에 맞추면 항공기처럼 납작한 형상은 구의 빈 공간만큼
       // 작아져, 화면 가로의 35%밖에 쓰지 못했다. 시선 기준 가로·세로 축으로
       // 실제 부품 꼭짓점을 재서 맞춘다.
-      const view = viewPreset === 'side'
-        ? new THREE.Vector3(0, 0, 1)
-        : new THREE.Vector3(1.12, 0.88, 1.2).normalize();
+      const view =
+        viewPreset === 'side'
+          ? new THREE.Vector3(0, 0, 1)
+          : new THREE.Vector3(1.12, 0.88, 1.2).normalize();
       const right = new THREE.Vector3().crossVectors(view, UP).normalize();
       const up = new THREE.Vector3().crossVectors(right, view);
       // 점 하나가 화면에 들어오려면 |가로| ≤ (거리 − 깊이)·tan(시야/2) 여야
@@ -376,15 +439,19 @@ export function ParametricUavViewer({
           );
         }
         distance = Math.max(distance * cameraFitPadding, radius * 0.6);
-        let minWide = Infinity, maxWide = -Infinity;
-        let minHigh = Infinity, maxHigh = -Infinity;
+        let minWide = Infinity,
+          maxWide = -Infinity;
+        let minHigh = Infinity,
+          maxHigh = -Infinity;
         for (const point of points) {
           const local = point.clone().sub(centre);
           const depth = Math.max(distance - local.dot(view), 1e-4);
           const across = local.dot(right) / depth;
           const above = local.dot(up) / depth;
-          minWide = Math.min(minWide, across); maxWide = Math.max(maxWide, across);
-          minHigh = Math.min(minHigh, above); maxHigh = Math.max(maxHigh, above);
+          minWide = Math.min(minWide, across);
+          maxWide = Math.max(maxWide, across);
+          minHigh = Math.min(minHigh, above);
+          maxHigh = Math.max(maxHigh, above);
         }
         const shiftWide = ((minWide + maxWide) / 2) * distance;
         const shiftHigh = ((minHigh + maxHigh) / 2) * distance;
@@ -457,31 +524,48 @@ export function ParametricUavViewer({
 
     const externalGroup = cameraSync?.group;
     const externalId = cameraSync?.id;
-    const unregisterExternal = externalGroup && externalId
-      ? registerViewerCamera(externalGroup, externalId, {
-          read: () => {
-            if (!runtime.radius || !runtime.homeDistance) return null;
-            const scale = 1 / runtime.radius;
-            const offset = camera.position.clone().sub(controls.target);
-            return {
-              direction: offset.clone().normalize().toArray(),
-              distanceScale: offset.length() / runtime.homeDistance,
-              targetOffset: controls.target.clone().sub(runtime.homeTarget).multiplyScalar(scale).toArray(),
-              zoom: camera.zoom,
-            };
-          },
-          apply: (pose) => {
-            if (!runtime.radius || !runtime.homeDistance) return;
-            runtime.syncing = true;
-            controls.target.copy(runtime.homeTarget).add(new THREE.Vector3(...pose.targetOffset).multiplyScalar(runtime.radius));
-            camera.position.copy(controls.target).add(new THREE.Vector3(...pose.direction).multiplyScalar(runtime.homeDistance * pose.distanceScale));
-            camera.zoom = pose.zoom;
-            camera.updateProjectionMatrix();
-            controls.update();
-            runtime.syncing = false;
-          },
-        })
-      : null;
+    const unregisterExternal =
+      externalGroup && externalId
+        ? registerViewerCamera(externalGroup, externalId, {
+            read: () => {
+              if (!runtime.radius || !runtime.homeDistance) return null;
+              const scale = 1 / runtime.radius;
+              const offset = camera.position.clone().sub(controls.target);
+              return {
+                direction: offset.clone().normalize().toArray(),
+                distanceScale: offset.length() / runtime.homeDistance,
+                targetOffset: controls.target
+                  .clone()
+                  .sub(runtime.homeTarget)
+                  .multiplyScalar(scale)
+                  .toArray(),
+                zoom: camera.zoom,
+              };
+            },
+            apply: (pose) => {
+              if (!runtime.radius || !runtime.homeDistance) return;
+              runtime.syncing = true;
+              controls.target
+                .copy(runtime.homeTarget)
+                .add(
+                  new THREE.Vector3(...pose.targetOffset).multiplyScalar(
+                    runtime.radius,
+                  ),
+                );
+              camera.position
+                .copy(controls.target)
+                .add(
+                  new THREE.Vector3(...pose.direction).multiplyScalar(
+                    runtime.homeDistance * pose.distanceScale,
+                  ),
+                );
+              camera.zoom = pose.zoom;
+              camera.updateProjectionMatrix();
+              controls.update();
+              runtime.syncing = false;
+            },
+          })
+        : null;
     const syncExternalCamera = () => {
       const config = cameraSyncRef.current;
       if (!config?.linked || runtime.syncing) return;
@@ -559,14 +643,24 @@ export function ParametricUavViewer({
       renderer.domElement.remove();
       runtimeRef.current = null;
     };
-  }, [cameraFitPadding, cameraSync?.group, cameraSync?.id, maxFps, retryKey, syncGroup, viewPreset]);
+  }, [
+    cameraFitPadding,
+    cameraSync?.group,
+    cameraSync?.id,
+    maxFps,
+    retryKey,
+    syncGroup,
+    viewPreset,
+  ]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
     runtime.controls.enablePan = !sideViewLocked;
     runtime.controls.minPolarAngle = sideViewLocked ? Math.PI / 2 : 0.05;
-    runtime.controls.maxPolarAngle = sideViewLocked ? Math.PI / 2 : Math.PI - 0.05;
+    runtime.controls.maxPolarAngle = sideViewLocked
+      ? Math.PI / 2
+      : Math.PI - 0.05;
     if (viewPreset === 'side' && runtime.hull.length) {
       runtime.fitCamera(runtime.hull, true);
     }
@@ -592,7 +686,15 @@ export function ParametricUavViewer({
         disposeObject(runtime.forces);
       }
 
-      runtime.model = buildAircraft(draft, changedGroup, false, assembly, baseline, selectedParts, bladeCount);
+      runtime.model = buildAircraft(
+        draft,
+        changedGroup,
+        false,
+        assembly,
+        baseline,
+        selectedParts,
+        bladeCount,
+      );
       // STL 뷰어와 같은 범위로 자른다. 학습 모델은 -67°까지도 내놓는데(예측의
       // 20%가 ±45°를 넘는다) 그대로 기울이면 기체가 뒤집힌 것처럼 보인다.
       const pitch = THREE.MathUtils.clamp(pitchDegrees, -45, 45);
@@ -600,22 +702,29 @@ export function ParametricUavViewer({
       runtime.scene.add(runtime.model);
 
       if (showGhost && baseline) {
-        runtime.ghost = buildAircraft(baseline, null, true, assembly, null, null, bladeCount);
+        runtime.ghost = buildAircraft(
+          baseline,
+          null,
+          true,
+          assembly,
+          null,
+          null,
+          bladeCount,
+        );
         runtime.ghost.rotation.z = THREE.MathUtils.degToRad(pitch);
         runtime.scene.add(runtime.ghost);
       } else {
         runtime.ghost = null;
       }
 
-      runtime.forces = showForces ? buildForceVectors(forceVectors, runtime.model) : null;
+      runtime.forces = showForces
+        ? buildForceVectors(forceVectors, runtime.model)
+        : null;
       if (runtime.forces) runtime.scene.add(runtime.forces);
 
       const framingPoints = hullPointsOf(runtime.model);
       if (runtime.forces) framingPoints.push(...hullPointsOf(runtime.forces));
-      runtime.fitCamera(
-        framingPoints,
-        topologyChanged || runtime.radius === 0,
-      );
+      runtime.fitCamera(framingPoints, topologyChanged || runtime.radius === 0);
       window.queueMicrotask(() => {
         setStatus('ready');
         setErrorMessage('');
@@ -634,6 +743,7 @@ export function ParametricUavViewer({
     pitchDegrees,
     assembly,
     bladeCount,
+    componentMeshRevision,
     selectedParts,
     showForces,
     showGhost,
@@ -676,7 +786,9 @@ export function ParametricUavViewer({
         <div className="pointer-events-auto absolute right-3 top-3 z-20 w-56 rounded-xl border border-[#e5e5ea] bg-white/95 p-3 text-xs shadow-lg backdrop-blur">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="truncate font-semibold text-[#1d1d1f]">{pickedInfo.name}</p>
+              <p className="truncate font-semibold text-[#1d1d1f]">
+                {pickedInfo.name}
+              </p>
               {pickedInfo.type && (
                 <p className="mt-0.5 text-[10px] text-[#6e6e73]">
                   {pickedInfo.type.replaceAll('_', ' ')}
@@ -791,13 +903,19 @@ function nacaSection(profile: string, steps = 16) {
   const position = Number(code[1]) / 10;
   const thickness = Number(code.slice(2)) / 100 || 0.12;
   const half = (x: number) =>
-    5 * thickness *
-    (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1015 * x ** 4);
+    5 *
+    thickness *
+    (0.2969 * Math.sqrt(x) -
+      0.126 * x -
+      0.3516 * x * x +
+      0.2843 * x ** 3 -
+      0.1015 * x ** 4);
   const mid = (x: number) => {
     if (!camber || !position) return 0;
     return x < position
       ? (camber / position ** 2) * (2 * position * x - x * x)
-      : (camber / (1 - position) ** 2) * (1 - 2 * position + 2 * position * x - x * x);
+      : (camber / (1 - position) ** 2) *
+          (1 - 2 * position + 2 * position * x - x * x);
   };
   const upper: [number, number][] = [];
   const lower: [number, number][] = [];
@@ -826,14 +944,14 @@ function createMaterialFactory(
     const active = changedGroup === kind;
     const plain = color === NEUTRAL_COLOR;
     return new THREE.MeshStandardMaterial({
-      color: ghost ? 0x7f96a2 : color ?? COLORS[kind],
+      color: ghost ? 0x7f96a2 : (color ?? COLORS[kind]),
       // 기본 상태에서는 원본 STL과 같은 재질값을 쓴다.
       roughness: ghost ? 0.8 : plain ? 0.44 : 0.48,
       metalness: ghost ? 0 : plain ? 0.24 : metalness,
       transparent: ghost,
       opacity: ghost ? 0.16 : 1,
       depthWrite: !ghost,
-      emissive: !ghost && active ? color ?? COLORS[kind] : 0x000000,
+      emissive: !ghost && active ? (color ?? COLORS[kind]) : 0x000000,
       emissiveIntensity: !ghost && active ? 0.28 : 0,
       side: THREE.DoubleSide,
     });
@@ -850,7 +968,15 @@ function buildAircraft(
   bladeCount: 2 | 4 = 2,
 ) {
   if (assembly?.placements.length) {
-    return buildFromPlacements(draft, assembly, changedGroup, ghost, baseline, selected, bladeCount);
+    return buildFromPlacements(
+      draft,
+      assembly,
+      changedGroup,
+      ghost,
+      baseline,
+      selected,
+      bladeCount,
+    );
   }
 
   const group = new THREE.Group();
@@ -879,7 +1005,11 @@ function buildAircraft(
   // Source STLs stack the craft as landing gear → rotors → arm deck → fuselage,
   // with the fuselage floor meeting the arms exactly. Fixed constants used to
   // flatten all of that into one plane regardless of the body's real height.
-  const deckY = Math.max(bodyHeight * 0.7, fuselage.floorHeight * SCALE * 3, 0.5);
+  const deckY = Math.max(
+    bodyHeight * 0.7,
+    fuselage.floorHeight * SCALE * 3,
+    0.5,
+  );
   const bodyCenterY = deckY + bodyHeight * 0.5;
   body.position.y = bodyCenterY;
   group.add(body);
@@ -1148,6 +1278,19 @@ function buildAircraft(
 }
 
 /**
+ * 원본 STL과 화면의 기준 형상을 같은 코드 경로로 비교하기 위한 진입점이다.
+ * 감사 스크립트가 별도의 간이 렌더러를 복제하면 화면과 검사 결과가 다시
+ * 어긋나므로, 편집 전 모델을 실제 뷰어와 동일하게 조립한다.
+ */
+export function buildAircraftForAudit(
+  draft: DesignDraft,
+  assembly: AssemblyInfo,
+  bladeCount: 2 | 4 = 2,
+) {
+  return buildAircraft(draft, null, false, assembly, draft, null, bladeCount);
+}
+
+/**
  * 원본 STEP 좌표로 기체를 조립한다. 부품 이름과 위치·방향이 모두 주어지므로
  * topology 문자열로 배치를 추정하던 경로(buildAircraft의 나머지)를 대신한다.
  * STEP은 Z가 높이인 mm 좌표계라 Three.js 축(Y가 높이)으로 바꿔 넣는다.
@@ -1225,7 +1368,8 @@ function buildFromPlacements(
   // `RotatedArm_5_Length`가 같이 있는데 숫자만 키로 쓰면 뒤엣것이 앞엣것을
   // 덮어써, 팔이 남의 길이로 그려진다. 설계 #1에서는 425mm 팔이 50mm로
   // 줄어 관절까지 닿지 못하고 끊어져 보였다(전체 8개 설계에서 발생).
-  const armKeyOf = (prefix: string, index: string) => `${prefix.toUpperCase()}_${index}`;
+  const armKeyOf = (prefix: string, index: string) =>
+    `${prefix.toUpperCase()}_${index}`;
   const baseLengthByKey = new Map<string, number>();
   for (const [name, value] of draft.sourceParameters) {
     const match = name.match(/^((?:Rotated|FixedRotation)?Arm)_(\d+)_Length$/i);
@@ -1278,7 +1422,9 @@ function buildFromPlacements(
   /** 마디 길이가 기준에서 몇 배로 바뀌었나. 꺾인 마디는 두 팔에 같은 비율로 나눈다. */
   const growthOfSegment = (index: number) => {
     const original = reference.segments[index] ?? draft.segments[index];
-    return original.length > 0 ? draft.segments[index].length / original.length : 1;
+    return original.length > 0
+      ? draft.segments[index].length / original.length
+      : 1;
   };
 
   // 조립 그래프로 바깥쪽을 정확히 가릴 수 있게 되어, 중간 팔도 늘릴 수 있다.
@@ -1289,7 +1435,8 @@ function buildFromPlacements(
       continue;
     }
     const ratio = growthOfSegment(index);
-    for (const key of keys) lengthByKey.set(key, (baseLengthByKey.get(key) ?? 0) * ratio);
+    for (const key of keys)
+      lengthByKey.set(key, (baseLengthByKey.get(key) ?? 0) * ratio);
   }
   const fallbackArmLength =
     draft.segments.reduce((sum, segment) => sum + segment.length, 0) /
@@ -1302,7 +1449,6 @@ function buildFromPlacements(
   const propeller = propellerSize(draft.propulsionGroups[0]?.propellerType);
   const catalogRotorRadius = (propeller.diameter * 25.4 * SCALE) / 2;
   const catalogMotorRadius = motorRadius(draft.propulsionGroups[0]?.motorType);
-  const wingGeometry = draft.wings[0];
   // 실측 치수가 있으면 그것을 쓴다. 같은 설계 안에서도 프로펠러 지름이
   // 부품마다 다르므로 카탈로그 문자열 하나로는 맞출 수 없다.
   const measured = (part: PartPlacement) =>
@@ -1315,17 +1461,31 @@ function buildFromPlacements(
    * 오프셋 슬라이더가 기준에서 얼마나 움직였는지를 팔 축 둘레의 회전과
    * 축 방향 이동으로 옮긴다. 아래에서 채운다.
    */
-  type Adjustment = { pivot: THREE.Vector3; spin: THREE.Quaternion; slide: THREE.Vector3 };
+  type Adjustment = {
+    pivot: THREE.Vector3;
+    spin: THREE.Quaternion;
+    slide: THREE.Vector3;
+  };
   const rotorAdjustment = new Map<string, Adjustment[]>();
   /** 안쪽 보정부터 차례로 적용한다. 바깥 팔은 안쪽 팔을 따라 이미 움직인 상태다. */
-  const applyChain = (point: THREE.Vector3, chain: Adjustment[] | undefined) => {
+  const applyChain = (
+    point: THREE.Vector3,
+    chain: Adjustment[] | undefined,
+  ) => {
     if (!chain) return point;
     for (const step of chain) {
-      point.sub(step.pivot).applyQuaternion(step.spin).add(step.pivot).add(step.slide);
+      point
+        .sub(step.pivot)
+        .applyQuaternion(step.spin)
+        .add(step.pivot)
+        .add(step.slide);
     }
     return point;
   };
-  const spinChain = (vector: THREE.Vector3, chain: Adjustment[] | undefined) => {
+  const spinChain = (
+    vector: THREE.Vector3,
+    chain: Adjustment[] | undefined,
+  ) => {
     if (!chain) return vector;
     for (const step of chain) vector.applyQuaternion(step.spin);
     return vector;
@@ -1396,9 +1556,9 @@ function buildFromPlacements(
   };
 
   // 부품 이름은 `WING_<그룹>_<인스턴스>` 꼴인데, 같은 그룹의 인스턴스는 치수가
-  // 같고 파라미터의 끝번호는 그룹 번호가 아니라 그 순서에 대응한다. 이름을
-  // 파라미터 경로에 그대로 맞추면 실측과 74%만 일치하지만, 이 규칙은 91.9%로
-  // 데이터가 허용하는 상한(92.5%)에 사실상 닿는다.
+  // 같고 draft.wings 앞부분은 그룹 번호가 아니라 정렬된 그룹 순서에 대응한다.
+  // path 끝번호는 물리 인스턴스 번호라서 먼저 검색하면, 세 그룹 이상인 설계에서
+  // 셋째 그룹에 둘째 그룹 파라미터가 붙는다(#13870의 1,858mm 날개가 909mm가 됨).
   const wingGroups = [
     ...new Set(
       placements
@@ -1406,14 +1566,11 @@ function buildFromPlacements(
         .filter((value) => Number.isFinite(value)),
     ),
   ].sort((a, b) => a - b);
-  const wingParametersFor = (partName: string) => {
-    const rank = wingGroups.indexOf(Number(partName.match(/^WING_(\d+)_/i)?.[1])) + 1;
-    if (rank < 1) return wingGeometry;
-    return (
-      draft.wings.find((wing) => wing.path.endsWith(`_${rank}`)) ??
-      draft.wings[rank - 1] ??
-      wingGeometry
-    );
+  const wingParametersFor = (source: DesignDraft, partName: string) => {
+    const rank =
+      wingGroups.indexOf(Number(partName.match(/^WING_(\d+)_/i)?.[1])) + 1;
+    if (rank < 1) return source.wings[0];
+    return source.wings[rank - 1] ?? source.wings[0];
   };
 
   // 조립 그래프를 허브에서 바깥으로 걸어, 팔 하나의 "바깥쪽"이 어디까지인지
@@ -1448,7 +1605,8 @@ function buildFromPlacements(
         // 허브 쪽 부모로는 내려가지 않는다. 트리 밖(허브가 없는 설계)이면
         // 예전처럼 허브만 막고 걷는다.
         if (seen.has(next)) continue;
-        if (parentOf.size ? parentOf.get(next) !== current : next === hubName) continue;
+        if (parentOf.size ? parentOf.get(next) !== current : next === hubName)
+          continue;
         seen.add(next);
         found.push(next);
         stack.push(next);
@@ -1467,11 +1625,17 @@ function buildFromPlacements(
    * 허브 쪽으로 자라며 이음매가 찢어진다. 조립 트리에서 부모가 어디인지 알고
    * 있으니 추측할 필요가 없다 — 부모에서 멀어지는 쪽이 바깥이다.
    */
-  const outwardFrom = (part: PartPlacement, axis: THREE.Vector3, point: THREE.Vector3) => {
+  const outwardFrom = (
+    part: PartPlacement,
+    axis: THREE.Vector3,
+    point: THREE.Vector3,
+  ) => {
     const parentName = parentOf.get(part.n);
     const parent = parentName ? byName.get(parentName) : undefined;
     const away = parent
-      ? point.clone().sub(applyChain(toScene(parent.p), rotorAdjustment.get(parent.n)))
+      ? point
+          .clone()
+          .sub(applyChain(toScene(parent.p), rotorAdjustment.get(parent.n)))
       : point;
     const outward = axis.clone();
     if (outward.dot(away) < 0) outward.negate();
@@ -1483,28 +1647,34 @@ function buildFromPlacements(
   // 증가분을 주면 바깥 부품이 두 배로 밀려난다.
   const editedArms = [...armKeysOfSegment]
     .filter(([index]) => reference.segments[index])
-    .sort((a, b) => (draft.segments[a[0]].depth ?? 0) - (draft.segments[b[0]].depth ?? 0))
+    .sort(
+      (a, b) =>
+        (draft.segments[a[0]].depth ?? 0) - (draft.segments[b[0]].depth ?? 0),
+    )
     .flatMap(([index, keys]) => {
       const segment = draft.segments[index];
       const original = reference.segments[index];
       const turn = THREE.MathUtils.degToRad(segment.angle - original.angle);
       const offsetShift = (segment.offset - original.offset) * SCALE;
       const ratio = growthOfSegment(index);
-      return keys.map((key, order) => {
-        const base = baseLengthByKey.get(key) ?? 0;
-        const grow = keys.length === 1
-          ? (segment.length - original.length) * SCALE
-          : (base * ratio - base) * SCALE;
-        return {
-          key,
-          turn: order === 0 ? turn : 0,
-          shift: (order === 0 ? offsetShift : 0) + grow,
-        };
-      });
+      return keys.map((key, order) => ({
+        key,
+        turn: order === 0 ? turn : 0,
+        offsetShift: order === 0 ? offsetShift : 0,
+        // 일부 STEP은 실제 팔이 250mm인데 설계 트리 파라미터가 50~492mm로
+        // 어긋난다. 증가량도 파라미터의 절대 mm가 아니라 실측 길이에 이
+        // 변화율을 적용해 계산해야 기준 형상과 편집 후 연결이 모두 맞는다.
+        ratio:
+          keys.length === 1
+            ? original.length > 0
+              ? segment.length / original.length
+              : 1
+            : ratio,
+      }));
     });
 
-  for (const { key, turn, shift } of editedArms) {
-    if (!turn && !shift) continue;
+  for (const { key, turn, offsetShift, ratio } of editedArms) {
+    if (!turn && !offsetShift && ratio === 1) continue;
     // 키가 이미 `ROTATEDARM_5` 꼴이라 접두사를 다시 붙이지 않는다.
     const armPattern = new RegExp(`^${key}_`, 'i');
     for (const arm of placements) {
@@ -1512,9 +1682,15 @@ function buildFromPlacements(
       const chain = rotorAdjustment.get(arm.n);
       // 이 팔 자신이 안쪽 보정으로 이미 옮겨졌다면, 축과 피벗도 같이 옮긴다.
       const centre = applyChain(toScene(arm.p), chain);
-      const along = outwardFrom(arm, spinChain(toDirection(arm.z), chain), centre);
-      const half = ((arm.s?.[2] ?? baseLengthByKey.get(key) ?? 200) * SCALE) / 2;
+      const along = outwardFrom(
+        arm,
+        spinChain(toDirection(arm.z), chain),
+        centre,
+      );
+      const measuredBase = arm.s?.[2] ?? baseLengthByKey.get(key) ?? 200;
+      const half = (measuredBase * SCALE) / 2;
       const end = centre.clone().addScaledVector(along, half);
+      const shift = offsetShift + measuredBase * (ratio - 1) * SCALE;
       const step: Adjustment = {
         pivot: end,
         spin: new THREE.Quaternion().setFromAxisAngle(along, turn),
@@ -1522,7 +1698,10 @@ function buildFromPlacements(
       };
       for (const moved of outboardOf(arm.n)) {
         if (!byName.has(moved)) continue;
-        rotorAdjustment.set(moved, [...(rotorAdjustment.get(moved) ?? []), step]);
+        rotorAdjustment.set(moved, [
+          ...(rotorAdjustment.get(moved) ?? []),
+          step,
+        ]);
       }
     }
   }
@@ -1540,7 +1719,9 @@ function buildFromPlacements(
       // 쌍을 찾아 나머지를 길이로 쓴다.
       const axisIndex = size ? cylinderAxisOf(size) : 2;
       const girth = size
-        ? [0, 1, 2].filter((index) => index !== axisIndex).map((index) => size[index])
+        ? [0, 1, 2]
+            .filter((index) => index !== axisIndex)
+            .map((index) => size[index])
         : null;
       // 모터 종류를 바꾸면 카탈로그 반지름이 달라진다. 그 변화율만 실측에
       // 곱해, 편집 전에는 실측 그대로이면서 편집은 형상에 보이게 한다.
@@ -1548,8 +1729,40 @@ function buildFromPlacements(
         motorRadius(draft.propulsionGroups[0]?.motorType),
         motorRadius(reference.propulsionGroups[0]?.motorType),
       );
-      const radius = (girth ? (girth[0] + girth[1]) / 4 : catalogMotorRadius) * edit;
+      const radius =
+        (girth ? (girth[0] + girth[1]) / 4 : catalogMotorRadius) * edit;
       const height = (size ? Math.max(size[axisIndex], 0.02) : 0.28) * edit;
+      const instanceGeometry = componentGeometry(
+        componentInstanceMeshKey(draft.baselineId, part.n),
+      );
+      const exactGeometry = instanceGeometry ?? componentGeometry(
+        componentMeshKey(assembly.modelOf.get(part.n), part.s),
+      );
+      if (exactGeometry) {
+        if (!exactGeometry.boundingBox) exactGeometry.computeBoundingBox();
+        const bounds = exactGeometry.boundingBox?.getSize(new THREE.Vector3());
+        const targetLargest = size ? Math.max(...size) : 0;
+        const sourceLargest = bounds
+          ? Math.max(bounds.x, bounds.y, bounds.z)
+          : 0;
+        // 표준 모델의 생김새는 보존하고 placement가 요구하는 전체 크기만
+        // 균일 배율로 맞춘다. 축별 스케일은 모터를 찌그러뜨린다.
+        const placementScale = instanceGeometry
+          ? 1
+          : targetLargest > 0 && sourceLargest > 0
+            ? targetLargest / sourceLargest
+            : 1;
+        const motor = new THREE.Mesh(
+          exactGeometry,
+          partMaterial(part, 'propulsion', 0.55),
+        );
+        motor.position.copy(position);
+        orientToBasis(motor, part);
+        motor.scale.setScalar(placementScale * edit);
+        motor.name = part.n;
+        group.add(motor);
+        continue;
+      }
       const motor = new THREE.Mesh(
         new THREE.CylinderGeometry(radius, radius * 0.93, height, 24),
         partMaterial(part, 'propulsion', 0.55),
@@ -1570,29 +1783,68 @@ function buildFromPlacements(
         propellerSize(draft.propulsionGroups[0]?.propellerType).diameter,
         propellerSize(reference.propulsionGroups[0]?.propellerType).diameter,
       );
-      const rotorRadius = ((largestOf(size) ?? catalogRotorRadius * 2) / 2) * edit;
+      const rotorRadius =
+        ((largestOf(size) ?? catalogRotorRadius * 2) / 2) * edit;
+      const instanceGeometry = componentGeometry(
+        componentInstanceMeshKey(draft.baselineId, part.n),
+      );
+      const exactGeometry = instanceGeometry ?? componentGeometry(
+        componentMeshKey(assembly.modelOf.get(part.n), part.s),
+      );
+      if (exactGeometry) {
+        if (!exactGeometry.boundingBox) exactGeometry.computeBoundingBox();
+        const bounds = exactGeometry.boundingBox?.getSize(new THREE.Vector3());
+        const targetLargest = size ? Math.max(...size) : 0;
+        const sourceLargest = bounds
+          ? Math.max(bounds.x, bounds.y, bounds.z)
+          : 0;
+        const placementScale = instanceGeometry
+          ? 1
+          : targetLargest > 0 && sourceLargest > 0
+            ? targetLargest / sourceLargest
+            : 1;
+        const propeller = new THREE.Mesh(
+          exactGeometry,
+          partMaterial(part, 'propulsion', 0.38),
+        );
+        propeller.position.copy(position);
+        orientToBasis(propeller, part);
+        propeller.scale.setScalar(placementScale * edit);
+        propeller.name = part.n;
+        group.add(propeller);
+        continue;
+      }
       const rotor = new THREE.Group();
       rotor.name = part.n;
       rotor.position.copy(position);
       orient(rotor, axis);
-      rotor.add(
-        new THREE.Mesh(
-          new THREE.CylinderGeometry(rotorRadius, rotorRadius, 0.015, 44),
-          new THREE.MeshStandardMaterial({
-            color: ghost
-              ? 0x7f96a2
-              : selected?.has(part.n)
-                ? TYPE_COLORS.Propeller
-                : NEUTRAL_COLOR,
-            transparent: true,
-            opacity: ghost ? 0.05 : selected && !selected.has(part.n) ? 0.05 : 0.16,
-            depthWrite: false,
-            roughness: 0.65,
-            metalness: 0,
-            side: THREE.DoubleSide,
-          }),
-        ),
-      );
+      // 원본 STL에는 정지된 블레이드만 있다. 수평 로터는 위에서 얇은 블레이드가
+      // 사라져 보이지 않도록 회전 영역을 보조 표시하되, 축이 누운 프로펠러에
+      // 원판을 세우면 #13077처럼 거대한 벽으로 보이므로 표시하지 않는다.
+      if (Math.abs(axis.dot(UP)) >= 0.85) {
+        rotor.add(
+          new THREE.Mesh(
+            new THREE.CylinderGeometry(rotorRadius, rotorRadius, 0.015, 44),
+            new THREE.MeshStandardMaterial({
+              color: ghost
+                ? 0x7f96a2
+                : selected?.has(part.n)
+                  ? TYPE_COLORS.Propeller
+                  : NEUTRAL_COLOR,
+              transparent: true,
+              opacity: ghost
+                ? 0.05
+                : selected && !selected.has(part.n)
+                  ? 0.05
+                  : 0.16,
+              depthWrite: false,
+              roughness: 0.65,
+              metalness: 0,
+              side: THREE.DoubleSide,
+            }),
+          ),
+        );
+      }
       // 날개 2장은 막대 하나가 지름을 가로지르는 모양이고, 4장은 그 막대를
       // 직교로 하나 더 얹는다.
       const bars = bladeCount / 2;
@@ -1617,7 +1869,16 @@ function buildFromPlacements(
     if (/^(?:ROTATEDARM|FIXEDROTATIONARM|ARM)_/.test(name)) {
       const named = part.n.match(/^(ROTATEDARM|FIXEDROTATIONARM|ARM)_(\d+)_/i);
       const key = named ? armKeyOf(named[1], named[2]) : '';
-      const length = (lengthByKey.get(key) ?? fallbackArmLength) * SCALE;
+      // STEP 실측을 기준 길이로 삼고 편집 비율만 파라미터에서 가져온다.
+      // 설계 트리와 STEP이 어긋난 11개 설계(팔 272개)도 편집 전에는 원본과
+      // 일치하고, 슬라이더를 움직이면 같은 비율로 자연스럽게 늘고 줄어든다.
+      const measuredBase =
+        part.s?.[2] ?? baseLengthByKey.get(key) ?? fallbackArmLength;
+      const parameterBase = baseLengthByKey.get(key);
+      const parameterLength = lengthByKey.get(key);
+      const editRatio =
+        parameterBase && parameterLength ? parameterLength / parameterBase : 1;
+      const length = measuredBase * editRatio * SCALE;
       // 팔은 10×5mm 각재가 아니라 지름 10mm 원통이다. 카탈로그에 튜브 모델이
       // `0394OD_para_tube` 하나뿐이고 0.394인치 외경이 10mm로, 실측 s[0]과
       // 같다. 부품 수의 26%를 차지해 형태 차이가 화면에 크게 남는다.
@@ -1629,7 +1890,7 @@ function buildFromPlacements(
       bar.position.copy(position);
       // 좌표가 형상의 중심이라 길이를 늘리면 허브 쪽으로도 자란다. 뿌리를
       // 그대로 두고 바깥으로만 뻗도록 늘어난 만큼의 절반을 밀어 준다.
-      const grown = length - (baseLengthByKey.get(key) ?? length / SCALE) * SCALE;
+      const grown = length - measuredBase * SCALE;
       if (grown) {
         const outward = outwardFrom(part, axis, position);
         bar.position.addScaledVector(outward, grown / 2);
@@ -1664,7 +1925,9 @@ function buildFromPlacements(
       const size = measured(part);
       const axisIndex = size ? cylinderAxisOf(size) : 1;
       const girth = size
-        ? [0, 1, 2].filter((index) => index !== axisIndex).map((index) => size[index])
+        ? [0, 1, 2]
+            .filter((index) => index !== axisIndex)
+            .map((index) => size[index])
         : null;
       const radius = girth ? (girth[0] + girth[1]) / 4 : 0.32;
       const height = size ? Math.max(size[axisIndex], 0.02) : 0.24;
@@ -1707,9 +1970,16 @@ function buildFromPlacements(
         const reach = (axis: 'x' | 'y' | 'z') =>
           (Math.abs(ix[axis]) * size[0] +
             Math.abs(iy[axis]) * size[1] +
-            Math.abs(iz[axis]) * size[2]) / 2;
-        width = Math.max(width, (Math.abs(centre.x - position.x) + reach('x')) * 2 + clearance);
-        depth = Math.max(depth, (Math.abs(centre.z - position.z) + reach('z')) * 2 + clearance);
+            Math.abs(iz[axis]) * size[2]) /
+          2;
+        width = Math.max(
+          width,
+          (Math.abs(centre.x - position.x) + reach('x')) * 2 + clearance,
+        );
+        depth = Math.max(
+          depth,
+          (Math.abs(centre.z - position.z) + reach('z')) * 2 + clearance,
+        );
       }
       // 실제 부품은 `capsule_fuselage`, 즉 원통 양 끝에 반구가 붙은 캡슐이다.
       // 둥근 상자로 그리면 끝 모서리가 반구 밖으로 튀어나와, 길이를 제대로
@@ -1721,7 +1991,10 @@ function buildFromPlacements(
       // CapsuleGeometry는 Y축을 따라 서 있다. 동체는 X축으로 눕는다.
       capsule.rotateZ(Math.PI / 2);
       capsule.scale(1, height / (capRadius * 2), depth / (capRadius * 2));
-      const body = new THREE.Mesh(capsule, partMaterial(part, 'fuselage', 0.22));
+      const body = new THREE.Mesh(
+        capsule,
+        partMaterial(part, 'fuselage', 0.22),
+      );
       body.position.copy(position);
       // 실측 상자는 선체의 윗절반만 잡으므로 윗면 높이는 맞다. 윗면을 그대로
       // 두고 아래로만 늘린다. 번들 STL 12개와 대조해 평균 오차 7mm.
@@ -1744,10 +2017,13 @@ function buildFromPlacements(
       );
       const battery = new THREE.Mesh(
         size
-          ? new THREE.BoxGeometry(...(size.map((v) => v * edit) as [number, number, number]))
+          ? new THREE.BoxGeometry(
+              ...(size.map((v) => v * edit) as [number, number, number]),
+            )
           : new THREE.BoxGeometry(
               0.9 * THREE.MathUtils.clamp(Math.cbrt(capacity / 5000), 0.7, 1.7),
-              0.32 * THREE.MathUtils.clamp(Math.cbrt(capacity / 5000), 0.7, 1.7),
+              0.32 *
+                THREE.MathUtils.clamp(Math.cbrt(capacity / 5000), 0.7, 1.7),
               0.5 * THREE.MathUtils.clamp(Math.cbrt(capacity / 5000), 0.7, 1.7),
             ),
         partMaterial(part, 'energy', 0.05),
@@ -1763,11 +2039,23 @@ function buildFromPlacements(
       // The source splits the centre body into fuselage plus this case. Skipping
       // it left the middle visibly thinner than the STL.
       const size = measured(part);
-      const width = size ? size[0] : Math.max(draft.fuselage.length * SCALE * 0.8, 0.35);
-      const height = size ? size[2] : Math.max(draft.fuselage.verticalDiameter * SCALE * 0.5, 0.2);
-      const depth = size ? size[1] : Math.max(draft.fuselage.horizontalDiameter * SCALE * 0.55, 0.4);
+      const width = size
+        ? size[0]
+        : Math.max(draft.fuselage.length * SCALE * 0.8, 0.35);
+      const height = size
+        ? size[2]
+        : Math.max(draft.fuselage.verticalDiameter * SCALE * 0.5, 0.2);
+      const depth = size
+        ? size[1]
+        : Math.max(draft.fuselage.horizontalDiameter * SCALE * 0.55, 0.4);
       const caseMesh = new THREE.Mesh(
-        new RoundedBoxGeometry(width, height, depth, 3, Math.min(width, height, depth) * 0.2),
+        new RoundedBoxGeometry(
+          width,
+          height,
+          depth,
+          3,
+          Math.min(width, height, depth) * 0.2,
+        ),
         partMaterial(part, 'payload', 0.1),
       );
       caseMesh.position.copy(position);
@@ -1784,7 +2072,9 @@ function buildFromPlacements(
       const edit = growth(draft.payload.mass, reference.payload.mass);
       const cargo = new THREE.Mesh(
         size
-          ? new THREE.BoxGeometry(...(size.map((v) => v * edit) as [number, number, number]))
+          ? new THREE.BoxGeometry(
+              ...(size.map((v) => v * edit) as [number, number, number]),
+            )
           : new THREE.BoxGeometry(0.52, guessed, 0.4),
         partMaterial(part, 'payload', 0.08),
       );
@@ -1796,13 +2086,32 @@ function buildFromPlacements(
     }
 
     if (name.startsWith('WING')) {
-      const wingData = wingParametersFor(part.n);
-      // 치수는 파라미터에서 읽는다. 실측 상자를 그대로 쓰면 슬라이더를 움직여도
-      // 형상이 그대로였고, 변의 길이 순서로 span·시위를 가르는 방식은 짧고 넓은
-      // 날개에서 둘을 뒤바꿨다.
-      const span = Math.max((wingData?.span ?? 900) * SCALE, 0.3);
-      const root = Math.max((wingData?.chordInner ?? 220) * SCALE, 0.08);
-      const tip = Math.max((wingData?.chordOuter ?? 140) * SCALE, 0.04);
+      const wingData = wingParametersFor(draft, part.n);
+      const referenceWing = wingParametersFor(reference, part.n) ?? wingData;
+
+      const exactWing = componentGeometry(
+        componentInstanceMeshKey(draft.baselineId, part.n),
+      );
+      const wingEdited = Boolean(
+        wingData &&
+          referenceWing &&
+          (wingData.span !== referenceWing.span ||
+            wingData.chordInner !== referenceWing.chordInner ||
+            wingData.chordOuter !== referenceWing.chordOuter ||
+            wingData.nacaProfile !== referenceWing.nacaProfile ||
+            wingData.taperOffset !== referenceWing.taperOffset),
+      );
+      if (exactWing && !wingEdited) {
+        const wing = new THREE.Mesh(
+          exactWing,
+          partMaterial(part, 'wing', 0.18),
+        );
+        wing.position.copy(position);
+        orientToBasis(wing, part);
+        wing.name = part.n;
+        group.add(wing);
+        continue;
+      }
 
       // 어느 로컬 축으로 뻗는지는 실측 치수가 span과 가장 가까운 축으로 고른다.
       // 단순히 가장 긴 축을 쓰면 19,716장 중 4.7%가 엉뚱한 축을 향했다.
@@ -1812,13 +2121,65 @@ function buildFromPlacements(
       const chordIndex = axisNearest(part.s, wingData?.chordInner ?? 220, rest);
       const thickIndex = rest.find((index) => index !== chordIndex) ?? rest[0];
 
+      // #11654는 WING_SPAN=1799지만 STEP의 날개 인스턴스 한 장은 500mm다.
+      // 파라미터를 곧바로 형상 길이로 쓰면 두 날개가 3.6배씩 뻗는다. 팔과
+      // 마찬가지로 편집 전에는 STEP 실측, 편집 후에는 파라미터 변화율만 적용한다.
+      const measuredSpan = part.s?.[spanIndex] ?? referenceWing?.span ?? 900;
+      const spanRatio =
+        wingData?.span && referenceWing?.span
+          ? wingData.span / referenceWing.span
+          : 1;
+      const rootRatio =
+        wingData?.chordInner && referenceWing?.chordInner
+          ? wingData.chordInner / referenceWing.chordInner
+          : 1;
+      const tipRatio =
+        wingData?.chordOuter && referenceWing?.chordOuter
+          ? wingData.chordOuter / referenceWing.chordOuter
+          : 1;
+      const span = Math.max(measuredSpan * spanRatio * SCALE, 0.3);
+      // STEP placement의 시위축 s 값은 root/tip 중 큰 쪽을 감싼 bounding size다.
+      // 이를 root로 쓰면 tip이 더 넓은 날개에서 최대 시위를 다시 taper 비율만큼
+      // 키우게 된다(#7266: 198.5mm를 112.2mm root로 오인해 tip을 약 350mm로 생성).
+      // span은 조립 인스턴스별 실측이 필요하지만, 두 시위는 원본 파라미터가 각각의
+      // 실제 단면을 직접 표현하므로 그 값을 기준으로 편집 비율만 적용한다.
+      const root = Math.max(
+        (referenceWing?.chordInner ?? part.s?.[chordIndex] ?? 220) *
+          rootRatio *
+          SCALE,
+        0.08,
+      );
+      const tip = Math.max(
+        (referenceWing?.chordOuter ?? part.s?.[chordIndex] ?? 140) *
+          tipRatio *
+          SCALE,
+        0.04,
+      );
+
       // 좌우 날개는 뻗는 축이 정반대라, 넓은 뿌리를 한쪽으로 고정하면 한 장은
       // 뿌리가 바깥을 향한다. 기체 중심에 가까운 끝을 뿌리로 잡는다.
-      const towardCentre = position.lengthSq() > 0
-        ? position.clone().negate().normalize()
-        : basis[chordIndex];
+      const towardCentre =
+        position.lengthSq() > 0
+          ? position.clone().negate().normalize()
+          : basis[chordIndex];
       const spanAxis = basis[spanIndex].clone();
       if (spanAxis.dot(towardCentre) < 0) spanAxis.negate();
+
+      // span/chord/thickness 축을 재배열하면 좌표계의 손잡이 방향이 바뀔 수 있다.
+      // 회전 행렬은 오른손 좌표계여야 하므로 두께축을 뒤집되, NACA 단면의 Y도
+      // 함께 뒤집어 월드 공간의 윗면 방향은 유지한다. 예전에는 축만 뒤집어서
+      // 캠버가 있는 익형 한쪽의 윗면과 아랫면이 서로 바뀌었다(#25255).
+      const thicknessAxis = basis[thickIndex].clone();
+      const frame = new THREE.Matrix4().makeBasis(
+        spanAxis,
+        thicknessAxis,
+        basis[chordIndex],
+      );
+      const invertSectionThickness = frame.determinant() < 0;
+      if (invertSectionThickness) {
+        thicknessAxis.negate();
+        frame.makeBasis(spanAxis, thicknessAxis, basis[chordIndex]);
+      }
 
       // 뿌리는 로컬 +X, 시위는 +Z, 두께는 +Y에 놓고 만든 뒤 통째로 돌린다.
       const half = span / 2;
@@ -1834,11 +2195,18 @@ function buildFromPlacements(
         [-half, tip, tipFront],
       ] as const) {
         for (const [cx, cy] of section) {
-          vertices.push(side, cy * chord, front + cx * chord);
+          vertices.push(
+            side,
+            cy * chord * (invertSectionThickness ? -1 : 1),
+            front + cx * chord,
+          );
         }
       }
       const shape = new THREE.BufferGeometry();
-      shape.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+      shape.setAttribute(
+        'position',
+        new THREE.BufferAttribute(new Float32Array(vertices), 3),
+      );
       const index: number[] = [];
       // 옆면: 뿌리 단면과 끝단 단면을 띠로 잇는다.
       for (let i = 0; i < count; i += 1) {
@@ -1859,15 +2227,6 @@ function buildFromPlacements(
       wing.position.copy(position);
       // 세 축을 그대로 회전 행렬로 쓴다. 이전처럼 span축 하나만 맞추면 나머지
       // 회전이 임의로 정해져 시위 방향과 두께 방향이 제멋대로 누웠다.
-      const frame = new THREE.Matrix4().makeBasis(
-        spanAxis,
-        basis[thickIndex],
-        basis[chordIndex],
-      );
-      // 축을 뒤섞으면 좌우가 뒤집힐 수 있다. 두께축은 대칭이라 뒤집어도 무해하다.
-      if (frame.determinant() < 0) {
-        frame.makeBasis(spanAxis, basis[thickIndex].clone().negate(), basis[chordIndex]);
-      }
       wing.quaternion.setFromRotationMatrix(frame);
       wing.name = part.n;
       group.add(wing);
@@ -2250,7 +2609,10 @@ function isWingSegment(segment: DesignSegment) {
   return Boolean(segment.wing || /WingArm/i.test(segment.nodeType));
 }
 
-function buildForceVectors(vectors?: ForceVectors, model?: THREE.Object3D | null) {
+function buildForceVectors(
+  vectors?: ForceVectors,
+  model?: THREE.Object3D | null,
+) {
   const group = new THREE.Group();
   const drag = Math.max(vectors?.drag ?? 0, 0);
   const hasLift = typeof vectors?.lift === 'number';
@@ -2258,21 +2620,62 @@ function buildForceVectors(vectors?: ForceVectors, model?: THREE.Object3D | null
   const thrust = Math.max(vectors?.thrust ?? 0, 0);
   const max = Math.max(drag, lift, thrust, 1);
   const bounds = model ? new THREE.Box3().setFromObject(model) : null;
-  const centre = bounds?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3(0, 0.8, 0);
-  const radius = Math.max(bounds?.getBoundingSphere(new THREE.Sphere()).radius ?? 2, 1);
+  const centre =
+    bounds?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3(0, 0.8, 0);
+  const radius = Math.max(
+    bounds?.getBoundingSphere(new THREE.Sphere()).radius ?? 2,
+    1,
+  );
   const length = (amount: number) => radius * (0.58 + (amount / max) * 0.72);
   const headLength = Math.max(radius * 0.12, 0.18);
   const headWidth = Math.max(radius * 0.07, 0.11);
   if (drag > 0)
-    group.add(buildForceArrow(new THREE.Vector3(-1, 0, 0), centre, length(drag), 0xf4773c, headLength, headWidth, radius, 20));
+    group.add(
+      buildForceArrow(
+        new THREE.Vector3(-1, 0, 0),
+        centre,
+        length(drag),
+        0xf4773c,
+        headLength,
+        headWidth,
+        radius,
+        20,
+      ),
+    );
   if (hasLift)
-    group.add(buildForceArrow(new THREE.Vector3(0, 1, 0), centre, length(lift) * 1.12, 0x00a86b, headLength * 1.12, headWidth * 1.18, radius, 30));
+    group.add(
+      buildForceArrow(
+        new THREE.Vector3(0, 1, 0),
+        centre,
+        length(lift) * 1.12,
+        0x00a86b,
+        headLength * 1.12,
+        headWidth * 1.18,
+        radius,
+        30,
+      ),
+    );
   if (thrust > 0)
-    group.add(buildForceArrow(new THREE.Vector3(1, 0, 0), centre, length(thrust), 0x6554d9, headLength, headWidth, radius, 20));
+    group.add(
+      buildForceArrow(
+        new THREE.Vector3(1, 0, 0),
+        centre,
+        length(thrust),
+        0x6554d9,
+        headLength,
+        headWidth,
+        radius,
+        20,
+      ),
+    );
   if (drag > 0 || hasLift || thrust > 0) {
     const originMarker = new THREE.Mesh(
       new THREE.SphereGeometry(Math.max(radius * 0.045, 0.065), 24, 16),
-      new THREE.MeshBasicMaterial({ color: 0xf6bf26, depthTest: false, depthWrite: false }),
+      new THREE.MeshBasicMaterial({
+        color: 0xf6bf26,
+        depthTest: false,
+        depthWrite: false,
+      }),
     );
     originMarker.position.copy(centre);
     originMarker.renderOrder = 40;
@@ -2293,14 +2696,30 @@ function buildForceArrow(
 ) {
   const arrow = new THREE.Group();
   const unit = direction.clone().normalize();
-  const material = new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false });
-  const shaftEnd = origin.clone().addScaledVector(unit, Math.max(length - headLength, length * 0.55));
-  const shaft = cylinderBetween(origin, shaftEnd, Math.max(radius * 0.012, 0.025), material);
-  const cone = new THREE.Mesh(new THREE.ConeGeometry(headWidth, headLength, 20), material.clone());
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const shaftEnd = origin
+    .clone()
+    .addScaledVector(unit, Math.max(length - headLength, length * 0.55));
+  const shaft = cylinderBetween(
+    origin,
+    shaftEnd,
+    Math.max(radius * 0.012, 0.025),
+    material,
+  );
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(headWidth, headLength, 20),
+    material.clone(),
+  );
   cone.position.copy(origin).addScaledVector(unit, length - headLength / 2);
   cone.quaternion.setFromUnitVectors(UP, unit);
   arrow.add(shaft, cone);
-  arrow.traverse((node) => { node.renderOrder = renderOrder; });
+  arrow.traverse((node) => {
+    node.renderOrder = renderOrder;
+  });
   return arrow;
 }
 

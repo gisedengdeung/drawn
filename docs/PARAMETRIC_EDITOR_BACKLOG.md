@@ -2,6 +2,7 @@
 
 > 작성 2026-09-28 · 브랜치 `parametric-functions-change` · 기준 커밋 `cfdfeb7`
 > **짝 문서**: `docs/PARAMETRIC_EDITOR_HANDOFF.md` — 편집 로직 재설계의 구조 분석·구현 단계·결정 사항.
+> **후속 문서**: `docs/PARAMETRIC_PLAN_B_HANDOFF.md` — 플랜 A 완료 타임라인과 P서버 기반 플랜 B.
 > 이 문서는 그 문서가 다루지 않는 **"계속 미뤄서 못한 것들"** 과 **파일·함수 단위 수정 지점**을 담는다.
 
 ---

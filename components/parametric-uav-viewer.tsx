@@ -69,6 +69,10 @@ type ParametricUavViewerProps = {
   selection?: string[];
   /** 3D에서 부품을 클릭했을 때. 주면 선택 상태를 바깥에서 관리한다. */
   onSelectionChange?: (names: string[]) => void;
+  /** 3D 클릭으로 해석한 편집 그룹. 부품 목록의 임의 다중 선택과 구분한다. */
+  onEditTargetChange?: (target: ParametricEditTarget | null) => void;
+  /** 팔 클릭 시 한 인스턴스만 고를지, 공유 파라미터 그룹 전체를 고를지 결정한다. */
+  armEditScope?: ArmEditScope;
   /** 배경 장식용 등, 조작 없이 저절로 돌아가야 할 때. */
   autoRotate?: boolean;
   /** 다른 전체 화면 UI에 가려졌을 때 WebGL 렌더링만 일시 정지한다. */
@@ -87,6 +91,236 @@ type ParametricUavViewerProps = {
   cameraSync?: { group: string; id: string; linked: boolean };
 };
 
+export type ArmEditScope = 'instance' | 'group';
+
+export type ParametricEditTarget = {
+  anchor: string;
+  names: string[];
+  parameterGroup: ParameterGroup;
+  segmentIndex: number | null;
+  wingIndex: number | null;
+  propulsionIndex: number | null;
+  armEditScope: ArmEditScope;
+  armInstance: string | null;
+  armBaseLength: number | null;
+  assemblyPath: string[];
+  connections: Array<{
+    name: string;
+    relation: 'parent' | 'child' | 'connected';
+    type: string | null;
+  }>;
+};
+
+const ARM_NAME = /^(?:ROTATEDARM|FIXEDROTATIONARM|ARM)_(\d+)_/i;
+const STRUCTURE_NAME = /^(?:ROTATEDARM|FIXEDROTATIONARM|ARM|BEND|BRANCH|CROSS|FLANGE)/i;
+
+function armKeyFromPartName(name: string) {
+  const match = name.match(/^((?:Rotated|FixedRotation)?Arm)_(\d+)_/i);
+  return match ? `${match[1].toUpperCase()}_${match[2]}` : null;
+}
+
+function armBaseLengthForKey(draft: DesignDraft, key: string | null) {
+  if (!key) return null;
+  for (const [name, value] of draft.sourceParameters) {
+    const match = name.match(/^((?:Rotated|FixedRotation)?Arm)_(\d+)_Length$/i);
+    if (
+      match &&
+      typeof value === 'number' &&
+      `${match[1].toUpperCase()}_${match[2]}` === key
+    ) return value;
+  }
+  return null;
+}
+
+function armKeysBySegment(draft: DesignDraft, baseline: DesignDraft | null) {
+  const reference = baseline ?? draft;
+  const baseLengthByKey = new Map<string, number>();
+  for (const [name, value] of draft.sourceParameters) {
+    const match = name.match(/^((?:Rotated|FixedRotation)?Arm)_(\d+)_Length$/i);
+    if (match && typeof value === 'number') {
+      baseLengthByKey.set(`${match[1].toUpperCase()}_${match[2]}`, value);
+    }
+  }
+  const result = new Map<number, string[]>();
+  const taken = new Set<string>();
+  draft.segments.forEach((_, index) => {
+    const segment = reference.segments[index] ?? draft.segments[index];
+    const first = segment.parameters?.arm1Length;
+    const second = segment.parameters?.arm2Length;
+    const targets = typeof first === 'number' && typeof second === 'number'
+      ? [first, second]
+      : [segment.length];
+    const keys: string[] = [];
+    for (const target of targets) {
+      let best: string | null = null;
+      let error = Infinity;
+      for (const [key, value] of baseLengthByKey) {
+        if (taken.has(key) || keys.includes(key)) continue;
+        const gap = Math.abs(value - target);
+        if (gap < error) {
+          error = gap;
+          best = key;
+        }
+      }
+      if (!best || error >= Math.max(target * 0.02, 1)) return;
+      keys.push(best);
+    }
+    result.set(index, keys);
+    keys.forEach((key) => taken.add(key));
+  });
+  return result;
+}
+
+/** 클릭한 인스턴스를 편집 가능한 조립 branch와 파라미터 인덱스로 해석한다. */
+export function resolveParametricEditTarget(
+  partName: string,
+  assembly: AssemblyInfo,
+  draft: DesignDraft,
+  baseline: DesignDraft | null = null,
+  armEditScope: ArmEditScope = 'group',
+): ParametricEditTarget {
+  const { placements, neighbours } = assembly;
+  const names = new Set(placements.map((part) => part.n));
+  const hub = placements.find((part) => /^MAINHUB/i.test(part.n))?.n;
+  const parentOf = new Map<string, string | null>();
+  if (hub) {
+    parentOf.set(hub, null);
+    const queue = [hub];
+    while (queue.length) {
+      const current = queue.shift() as string;
+      for (const next of neighbours.get(current) ?? []) {
+        if (!names.has(next) || parentOf.has(next)) continue;
+        parentOf.set(next, current);
+        queue.push(next);
+      }
+    }
+  }
+
+  const upper = partName.toUpperCase();
+  const type = assembly.typeOf.get(partName) ?? '';
+  const wingMatch = partName.match(/^WING_(\d+)_/i);
+  const wingGroups = [...new Set(placements.flatMap((part) => {
+    const match = part.n.match(/^WING_(\d+)_/i);
+    return match ? [Number(match[1])] : [];
+  }))].sort((a, b) => a - b);
+
+  let cursor: string | null | undefined = partName;
+  let armAnchor: string | null = null;
+  while (cursor) {
+    if (ARM_NAME.test(cursor)) {
+      armAnchor = cursor;
+      break;
+    }
+    cursor = parentOf.get(cursor);
+  }
+  const armKey = armAnchor ? armKeyFromPartName(armAnchor) : null;
+  const armBindings = armKeysBySegment(draft, baseline);
+  const segmentEntry = armKey == null
+    ? null
+    : [...armBindings].find(([, keys]) => keys.includes(armKey)) ?? null;
+  const segmentIndex = segmentEntry?.[0] ?? null;
+  const segmentArmKeys = segmentEntry?.[1] ?? (armKey ? [armKey] : []);
+
+  let parameterGroup: ParameterGroup = 'structure';
+  if (wingMatch || /wing/i.test(type)) parameterGroup = 'wing';
+  else if (/^(?:MOTOR|PROPELLER)/i.test(upper) || /motor|propeller/i.test(type)) parameterGroup = 'propulsion';
+  else if (/^BATTERY/i.test(upper) || /battery/i.test(type)) parameterGroup = 'energy';
+  else if (/^CARGO(?!CASE)/i.test(upper)) parameterGroup = 'payload';
+  else if (/^(?:SERVO|SENSOR)/i.test(upper)) parameterGroup = 'layout';
+  else if (/^(?:FUSELAGE|CARGOCASE|MAINHUB)/i.test(upper)) parameterGroup = 'fuselage';
+
+  let related: string[];
+  if (wingMatch) {
+    related = placements
+      .map((part) => part.n)
+      .filter((name) => name.startsWith(`WING_${wingMatch[1]}_`));
+  } else if (armAnchor) {
+    // 한 세그먼트 파라미터는 대칭 배치된 여러 실제 ARM 인스턴스를 공유한다.
+    // 편집 시 함께 움직이는 모든 branch를 강조해야 선택 범위와 결과가 일치한다.
+    const anchors = armEditScope === 'group' && segmentArmKeys.length
+      ? placements
+          .map((part) => part.n)
+          .filter((name) => {
+            const key = armKeyFromPartName(name);
+            return key != null && segmentArmKeys.includes(key);
+          })
+      : [armAnchor];
+    related = [];
+    for (const anchor of anchors) {
+      if (!related.includes(anchor)) related.push(anchor);
+      const stack = [anchor];
+      while (stack.length) {
+        const current = stack.pop() as string;
+        for (const next of neighbours.get(current) ?? []) {
+          if (parentOf.get(next) !== current || related.includes(next)) continue;
+          related.push(next);
+          stack.push(next);
+        }
+      }
+      const anchorParent = parentOf.get(anchor);
+      if (anchorParent && STRUCTURE_NAME.test(anchorParent) && !related.includes(anchorParent)) {
+        related.unshift(anchorParent);
+      }
+    }
+  } else {
+    related = placements.flatMap((part) => {
+      const candidateType = assembly.typeOf.get(part.n) ?? '';
+      if (parameterGroup === 'fuselage') return /^(?:FUSELAGE|CARGOCASE|MAINHUB)/i.test(part.n) ? [part.n] : [];
+      if (parameterGroup === 'energy') return /^BATTERY/i.test(part.n) || /battery/i.test(candidateType) ? [part.n] : [];
+      if (parameterGroup === 'payload') return /^CARGO(?!CASE)/i.test(part.n) ? [part.n] : [];
+      if (parameterGroup === 'layout') return /^(?:SERVO|SENSOR)/i.test(part.n) ? [part.n] : [];
+      return part.n === partName ? [part.n] : [];
+    });
+  }
+  // 선택 배열의 마지막 항목은 우측 상세 카드가 표시한다. branch 끝 부품이
+  // 아니라 사용자가 실제로 클릭한 인스턴스가 나오도록 anchor를 끝에 둔다.
+  related = [...new Set(related.filter((name) => name !== partName)), partName];
+
+  const assemblyPath: string[] = [];
+  cursor = partName;
+  while (cursor) {
+    assemblyPath.unshift(cursor);
+    cursor = parentOf.get(cursor);
+  }
+  const parent = parentOf.get(partName);
+  const connections = (neighbours.get(partName) ?? [])
+    .filter((name) => names.has(name))
+    .map((name) => ({
+      name,
+      relation: parent === name
+        ? 'parent' as const
+        : parentOf.get(name) === partName
+          ? 'child' as const
+          : 'connected' as const,
+      type: assembly.typeOf.get(name) ?? null,
+    }))
+    .sort((left, right) => {
+      const order = { parent: 0, child: 1, connected: 2 } as const;
+      return order[left.relation] - order[right.relation] || left.name.localeCompare(right.name);
+    });
+
+  const wingGroup = wingMatch ? Number(wingMatch[1]) : null;
+  const wingIndex = wingGroup == null ? null : Math.max(wingGroups.indexOf(wingGroup), 0);
+  const segmentId = segmentIndex == null ? null : draft.segments[segmentIndex]?.id;
+  const propulsionIndex = segmentId == null
+    ? null
+    : draft.propulsionGroups.findIndex((group) => group.segmentId === segmentId);
+
+  return {
+    anchor: partName,
+    names: related,
+    parameterGroup,
+    segmentIndex,
+    wingIndex,
+    propulsionIndex: propulsionIndex != null && propulsionIndex >= 0 ? propulsionIndex : null,
+    armEditScope,
+    armInstance: armAnchor,
+    armBaseLength: armBaseLengthForKey(draft, armKey),
+    assemblyPath,
+    connections,
+  };
+}
+
 type ViewerRuntime = {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
@@ -102,7 +336,7 @@ type ViewerRuntime = {
   hull: THREE.Vector3[];
   homeTarget: THREE.Vector3;
   homeDistance: number;
-  lastFittedRadius: number;
+  designId: number | null;
   topology: string;
   syncing: boolean;
 };
@@ -167,6 +401,8 @@ export function ParametricUavViewer({
   bladeCount = 2,
   selection,
   onSelectionChange,
+  onEditTargetChange,
+  armEditScope = 'group',
   autoRotate = false,
   paused = false,
   maxFps = 60,
@@ -225,6 +461,14 @@ export function ParametricUavViewer({
   useEffect(() => {
     pickRef.current = setPicked;
   }, [setPicked]);
+  const editTargetRef = useRef(onEditTargetChange);
+  useEffect(() => {
+    editTargetRef.current = onEditTargetChange;
+  }, [onEditTargetChange]);
+  const pickContextRef = useRef({ assembly, draft, baseline, armEditScope });
+  useEffect(() => {
+    pickContextRef.current = { assembly, draft, baseline, armEditScope };
+  }, [armEditScope, assembly, baseline, draft]);
   // 같은 이유로 자동 회전 여부도 ref로 읽는다.
   const autoRotateRef = useRef(autoRotate);
   useEffect(() => {
@@ -360,12 +604,21 @@ export function ParametricUavViewer({
       // 빈 공간을 눌렀다고 선택을 지우지 않는다. 화면을 돌리려다 빗맞히면
       // 애써 고른 것이 한 번에 날아간다. 해제는 목록의 버튼이나 ✕로 한다.
       if (!name) return;
-      pickRef.current((current) =>
-        // 이미 고른 것을 다시 누르면 빼고, 아니면 더한다. 목록과 같은 방식이다.
-        current.includes(name)
-          ? current.filter((item) => item !== name)
-          : [...current, name],
+      const context = pickContextRef.current;
+      if (!context.assembly) {
+        pickRef.current([name]);
+        editTargetRef.current?.(null);
+        return;
+      }
+      const target = resolveParametricEditTarget(
+        name,
+        context.assembly,
+        context.draft,
+        context.baseline,
+        context.armEditScope,
       );
+      pickRef.current(target.names);
+      editTargetRef.current?.(target);
     };
     renderer.domElement.addEventListener('pointerdown', handlePointerDown);
     renderer.domElement.addEventListener('pointerup', handlePointerUp);
@@ -398,13 +651,22 @@ export function ParametricUavViewer({
         box.getBoundingSphere(new THREE.Sphere()).radius,
         2.5,
       );
-      const previous = runtime.lastFittedRadius;
       runtime.radius = radius;
-      const changedMaterially =
-        previous <= 0 || Math.abs(radius - previous) / previous > 0.22;
-      if (!force && !changedMaterially) {
+      runtime.hull = points;
+      // 슬라이더 편집 중 형상 크기가 크게 바뀌어도 사용자가 잡아 둔 시점을
+      // 유지한다. 자동 프레이밍은 최초 로딩·설계 전환·명시적 리셋에서만 한다.
+      if (!force) {
         controls.minDistance = Math.max(radius * 0.55, 1.5);
         controls.maxDistance = Math.max(radius * 8, 12);
+        camera.far = Math.max(
+          camera.position.distanceTo(controls.target) + radius * 10,
+          100,
+        );
+        camera.updateProjectionMatrix();
+        configureInfiniteGrid(grid, {
+          step: Math.max(radius / 7, 0.65),
+          fadeDistance: Math.max(radius * 14, 45),
+        });
         return;
       }
       const verticalFov = THREE.MathUtils.degToRad(camera.fov);
@@ -466,7 +728,6 @@ export function ParametricUavViewer({
       camera.updateProjectionMatrix();
       controls.target.copy(centre);
       runtime.homeTarget.copy(centre);
-      runtime.hull = points;
       controls.minDistance = Math.max(radius * 0.55, 1.5);
       controls.maxDistance = Math.max(radius * 8, 12);
       controls.update();
@@ -476,7 +737,6 @@ export function ParametricUavViewer({
         fadeDistance: Math.max(radius * 14, 45),
       });
       updateInfiniteGrid(grid, camera);
-      runtime.lastFittedRadius = radius;
     };
 
     const runtime: ViewerRuntime = {
@@ -493,7 +753,7 @@ export function ParametricUavViewer({
       hull: [],
       homeTarget: new THREE.Vector3(),
       homeDistance: 0,
-      lastFittedRadius: 0,
+      designId: null,
       topology: '',
       syncing: false,
     };
@@ -671,7 +931,9 @@ export function ParametricUavViewer({
     const runtime = runtimeRef.current;
     if (!runtime) return;
     try {
+      const designChanged = runtime.designId !== draft.baselineId;
       const topologyChanged = runtime.topology !== draft.topology;
+      runtime.designId = draft.baselineId;
       runtime.topology = draft.topology;
       if (runtime.model) {
         runtime.scene.remove(runtime.model);
@@ -724,7 +986,10 @@ export function ParametricUavViewer({
 
       const framingPoints = hullPointsOf(runtime.model);
       if (runtime.forces) framingPoints.push(...hullPointsOf(runtime.forces));
-      runtime.fitCamera(framingPoints, topologyChanged || runtime.radius === 0);
+      runtime.fitCamera(
+        framingPoints,
+        designChanged || topologyChanged || runtime.radius === 0,
+      );
       window.queueMicrotask(() => {
         setStatus('ready');
         setErrorMessage('');
@@ -798,7 +1063,10 @@ export function ParametricUavViewer({
             <button
               type="button"
               aria-label="선택 해제"
-              onClick={() => setPicked([])}
+              onClick={() => {
+                setPicked([]);
+                editTargetRef.current?.(null);
+              }}
               className="shrink-0 rounded-md px-1.5 py-0.5 text-[#6e6e73] hover:bg-[#f5f5f7]"
             >
               ✕
@@ -852,7 +1120,7 @@ export function ParametricUavViewer({
 
 const COLORS = {
   structure: 0x167f91,
-  fuselage: 0xe7eef1,
+  fuselage: 0x4f7fa8,
   propulsion: 0x233a49,
   energy: 0x6d5bd0,
   wing: 0x82c4ce,
@@ -887,7 +1155,7 @@ export const TYPE_COLORS: Record<string, number> = {
   Wing: 0x39bcd0,
   Cargo: 0xe7a33e,
   CargoCase: 0xc98626,
-  UAV_Fuselage: 0xd7e0e6,
+  UAV_Fuselage: 0x4f7fa8,
   Orient: 0x9aa7ad,
 };
 
@@ -1286,8 +1554,9 @@ export function buildAircraftForAudit(
   draft: DesignDraft,
   assembly: AssemblyInfo,
   bladeCount: 2 | 4 = 2,
+  baseline: DesignDraft = draft,
 ) {
-  return buildAircraft(draft, null, false, assembly, draft, null, bladeCount);
+  return buildAircraft(draft, null, false, assembly, baseline, null, bladeCount);
 }
 
 /**
@@ -1659,6 +1928,8 @@ function buildFromPlacements(
       const ratio = growthOfSegment(index);
       return keys.map((key, order) => ({
         key,
+        instanceName: null as string | null,
+        depth: segment.depth ?? 0,
         turn: order === 0 ? turn : 0,
         offsetShift: order === 0 ? offsetShift : 0,
         // 일부 STEP은 실제 팔이 250mm인데 설계 트리 파라미터가 50~492mm로
@@ -1673,12 +1944,39 @@ function buildFromPlacements(
       }));
     });
 
-  for (const { key, turn, offsetShift, ratio } of editedArms) {
+  const segmentByArmKey = new Map<string, number>();
+  for (const [index, keys] of armKeysOfSegment) {
+    keys.forEach((key) => segmentByArmKey.set(key, index));
+  }
+  const instanceEditedArms = Object.entries(draft.instanceArmEdits ?? {}).flatMap(
+    ([instanceName, edit]) => {
+      const key = armKeyFromPartName(instanceName);
+      const index = key ? segmentByArmKey.get(key) : undefined;
+      if (!key || index == null) return [];
+      const segment = draft.segments[index];
+      const original = reference.segments[index] ?? segment;
+      const parameterBase = baseLengthByKey.get(key) ?? original.length;
+      const groupLength = lengthByKey.get(key) ?? parameterBase;
+      return [{
+        key,
+        instanceName,
+        depth: segment.depth ?? 0,
+        turn: THREE.MathUtils.degToRad((edit.angle ?? segment.angle) - original.angle),
+        offsetShift: ((edit.offset ?? segment.offset) - original.offset) * SCALE,
+        ratio: parameterBase > 0 ? (edit.length ?? groupLength) / parameterBase : 1,
+      }];
+    },
+  );
+
+  const armAdjustments = [...editedArms, ...instanceEditedArms]
+    .sort((left, right) => left.depth - right.depth);
+  for (const { key, instanceName, turn, offsetShift, ratio } of armAdjustments) {
     if (!turn && !offsetShift && ratio === 1) continue;
     // 키가 이미 `ROTATEDARM_5` 꼴이라 접두사를 다시 붙이지 않는다.
     const armPattern = new RegExp(`^${key}_`, 'i');
     for (const arm of placements) {
-      if (!armPattern.test(arm.n)) continue;
+      if (instanceName ? arm.n !== instanceName : !armPattern.test(arm.n)) continue;
+      if (!instanceName && draft.instanceArmEdits?.[arm.n]) continue;
       const chain = rotorAdjustment.get(arm.n);
       // 이 팔 자신이 안쪽 보정으로 이미 옮겨졌다면, 축과 피벗도 같이 옮긴다.
       const centre = applyChain(toScene(arm.p), chain);
@@ -1875,7 +2173,7 @@ function buildFromPlacements(
       const measuredBase =
         part.s?.[2] ?? baseLengthByKey.get(key) ?? fallbackArmLength;
       const parameterBase = baseLengthByKey.get(key);
-      const parameterLength = lengthByKey.get(key);
+      const parameterLength = draft.instanceArmEdits?.[part.n]?.length ?? lengthByKey.get(key);
       const editRatio =
         parameterBase && parameterLength ? parameterLength / parameterBase : 1;
       const length = measuredBase * editRatio * SCALE;

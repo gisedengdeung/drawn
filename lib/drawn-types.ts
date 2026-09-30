@@ -179,6 +179,12 @@ export type PhysicalComponent = {
   choice: string;
 };
 
+export type ArmInstanceEdit = {
+  length?: number;
+  angle?: number;
+  offset?: number;
+};
+
 export type SourceParameterTuple = [
   name: string,
   value: number | string | boolean | null,
@@ -219,6 +225,8 @@ export type DesignDraft = {
     mass: number;
   };
   layout: Record<string, { x: number; y: number }>;
+  /** STEP 인스턴스 하나에만 적용하는 로컬 미리보기 값. 원본 파라미터는 유지한다. */
+  instanceArmEdits?: Record<string, ArmInstanceEdit>;
 };
 
 export type CompareTarget =

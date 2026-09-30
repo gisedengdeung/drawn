@@ -5,7 +5,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import {
-  Activity,
   ArrowLeft,
   Beaker,
   Bot,
@@ -57,9 +56,8 @@ import type {
 } from '@/lib/drawn-types';
 
 const editorTools = [
-  { id: 'design' as const, label: '설계 선택', description: '필터·추천·즐겨찾기에서 기준 설계를 고릅니다.', icon: Boxes },
-  { id: 'parameters' as const, label: '파라미터 편집', description: '형상과 부품 수치를 조정해 나만의 기체를 만듭니다.', icon: Beaker },
-  { id: 'performance' as const, label: '성능 확인', description: '속도별 예측과 원본 시뮬레이션 곡선을 확인합니다.', icon: Activity },
+  { id: 'design' as const, label: '설계 선택 · 모델 정보', description: '기준 설계를 고르면서 모델 구성을 함께 확인합니다.', icon: Boxes },
+  { id: 'parameters' as const, label: '파라미터 편집 · 성능 확인', description: '형상을 편집하면서 성능 변화를 동시에 확인합니다.', icon: Beaker },
   { id: 'gallery' as const, label: '공유 갤러리', description: '설계를 게시하거나 다른 설계를 가져옵니다.', icon: Share2 },
 ];
 
@@ -505,18 +503,21 @@ function EditorToolNavigation({
         <DrawnLogo className="size-7 rounded-lg" />
       </button>
       <span className="mx-1 h-5 w-px shrink-0 bg-[#e5e5ea]" />
-      {editorTools.map(({ id, label, icon: Icon }) => (
-        <button
-          key={id}
-          type="button"
-          onClick={() => onSelect(id)}
-          aria-current={active === id ? 'page' : undefined}
-          className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${active === id ? 'bg-[#1d1d1f] text-white shadow-sm' : 'text-[#6e6e73] hover:bg-[#f5f5f7] hover:text-[#1d1d1f]'}`}
-        >
-          <Icon className={`size-3.5 ${active === id ? 'text-[#60a5fa]' : ''}`} />
-          {label}
-        </button>
-      ))}
+      {editorTools.map(({ id, label, icon: Icon }) => {
+        const selected = active === id || (id === 'parameters' && active === 'performance');
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onSelect(id)}
+            aria-current={selected ? 'page' : undefined}
+            className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${selected ? 'bg-[#1d1d1f] text-white shadow-sm' : 'text-[#6e6e73] hover:bg-[#f5f5f7] hover:text-[#1d1d1f]'}`}
+          >
+            <Icon className={`size-3.5 ${selected ? 'text-[#60a5fa]' : ''}`} />
+            {label}
+          </button>
+        );
+      })}
       <span className="mx-1 h-5 w-px shrink-0 bg-[#e5e5ea]" />
       <button type="button" onClick={onOpenAssistant} className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-[#3182f6] hover:bg-[#eff6ff]">
         <Bot className="size-3.5" /> AI 도우미

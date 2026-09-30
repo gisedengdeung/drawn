@@ -23,6 +23,8 @@ type StlViewerProps = {
   showForceVectors?: boolean;
   cameraFitPadding?: number;
   cameraSync?: { group: string; id: string; linked: boolean };
+  /** 값이 바뀔 때 설계 원점을 바라보는 홈 카메라로 돌아간다. */
+  cameraResetKey?: number;
   showControls?: boolean;
   /** 다른 전체 화면 UI에 가려졌을 때 WebGL 렌더링만 일시 정지한다. */
   paused?: boolean;
@@ -35,6 +37,7 @@ export function StlViewer({
   showForceVectors = false,
   cameraFitPadding = 1.62,
   cameraSync,
+  cameraResetKey = 0,
   showControls = true,
   paused = false,
 }: StlViewerProps) {
@@ -47,6 +50,7 @@ export function StlViewer({
   const autoRotateRef = useRef(true);
   const pausedRef = useRef(paused);
   const cameraSyncRef = useRef(cameraSync);
+  const resetCameraRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     pausedRef.current = paused;
@@ -117,9 +121,19 @@ export function StlViewer({
     controls.autoRotate = autoRotateRef.current;
     controls.autoRotateSpeed = 0.55;
     controls.enablePan = true;
+    // 파라메트릭 뷰와 동일하게 커서 아래 형상을 향해 확대한다.
+    controls.zoomToCursor = true;
+    const movementKeys = new Set<string>();
+    const panVelocity = new THREE.Vector2();
+    let lastMovementAt = 0;
     const handleKeyboard = (event: KeyboardEvent) => {
       const offset = camera.position.clone().sub(controls.target);
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      const key = event.key.toLowerCase();
+      if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
+        movementKeys.add(key);
+        event.preventDefault();
+        return;
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), event.key === 'ArrowLeft' ? 0.12 : -0.12);
       } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
         offset.multiplyScalar(event.key === 'ArrowUp' ? 0.9 : 1.1);
@@ -130,7 +144,42 @@ export function StlViewer({
       camera.position.copy(controls.target).add(offset);
       controls.update();
     };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      movementKeys.delete(event.key.toLowerCase());
+    };
+    const stopKeyboardMovement = () => movementKeys.clear();
+    const updateKeyboardMovement = (time: number) => {
+      const delta = lastMovementAt
+        ? Math.min(Math.max((time - lastMovementAt) / 1000, 0), 0.05)
+        : 0;
+      lastMovementAt = time;
+      const input = new THREE.Vector2(
+        Number(movementKeys.has('d')) - Number(movementKeys.has('a')),
+        Number(movementKeys.has('w')) - Number(movementKeys.has('s')),
+      );
+      if (input.lengthSq() > 1) input.normalize();
+      const distance = camera.position.distanceTo(controls.target);
+      const desired = input.multiplyScalar(Math.max(distance * 0.294, 0.56));
+      panVelocity.lerp(desired, 1 - Math.exp(-10 * delta));
+      if (!movementKeys.size && panVelocity.lengthSq() < 1e-5) {
+        panVelocity.set(0, 0);
+        return;
+      }
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+      const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+      const move = right
+        .multiplyScalar(panVelocity.x * delta)
+        .addScaledVector(up, panVelocity.y * delta);
+      camera.position.add(move);
+      controls.target.add(move);
+    };
     renderer.domElement.addEventListener('keydown', handleKeyboard);
+    window.addEventListener('keyup', handleKeyUp);
+    renderer.domElement.addEventListener('blur', stopKeyboardMovement);
+    const focusCanvas = () => renderer.domElement.focus({ preventScroll: true });
+    renderer.domElement.addEventListener('pointerdown', focusCanvas);
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x91a9b6, 2.6));
     const key = new THREE.DirectionalLight(0xffffff, 3.6);
@@ -195,19 +244,21 @@ export function StlViewer({
     const fitCamera = () => {
       if (!modelRadius || !model) return;
       modelPivot.updateWorldMatrix(true, true);
-      if (!model.geometry.boundingBox) model.geometry.computeBoundingBox();
-      const bounds = model.geometry.boundingBox;
-      if (!bounds) return;
+      const positions = model.geometry.getAttribute('position');
+      if (!positions) return;
       const points: THREE.Vector3[] = [];
-      for (const x of [bounds.min.x, bounds.max.x]) {
-        for (const y of [bounds.min.y, bounds.max.y]) {
-          for (const z of [bounds.min.z, bounds.max.z]) {
-            points.push(new THREE.Vector3(x, y, z).applyMatrix4(model.matrixWorld));
-          }
-        }
+      // 회전된 날개처럼 비어 있는 AABB 모서리를 사용하면 실제보다 훨씬 큰
+      // 형상으로 계산되어 듀얼 뷰의 STL만 작아진다. 실제 STL 꼭짓점으로 맞춘다.
+      for (let index = 0; index < positions.count; index += 1) {
+        points.push(
+          new THREE.Vector3()
+            .fromBufferAttribute(positions, index)
+            .applyMatrix4(model.matrixWorld),
+        );
       }
       const box = new THREE.Box3().setFromPoints(points);
-      const centre = box.getCenter(new THREE.Vector3());
+      // 파라메트릭 뷰와 동일하게 설계 좌표 원점을 홈 주시점으로 사용한다.
+      const centre = new THREE.Vector3();
       const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1);
       const verticalFov = THREE.MathUtils.degToRad(camera.fov);
       const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
@@ -217,33 +268,16 @@ export function StlViewer({
       const spanWide = Math.tan(horizontalFov / 2);
       const spanHigh = Math.tan(verticalFov / 2);
       let distance = 0;
-      for (let pass = 0; pass < 4; pass += 1) {
-        distance = 0;
-        for (const point of points) {
-          const local = point.clone().sub(centre);
-          const depth = local.dot(view);
-          distance = Math.max(
-            distance,
-            Math.abs(local.dot(right)) / spanWide + depth,
-            Math.abs(local.dot(up)) / spanHigh + depth,
-          );
-        }
-        distance = Math.max(distance * cameraFitPadding, radius * 0.6);
-        let minWide = Infinity, maxWide = -Infinity;
-        let minHigh = Infinity, maxHigh = -Infinity;
-        for (const point of points) {
-          const local = point.clone().sub(centre);
-          const depth = Math.max(distance - local.dot(view), 1e-4);
-          const across = local.dot(right) / depth;
-          const above = local.dot(up) / depth;
-          minWide = Math.min(minWide, across); maxWide = Math.max(maxWide, across);
-          minHigh = Math.min(minHigh, above); maxHigh = Math.max(maxHigh, above);
-        }
-        const shiftWide = ((minWide + maxWide) / 2) * distance;
-        const shiftHigh = ((minHigh + maxHigh) / 2) * distance;
-        if (Math.hypot(shiftWide, shiftHigh) < radius * 0.004) break;
-        centre.addScaledVector(right, shiftWide).addScaledVector(up, shiftHigh);
+      for (const point of points) {
+        const local = point.clone().sub(centre);
+        const depth = local.dot(view);
+        distance = Math.max(
+          distance,
+          Math.abs(local.dot(right)) / spanWide + depth,
+          Math.abs(local.dot(up)) / spanHigh + depth,
+        );
       }
+      distance = Math.max(distance * cameraFitPadding, radius * 0.6);
 
       camera.position.copy(view.clone().multiplyScalar(distance).add(centre));
       camera.near = Math.max(radius / 100, 0.02);
@@ -255,12 +289,17 @@ export function StlViewer({
       controls.maxDistance = Math.max(radius * 8, 12);
       controls.update();
       homeDistance = camera.position.distanceTo(controls.target);
+      const sync = cameraSyncRef.current;
+      if (sync?.linked) {
+        window.queueMicrotask(() => broadcastViewerCamera(sync.group, sync.id));
+      }
       configureInfiniteGrid(grid, {
         step: Math.max(radius / 7, 0.65),
         fadeDistance: Math.max(radius * 14, 45),
       });
       updateInfiniteGrid(grid, camera);
     };
+    resetCameraRef.current = fitCamera;
 
     const externalGroup = cameraSync?.group;
     const externalId = cameraSync?.id;
@@ -360,8 +399,9 @@ export function StlViewer({
       },
     );
 
-    const animate = () => {
+    const animate = (time = 0) => {
       if (!pausedRef.current) {
+        updateKeyboardMovement(time);
         updateDynamics();
         controls.autoRotate = autoRotateRef.current && !cameraSyncRef.current?.linked;
         controls.update();
@@ -379,6 +419,9 @@ export function StlViewer({
       observer.disconnect();
       renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
       renderer.domElement.removeEventListener('keydown', handleKeyboard);
+      window.removeEventListener('keyup', handleKeyUp);
+      renderer.domElement.removeEventListener('blur', stopKeyboardMovement);
+      renderer.domElement.removeEventListener('pointerdown', focusCanvas);
       controls.dispose();
       controls.removeEventListener('change', syncExternalCamera);
       unregisterExternal?.();
@@ -395,8 +438,13 @@ export function StlViewer({
       disposeInfiniteGrid(grid);
       renderer.dispose();
       renderer.domElement.remove();
+      resetCameraRef.current = () => {};
     };
   }, [cameraFitPadding, cameraSync?.group, cameraSync?.id, retryKey, src]);
+
+  useEffect(() => {
+    if (cameraResetKey > 0) resetCameraRef.current();
+  }, [cameraResetKey]);
 
   return (
     <div

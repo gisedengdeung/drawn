@@ -1,14 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import {
   BatteryCharging,
   CircleGauge,
   Gauge,
+  GitCompareArrows,
   Route,
   Scale,
   Weight,
   Wind,
+  X,
   Zap,
 } from 'lucide-react';
 import {
@@ -21,6 +23,11 @@ import {
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { DesignPicker } from '@/components/design-picker';
+import { ParametricUavViewer } from '@/components/parametric-uav-viewer';
+import { useDesignPreview } from '@/hooks/use-design-preview';
+import { copyViewerCamera } from '@/lib/viewer-camera-sync';
 import {
   ChartContainer,
   ChartTooltip,
@@ -41,8 +48,6 @@ import {
 } from '@/lib/drawn-types';
 import {
   DataDisclaimer,
-  DesignSelector,
-  ModelStage,
   SourceBadge,
 } from '@/components/views/shared';
 
@@ -65,7 +70,9 @@ export function CompareView({
   pair: ComparePair;
   onPairChange: (pair: ComparePair) => void;
 }) {
-  const [activeModel, setActiveModel] = useState<'a' | 'b'>('b');
+  const [viewerMode, setViewerMode] = useState<'a' | 'b' | 'dual'>('dual');
+  const [cameraLinked, setCameraLinked] = useState(true);
+  const [pickerSlot, setPickerSlot] = useState<'a' | 'b' | null>(null);
   const [curveMetric, setCurveMetric] = useState<CurveMetric>('power');
   const designById = useMemo(
     () => new Map(dataset.designs.map((design) => [design.id, design])),
@@ -73,6 +80,9 @@ export function CompareView({
   );
   const a = designById.get(pair.aId);
   const b = designById.get(pair.bId);
+  const aPreview = useDesignPreview(a?.id ?? null);
+  const bPreview = useDesignPreview(b?.id ?? null);
+  const cameraGroup = `dataset-compare-${useId()}`;
 
   if (!a || !b) {
     return (
@@ -84,16 +94,6 @@ export function CompareView({
 
   const aDetail = showcases[String(a.id)] ?? null;
   const bDetail = showcases[String(b.id)] ?? null;
-  const selectorOptions = [
-    a,
-    b,
-    ...dataset.summary.showcaseIds
-      .map((id) => designById.get(id))
-      .filter((design): design is DesignSummary => Boolean(design)),
-  ].filter((design, index, designs) =>
-    designs.findIndex((candidate) => candidate.id === design.id) === index,
-  );
-
   const chartRows = Array.from({ length: 51 }, (_, speed) => ({
     speed,
     a: getTrimValue(aDetail?.trim[speed], curveMetric),
@@ -102,50 +102,84 @@ export function CompareView({
   const hasAnyTrim = Boolean(aDetail || bDetail);
 
   return (
-    <div>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(390px,0.85fr)]">
-        <div>
-          <div className="mb-3 grid grid-cols-2 gap-3">
-            <DesignChoice
-              label="A 설계"
-              tone="cyan"
-              designs={selectorOptions}
-              value={a.id}
-              onChange={(aId) => onPairChange({ aId, bId: b.id })}
-            />
-            <DesignChoice
-              label="B 설계"
-              tone="violet"
-              designs={selectorOptions}
-              value={b.id}
-              onChange={(bId) => onPairChange({ aId: a.id, bId })}
-            />
+    <div className="h-full min-h-0">
+      <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid min-h-0 grid-rows-[auto_minmax(230px,1fr)_292px] border-r border-[#e5e5ea]">
+          <div className="grid grid-cols-2 gap-2 border-b border-[#e5e5ea] bg-white p-3">
+            <CompareDesignSlot label="A 설계" tone="cyan" design={a} expanded={pickerSlot === 'a'} onClick={() => setPickerSlot((current) => current === 'a' ? null : 'a')} />
+            <CompareDesignSlot label="B 설계" tone="violet" design={b} expanded={pickerSlot === 'b'} onClick={() => setPickerSlot((current) => current === 'b' ? null : 'b')} />
           </div>
 
-          <div className="relative">
-            <div className="absolute right-4 top-4 z-30 flex rounded-lg border border-[#e5e5ea] bg-white/90 p-1 shadow-sm backdrop-blur">
-              <Button size="sm" variant="ghost" onClick={() => setActiveModel('a')} className={activeModel === 'a' ? 'bg-[#eff6ff] text-[#1b64da]' : 'text-[#6e6e73]'}>A · #{a.id}</Button>
-              <Button size="sm" variant="ghost" onClick={() => setActiveModel('b')} className={activeModel === 'b' ? 'bg-violet-50 text-violet-700' : 'text-[#6e6e73]'}>B · #{b.id}</Button>
+          <div className="relative min-h-0 overflow-hidden bg-[#eef3f6]">
+            <div className="absolute left-1/2 top-3 z-30 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-2xl border border-[#e5e5ea] bg-white/94 p-1.5 shadow-xl backdrop-blur-xl">
+              <div className="flex rounded-lg bg-[#f5f5f7] p-1">
+                <CompareModeButton active={viewerMode === 'a'} onClick={() => setViewerMode('a')}>A · #{a.id}</CompareModeButton>
+                <CompareModeButton active={viewerMode === 'b'} onClick={() => setViewerMode('b')}>B · #{b.id}</CompareModeButton>
+                <CompareModeButton active={viewerMode === 'dual'} onClick={() => setViewerMode('dual')}>듀얼 뷰</CompareModeButton>
+              </div>
+              {viewerMode === 'dual' && <div className="flex items-center gap-1 rounded-lg bg-[#f5f5f7] p-1 text-[10px] font-medium text-[#3c3c43]">
+                <div className="flex items-center gap-1.5 px-1.5">
+                  <Switch
+                    aria-label="A와 B 설계 카메라 연동"
+                    checked={cameraLinked}
+                    onCheckedChange={(linked) => {
+                      setCameraLinked(linked);
+                      if (linked) window.requestAnimationFrame(() => copyViewerCamera(cameraGroup, 'a', 'b'));
+                    }}
+                    size="sm"
+                  />
+                  카메라 연동
+                </div>
+                {!cameraLinked && <>
+                  <button type="button" onClick={() => copyViewerCamera(cameraGroup, 'a', 'b')} className="rounded-md bg-white px-2 py-1 shadow-sm hover:text-[#1b64da]">A → B</button>
+                  <button type="button" onClick={() => copyViewerCamera(cameraGroup, 'b', 'a')} className="rounded-md bg-white px-2 py-1 shadow-sm hover:text-[#1b64da]">A ← B</button>
+                </>}
+              </div>}
             </div>
-            <ModelStage
-              design={activeModel === 'a' ? aDetail : bDetail}
-              emptyDesignId={activeModel === 'a' ? a.id : b.id}
-              className="min-h-[390px] lg:min-h-[430px]"
-              label={false}
-            />
+            <div className={`absolute inset-0 grid ${viewerMode === 'dual' ? 'grid-cols-2 divide-x divide-[#dbe4ea]' : 'grid-cols-1'}`}>
+              {(viewerMode === 'a' || viewerMode === 'dual') && <CompareParametricPane key="a" preview={aPreview} label={`A · #${a.id}`} tone="cyan" cameraGroup={cameraGroup} cameraId="a" cameraLinked={viewerMode === 'dual' && cameraLinked} paused={pickerSlot != null} />}
+              {(viewerMode === 'b' || viewerMode === 'dual') && <CompareParametricPane key="b" preview={bPreview} label={`B · #${b.id}`} tone="violet" cameraGroup={cameraGroup} cameraId="b" cameraLinked={viewerMode === 'dual' && cameraLinked} paused={pickerSlot != null} />}
+            </div>
+            {pickerSlot && <div className={`absolute top-0 z-50 flex h-[min(460px,100%)] w-1/2 flex-col overflow-hidden border border-t-2 bg-white shadow-2xl animate-in slide-in-from-top-2 ${pickerSlot === 'a' ? 'left-0 border-[#93c5fd]' : 'right-0 border-violet-300'}`}>
+              <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3">
+                <GitCompareArrows className={`size-4 ${pickerSlot === 'a' ? 'text-[#3182f6]' : 'text-violet-600'}`} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold">{pickerSlot === 'a' ? 'A' : 'B'} 설계 선택</p>
+                  <p className="text-[9px] text-[#86868b]">기존 설계 탐색·추천·즐겨찾기 사용</p>
+                </div>
+                <button type="button" onClick={() => setPickerSlot(null)} aria-label="설계 선택 닫기" className="grid size-7 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7]"><X className="size-4" /></button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <DesignPicker
+                  designs={dataset.designs}
+                  showcases={showcases}
+                  selectedId={pickerSlot === 'a' ? a.id : b.id}
+                  layout="split"
+                  onSelect={(id) => {
+                    if (pickerSlot === 'a') onPairChange(id === b.id ? { aId: id, bId: a.id } : { aId: id, bId: b.id });
+                    else onPairChange(id === a.id ? { aId: b.id, bId: id } : { aId: a.id, bId: id });
+                    setPickerSlot(null);
+                  }}
+                />
+              </div>
+            </div>}
           </div>
 
-          <section className="workspace-panel mt-4 rounded-xl p-4">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <section className="min-h-0 overflow-hidden border-t border-[#e5e5ea] bg-white p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2"><h2 className="text-sm font-medium text-[#3c3c43]">속도별 성능 비교</h2><SourceBadge /></div>
-                <p className="mt-1 text-xs text-[#6e6e73]">
-                  {aDetail && bDetail
-                    ? '두 설계의 유효 trim 행만 연결합니다.'
-                    : aDetail || bDetail
-                      ? '패키징된 한 설계의 trim 곡선만 표시합니다.'
-                      : '두 설계 모두 metadata-only라 trim 곡선이 없습니다.'}
-                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
+                  <span className="flex items-center gap-1.5 font-medium text-[#1b64da]"><i className="size-2 rounded-full bg-[#3182f6]" />A 설계 · #{a.id}</span>
+                  <span className="flex items-center gap-1.5 font-medium text-violet-700"><i className="size-2 rounded-full bg-[#6750a4]" />B 설계 · #{b.id}</span>
+                  <span className="text-[#86868b]">
+                    {aDetail && bDetail
+                      ? '두 설계의 유효 trim 행만 연결합니다.'
+                      : aDetail || bDetail
+                        ? '패키징된 한 설계의 trim 곡선만 표시합니다.'
+                        : '두 설계 모두 metadata-only라 trim 곡선이 없습니다.'}
+                  </span>
+                </div>
               </div>
               <div className="flex rounded-lg bg-[#f5f5f7] p-1">
                 {([
@@ -158,25 +192,25 @@ export function CompareView({
               </div>
             </div>
             {hasAnyTrim ? (
-              <ChartContainer config={chartConfig} className="h-[260px] w-full aspect-auto" initialDimension={{ width: 760, height: 260 }}>
+              <ChartContainer config={chartConfig} className="h-[210px] w-full aspect-auto" initialDimension={{ width: 960, height: 210 }}>
                 <LineChart data={chartRows} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke="#e2e8ec" />
                   <XAxis dataKey="speed" tickLine={false} axisLine={false} tickMargin={10} unit="m/s" />
                   <YAxis tickLine={false} axisLine={false} width={52} />
                   <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-                  {aDetail && <Line type="monotone" dataKey="a" name={`Design #${a.id}`} stroke="var(--color-a)" strokeWidth={2.2} dot={false} connectNulls={false} />}
-                  {bDetail && <Line type="monotone" dataKey="b" name={`Design #${b.id}`} stroke="var(--color-b)" strokeWidth={2.2} dot={false} connectNulls={false} />}
+                  {aDetail && <Line type="monotone" dataKey="a" name={`A 설계 · #${a.id}`} stroke="var(--color-a)" strokeWidth={2.2} dot={false} connectNulls={false} />}
+                  {bDetail && <Line type="monotone" dataKey="b" name={`B 설계 · #${b.id}`} stroke="var(--color-b)" strokeWidth={2.2} dot={false} connectNulls={false} />}
                 </LineChart>
               </ChartContainer>
             ) : (
-              <div className="grid h-[260px] place-items-center rounded-xl border border-dashed border-[#e5e5ea] bg-[#f5f5f7] text-sm text-[#6e6e73]">
+              <div className="grid h-[210px] place-items-center rounded-xl border border-dashed border-[#e5e5ea] bg-[#f5f5f7] text-sm text-[#6e6e73]">
                 대표 12개 설계를 선택하면 속도별 곡선을 비교할 수 있습니다.
               </div>
             )}
           </section>
         </div>
 
-        <aside className="workspace-panel rounded-xl p-4 lg:p-5">
+        <aside className="min-h-0 overflow-y-auto bg-white p-4">
           <div className="mb-4 flex items-center justify-between">
             <div><h2 className="font-semibold text-[#1d1d1f]">A → B 변경 분석</h2><p className="mt-1 text-xs text-[#6e6e73]">구성 차이와 성능 결과를 순서대로 확인하세요.</p></div>
             <Badge variant="outline" className="border-[#e5e5ea] bg-[#f5f5f7] text-[#6e6e73]">#{a.id} → #{b.id}</Badge>
@@ -219,23 +253,44 @@ export function CompareView({
   );
 }
 
-function DesignChoice({
+function CompareDesignSlot({ label, tone, design, expanded, onClick }: { label: string; tone: 'cyan' | 'violet'; design: DesignSummary; expanded: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition hover:shadow-sm ${tone === 'cyan' ? 'border-[#bfdbfe] bg-[#eff6ff]' : 'border-violet-200 bg-violet-50'}`}>
+      <span className={`grid size-8 shrink-0 place-items-center rounded-lg bg-white text-xs font-bold shadow-sm ${tone === 'cyan' ? 'text-[#1b64da]' : 'text-violet-700'}`}>{label.slice(0, 1)}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-[10px] font-semibold ${tone === 'cyan' ? 'text-[#1b64da]' : 'text-violet-700'}`}>{label}</span>
+        <span className="block truncate text-xs font-semibold text-[#1d1d1f]">Design #{design.id} · {design.numPropellers}P/{design.numWings}W</span>
+      </span>
+      <span className="shrink-0 text-[10px] font-medium text-[#6e6e73]">{expanded ? '접기' : '변경'}</span>
+    </button>
+  );
+}
+
+function CompareModeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`rounded-md px-2.5 py-1.5 text-[10px] font-semibold transition ${active ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73] hover:text-[#1d1d1f]'}`}>{children}</button>;
+}
+
+function CompareParametricPane({
+  preview,
   label,
   tone,
-  designs,
-  value,
-  onChange,
+  cameraGroup,
+  cameraId,
+  cameraLinked,
+  paused,
 }: {
+  preview: ReturnType<typeof useDesignPreview>;
   label: string;
   tone: 'cyan' | 'violet';
-  designs: DesignSummary[];
-  value: number;
-  onChange: (id: number) => void;
+  cameraGroup: string;
+  cameraId: 'a' | 'b';
+  cameraLinked: boolean;
+  paused: boolean;
 }) {
   return (
-    <div className={`rounded-xl border p-3 ${tone === 'cyan' ? 'border-[#bfdbfe] bg-[#eff6ff]' : 'border-violet-200 bg-violet-50'}`}>
-      <p className={`mb-2 text-[10px] font-semibold tracking-[0.08em] ${tone === 'cyan' ? 'text-[#1b64da]' : 'text-violet-700'}`}>{label}</p>
-      <DesignSelector designs={designs} value={value} onChange={onChange} className="w-full" />
+    <div className="relative min-h-0 overflow-hidden bg-[#eef3f6]">
+      {preview ? <ParametricUavViewer draft={preview.draft} assembly={preview.assembly} paused={paused} maxFps={30} cameraFitPadding={1.62} cameraSync={{ group: cameraGroup, id: cameraId, linked: cameraLinked }} /> : <div className="absolute inset-0 grid place-items-center text-xs font-semibold text-[#6e6e73]">파라메트릭 형상 준비 중…</div>}
+      <span className={`pointer-events-none absolute left-3 top-3 z-20 rounded-lg border border-white/70 bg-white/90 px-2.5 py-1.5 text-[10px] font-semibold shadow-sm backdrop-blur ${tone === 'cyan' ? 'text-[#1b64da]' : 'text-violet-700'}`}>{label}</span>
     </div>
   );
 }

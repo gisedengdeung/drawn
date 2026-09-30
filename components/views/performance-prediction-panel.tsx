@@ -5,7 +5,7 @@ import { BrainCircuit, LoaderCircle, RotateCcw } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import type { DesignDraft } from '../../lib/drawn-types';
 import { formatMetric } from '../../lib/drawn-types';
-import type { PerformanceMetric } from '../../lib/performance-client';
+import type { PerformanceMetric, PerformancePrediction, PerformanceResult } from '../../lib/performance-client';
 import { usePerformancePrediction } from '../../hooks/use-performance-prediction';
 import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
@@ -55,6 +55,9 @@ export function PerformancePredictionPanel({
   speed: controlledSpeed,
   onSpeedChange,
   onPitchChange,
+  onPredictionChange,
+  onResultChange,
+  resultOverride,
 }: {
   designId: number;
   draft: DesignDraft | null;
@@ -65,14 +68,26 @@ export function PerformancePredictionPanel({
   onSpeedChange?: (speed: number) => void;
   /** 선택한 속도의 예측 피치각. 3D 기체를 그만큼 기울이는 데 쓴다. */
   onPitchChange?: (pitchDegrees: number | null) => void;
+  /** 선택한 속도의 공력 예측 전체. 현재 파라메트릭 3D 자세와 힘 벡터에 쓴다. */
+  onPredictionChange?: (prediction: PerformancePrediction | null) => void;
+  /** 모든 속도의 AI 예측. 편집 화면의 와이드 성능 곡선에 쓴다. */
+  onResultChange?: (result: PerformanceResult | null) => void;
+  /** 이미 계산된 결과를 표시 전용 패널에서 재사용한다. 주어지면 새 API 요청을 만들지 않는다. */
+  resultOverride?: PerformanceResult | null;
 }) {
   const id = useId();
   const [localSpeed, setLocalSpeed] = useState(20);
+  const [speedDraft, setSpeedDraft] = useState<string | null>(null);
   const [metric, setMetric] = useState<PerformanceMetric>('thrust');
   const speed = controlledSpeed ?? localSpeed;
   const changeSpeed = (next: number) => { setLocalSpeed(next); onSpeedChange?.(next); };
-  const prediction = usePerformancePrediction(designId, draft, !disabled && !inputError);
-  const result = prediction.result;
+  const commitSpeed = (raw: string) => {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) changeSpeed(Math.min(50, Math.max(0, Math.round(parsed))));
+    setSpeedDraft(null);
+  };
+  const prediction = usePerformancePrediction(designId, draft, !disabled && !inputError && resultOverride === undefined);
+  const result = resultOverride === undefined ? prediction.result : resultOverride;
   const row = result?.predictions.find((item) => item.speed === speed);
   const selectedMetric = metrics.find((item) => item.key === metric)!;
   const chartConfig = useMemo(() => ({
@@ -86,6 +101,12 @@ export function PerformancePredictionPanel({
   useEffect(() => {
     onPitchChange?.(pitch);
   }, [onPitchChange, pitch]);
+  useEffect(() => {
+    onPredictionChange?.(row ?? null);
+  }, [onPredictionChange, row]);
+  useEffect(() => {
+    onResultChange?.(result ?? null);
+  }, [onResultChange, result]);
 
   return (
     <section aria-labelledby={`${id}-title`} className="min-w-0 rounded-2xl border border-[#bfdbfe] bg-white p-4">
@@ -93,13 +114,32 @@ export function PerformancePredictionPanel({
         <h2 id={`${id}-title`} className="flex items-center gap-2 text-sm font-semibold text-[#1d1d1f]">
           <BrainCircuit className="size-4 text-[#3182f6]" /> AI 속도별 예측
         </h2>
-        <span className="rounded-full bg-[#eff6ff] px-2 py-1 text-[10px] font-medium text-[#1b64da]">기준 설계 조건부 예측</span>
+        <span className="rounded-full bg-[#eff6ff] px-2 py-1 text-[11px] font-medium text-[#1b64da]">기준 설계 조건부 예측</span>
       </div>
       <p className="mt-2 text-xs leading-5 text-[#6e6e73]">기준 설계의 물리 조건을 사용하는 학습 모델입니다. 예측 수치는 실제 비행 가능 여부를 판정하지 않습니다.</p>
       <div className="mt-4">
-        <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center justify-between gap-3 text-xs">
           <span id={`${id}-speed`} className="font-medium text-[#3c3c43]">예측 속도</span>
-          <output className="font-mono font-semibold text-[#1b64da]">{speed} m/s</output>
+          <label className="flex items-center gap-1 rounded-lg border border-[#d6e6ff] bg-white px-2 py-1 text-[#1b64da] focus-within:border-[#3182f6] focus-within:ring-2 focus-within:ring-[#3182f6]/15">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={50}
+              step={1}
+              aria-label="예측 속도 직접 입력"
+              value={speedDraft ?? String(speed)}
+              onFocus={(event) => { setSpeedDraft(String(speed)); event.currentTarget.select(); }}
+              onChange={(event) => setSpeedDraft(event.currentTarget.value)}
+              onBlur={(event) => commitSpeed(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+                if (event.key === 'Escape') setSpeedDraft(null);
+              }}
+              className="w-10 bg-transparent text-right font-mono font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <span className="font-mono font-semibold">m/s</span>
+          </label>
         </div>
         <Slider
           aria-labelledby={`${id}-speed`}
@@ -107,7 +147,7 @@ export function PerformancePredictionPanel({
           onValueChange={(value) => changeSpeed(Number(Array.isArray(value) ? value[0] : value))}
           className="mt-3 [&_[data-slot=slider-range]]:bg-[#3182f6]"
         />
-        <div className="mt-1 flex justify-between font-mono text-[10px] text-[#86868b]"><span>0 m/s</span><span>50 m/s</span></div>
+        <div className="mt-1 flex justify-between font-mono text-[11px] text-[#86868b]"><span>0 m/s</span><span>50 m/s</span></div>
       </div>
 
       {inputError ? (
@@ -137,7 +177,7 @@ export function PerformancePredictionPanel({
             {metrics.map((item) => (
               <div key={item.key} className="min-w-0 rounded-xl bg-[#f5f5f7] p-2.5">
                 <p className="text-[11px] text-[#6e6e73]">{item.label}</p>
-                <p className="mt-1 break-words font-mono text-base font-semibold text-[#1d1d1f]">{row[item.key] == null ? '—' : formatMetric(row[item.key]!, item.digits)} <span className="text-[10px] font-normal text-[#86868b]">{item.unit}</span></p>
+                <p className="mt-1 break-words font-mono text-base font-semibold text-[#1d1d1f]">{row[item.key] == null ? '—' : formatMetric(row[item.key]!, item.digits)} <span className="text-[11px] font-normal text-[#86868b]">{item.unit}</span></p>
               </div>
             ))}
           </div>
@@ -169,7 +209,7 @@ export function PerformancePredictionPanel({
               </ChartContainer>
             </div>
           )}
-          <p className="mt-3 break-all text-[10px] text-[#86868b]">모델 {result.modelVersion} · 기준 설계 #{result.designId}</p>
+          <p className="mt-3 break-all text-[11px] text-[#86868b]">모델 {result.modelVersion} · 기준 설계 #{result.designId}</p>
         </>
       ) : null}
     </section>

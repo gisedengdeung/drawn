@@ -1,30 +1,47 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
+  ArrowLeft,
   BatteryCharging,
   Box,
+  BrainCircuit,
+  ChevronDown,
   ChevronRight,
   CircleGauge,
+  Database,
+  Gauge,
   GitCompareArrows,
   Info,
   Layers3,
-  MousePointer2,
+  Lock,
   Package,
   Plane,
   RotateCcw,
   Ruler,
-  Search,
   SlidersHorizontal,
   ShoppingBag,
+  Timer,
+  Unlock,
   Weight,
   Wind,
+  X,
   Zap,
 } from 'lucide-react';
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceDot,
+  ReferenceLine,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 import { PerformancePredictionPanel } from './performance-prediction-panel';
 import { ParametricUavViewer, TYPE_COLORS } from '@/components/parametric-uav-viewer';
+import { DesignPicker } from '@/components/design-picker';
 import { StlViewer } from '@/components/stl-viewer';
 import { cloneDraft } from '@/lib/design-draft';
 import { countChanges, estimateDraft } from '@/lib/design-performance';
@@ -32,8 +49,8 @@ import type { DesignWorkspace } from '@/hooks/use-design-workspace';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
@@ -44,16 +61,23 @@ import type {
   DesignDraft,
   DesignSummary,
   DraftGeometryMode,
+  EditorTool,
   ParameterDefinition,
   ParameterGroup,
   PartPlacement,
   ShowcaseDesign,
+  ShowcaseMap,
+  TrimRow,
   WingParameters,
 } from '@/lib/drawn-types';
 import { formatBatteryLabel, formatComponent, formatEnergyConfiguration, formatMetric, formatMotorLabel, formatPropellerLabel, isAvailableMetric, percentChange } from '@/lib/drawn-types';
-import { DataDisclaimer, DesignSelector, SectionHeading } from '@/components/views/shared';
+import { formatValidSpeedRanges, type PerformancePrediction, type PerformanceResult } from '@/lib/performance-client';
+import { DataDisclaimer } from '@/components/views/shared';
+import { copyViewerCamera } from '@/lib/viewer-camera-sync';
 
 type MobilePanel = 'parameters' | 'preview' | 'performance';
+type BaselineCompareView = 'baseline' | 'draft' | 'dual';
+type PerformanceSource = 'ai' | 'dataset';
 
 const GROUP_LABELS: Record<ParameterGroup, string> = {
   structure: '기체 구조',
@@ -79,35 +103,44 @@ const GROUP_HINTS: Record<ParameterGroup, string> = {
 const EXPERT_MODE_STORAGE_KEY = 'aerotwin:design-lab-expert-mode';
 
 export function DesignLabView({
-  designs,
   selected,
   referenceDesign,
   datasetDesigns = [],
+  showcases = {},
   onSelect,
   onOpenDatasetCompare,
   onOpenParts,
   workspace,
   focusedParameterId,
+  activeTool = 'parameters',
+  onCloseTool,
+  suspended = false,
 }: {
-  designs: Array<Pick<DesignSummary, 'id' | 'numPropellers' | 'numWings'>>;
   selected: DesignSummary;
   referenceDesign?: ShowcaseDesign | null;
   datasetDesigns?: DesignSummary[];
+  showcases?: ShowcaseMap;
   onSelect: (id: number) => void;
   onOpenDatasetCompare: () => void;
   onOpenParts: () => void;
   workspace: DesignWorkspace;
   focusedParameterId?: string | null;
+  activeTool?: EditorTool;
+  onCloseTool?: () => void;
+  /** 상위 전체 화면 보드에 가려진 동안 배경 WebGL 렌더링을 멈춘다. */
+  suspended?: boolean;
 }) {
   const { baseline, draft, setDraft, catalogs, placements, loading, loadError } = workspace;
   const [mode, setMode] = useState<DraftGeometryMode>('parametric-preview');
   const [showGhost, setShowGhost] = useState(false);
   const [changedGroup, setChangedGroup] = useState<ParameterGroup | null>(null);
-  const [search, setSearch] = useState('');
   const [openSections, setOpenSections] = useState<string[]>(['structure', 'fuselage', 'propulsion']);
   const [expertMode, setExpertMode] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('preview');
   const [compareOpen, setCompareOpen] = useState(false);
+  const [compareDetailsOpen, setCompareDetailsOpen] = useState(true);
+  const [baselineCompareView, setBaselineCompareView] = useState<BaselineCompareView>('dual');
+  const [baselineCameraLinked, setBaselineCameraLinked] = useState(true);
   /** 부품 탭에서 고른 부품 이름들. 3D에서는 이것만 제 색으로 남는다. */
   const [selectedParts, setSelectedParts] = useState<string[]>([]);
   const [openTypes, setOpenTypes] = useState<string[]>([]);
@@ -118,24 +151,44 @@ export function DesignLabView({
    * 무엇인지 읽기 어려웠다. 원본은 로컬에 있을 때만 뜬다.
    */
   const [sideBySide, setSideBySide] = useState(false);
+  const [cameraLinked, setCameraLinked] = useState(true);
+  const [viewerToolbarOpen, setViewerToolbarOpen] = useState(true);
   /** 왼쪽 패널 탭. 부품 목록이 파라미터 아코디언에 끼면 매번 밀려 내려간다. */
-  const [panelTab, setPanelTab] = useState<'parameters' | 'parts'>('parameters');
+  const [panelTab, setPanelTab] = useState<'design' | 'parameters' | 'parts'>('parameters');
+  // 아일랜드는 3D 위에 떠 있으므로 접어서 화면을 완전히 비울 수 있어야 한다.
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+  // 설계를 고르면 현재 3D에 반영된 파라메트릭 모델 정보를 오른쪽에 바로 보여준다.
+  const [modelInfoHiddenFor, setModelInfoHiddenFor] = useState<number | null>(null);
+  // 성능 확인 탭에서 흡수한 속도별 시트. AI 예측과 같은 speed를 공유해 한 값으로 본다.
+  const [chartsOpen, setChartsOpen] = useState(false);
+  const [speed, setSpeed] = useState(20);
+  const [aiPredictionOpen, setAiPredictionOpen] = useState(false);
+  const [performanceSource, setPerformanceSource] = useState<PerformanceSource>('ai');
+  const [sideViewLocked, setSideViewLocked] = useState(false);
+  const [sideViewResetKey, setSideViewResetKey] = useState(0);
+  /** 선택한 속도의 AI 출력. STL이 아니라 현재 파라메트릭 형상에만 적용한다. */
+  const [aiFlightState, setAiFlightState] = useState<PerformancePrediction | null>(null);
+  const [aiPerformanceResult, setAiPerformanceResult] = useState<PerformanceResult | null>(null);
   const [estimateState, setEstimateState] = useState<'ready' | 'calculating'>('ready');
   const [estimateImpact, setEstimateImpact] = useState<'performance' | 'geometry-only'>('performance');
   const highlightTimeoutRef = useRef<number | null>(null);
   const estimateTimeoutRef = useRef<number | null>(null);
+  const aiPredictionPanelRef = useRef<HTMLDivElement>(null);
   const packagedReference = referenceDesign ?? ('modelPath' in selected ? selected as ShowcaseDesign : null);
+  const originalTrimAvailable = Boolean(packagedReference?.trim.some((row) => row.valid));
+  const originalTrimRow = packagedReference?.trim.find((row) => row.speed === speed) ?? null;
   // 배포된 STL이 없어도 개발 PC의 원본에서 받아올 수 있다.
   const originalStlUrl = packagedReference?.modelPath ?? `/local-model/${selected.id}`;
+  const comparisonCameraGroup = `design-compare-${selected.id}`;
+  const baselineComparisonCameraGroup = `baseline-draft-${selected.id}`;
 
   const focusedParameter = draft?.parameterDefinitions.find((definition) => definition.id === focusedParameterId || definition.path === focusedParameterId);
   const focusId = focusedParameter?.id;
-  const focusLabel = focusedParameter?.label;
   useEffect(() => {
-    if (!focusId || !focusLabel) return;
+    if (!focusId) return;
     let scrollFrame = 0;
     const frame = window.requestAnimationFrame(() => {
-      setSearch(focusLabel);
       setExpertMode(true);
       setMobilePanel('parameters');
       setOpenSections((sections) => sections.includes('source-parameters') ? sections : [...sections, 'source-parameters']);
@@ -146,7 +199,7 @@ export function DesignLabView({
       });
     });
     return () => { window.cancelAnimationFrame(frame); window.cancelAnimationFrame(scrollFrame); };
-  }, [focusId, focusLabel]);
+  }, [focusId]);
   useEffect(() => {
     window.queueMicrotask(() => {
       try {
@@ -207,55 +260,106 @@ export function DesignLabView({
     [baseline, datasetDesigns, draft, selected],
   );
   const changedCount = useMemo(() => draft && baseline ? countChanges(draft, baseline) : 0, [baseline, draft]);
+  const differences = useMemo(() => draft && baseline ? draftDifferences(baseline, draft) : [], [baseline, draft]);
   const parameterCount = draft?.parameterDefinitions?.length ?? 0;
-  const editableParameterCount = draft?.parameterDefinitions?.filter((item) => item.editable).length ?? 0;
-  const query = search.trim().toLocaleLowerCase('ko-KR');
-  const groupVisible = (group: ParameterGroup, terms: string[]) => !query
-    || GROUP_LABELS[group].toLocaleLowerCase('ko-KR').includes(query)
-    || terms.some((term) => term.toLocaleLowerCase('ko-KR').includes(query));
+  const showLeftPanel = activeTool === 'design' || activeTool === 'parameters';
+  const showPerformancePanel = activeTool === 'performance';
+  const showViewerControls = showLeftPanel || showPerformancePanel;
+  const effectivePanelTab = activeTool === 'design'
+    ? 'design'
+    : panelTab === 'design' ? 'parameters' : panelTab;
+  const showModelInfo = activeTool === 'design' && modelInfoHiddenFor !== selected.id;
+  const handlePredictionChange = useCallback((prediction: PerformancePrediction | null) => {
+    setAiFlightState(prediction);
+  }, []);
+  const handlePerformanceResultChange = useCallback((result: PerformanceResult | null) => {
+    setAiPerformanceResult(result);
+  }, []);
+  const closeAiPrediction = useCallback(() => {
+    setAiPredictionOpen(false);
+    setSideViewLocked(false);
+    setChartsOpen(false);
+  }, []);
+  const showAiPrediction = showPerformancePanel && aiPredictionOpen;
+  const showAiFlight = showAiPrediction && aiFlightState !== null;
+  const boardUsesOriginal = chartsOpen && performanceSource === 'dataset';
+  const showOriginalFlight = showAiPrediction && boardUsesOriginal && Boolean(originalTrimRow?.valid);
+  const activeFlightState = boardUsesOriginal
+    ? showOriginalFlight ? originalTrimRow : null
+    : showAiFlight ? aiFlightState : null;
+  const visualizationSource: PerformanceSource = boardUsesOriginal ? 'dataset' : 'ai';
+  const activeForces = useMemo(() => activeFlightState ? {
+    drag: activeFlightState.drag,
+    lift: activeFlightState.lift,
+    thrust: activeFlightState.thrust,
+  } : undefined, [activeFlightState]);
+  useEffect(() => {
+    if (!originalTrimAvailable && performanceSource === 'dataset') {
+      window.queueMicrotask(() => setPerformanceSource('ai'));
+    }
+  }, [originalTrimAvailable, performanceSource]);
+  useEffect(() => {
+    if (!aiPredictionOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      aiPredictionPanelRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [aiPredictionOpen]);
+  useEffect(() => {
+    if (showPerformancePanel || (!aiPredictionOpen && !sideViewLocked)) return;
+    window.queueMicrotask(closeAiPrediction);
+  }, [aiPredictionOpen, closeAiPrediction, showPerformancePanel, sideViewLocked]);
 
   return (
-    <section className="@container/lab px-3 py-4 lg:px-5">
-      <SectionHeading
-        eyebrow={`파라메트릭 Design Studio / Baseline #${selected.id}`}
-        title="설계 파라미터와 3D를 한 화면에서 조정하세요"
-        description="치수·부품·날개 조건을 편집하고, 속도별 AI 예측과 기존 설계 KPI를 함께 확인하세요."
-        actions={(
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={onOpenParts} disabled={loading || !draft} className="bg-[#3182f6] text-white hover:bg-[#1b64da]"><ShoppingBag className="size-4" />부품 찾기</Button>
-            {expertMode && <Badge variant="outline" className="border-[#bfdbfe] bg-[#eff6ff] text-[#1b64da]">원본 {parameterCount} · 편집 가능 {editableParameterCount}</Badge>}
-            <DesignSelector designs={designs} value={selected.id} onChange={onSelect} />
-          </div>
-        )}
-      />
-
-      <div className="mb-3 grid grid-cols-3 rounded-xl bg-[#f5f5f7] p-1 @min-[900px]/lab:hidden">
+    // 3D를 바닥에 깔고 패널을 그 위에 띄운다. 예전에는 3칸 그리드라 뷰어가
+    // 가로의 절반도 쓰지 못했다.
+    <section className="@container/lab relative h-full min-h-[560px] overflow-hidden">
+      <div className="mb-3 hidden">
         {([
           ['parameters', '파라미터', SlidersHorizontal],
           ['preview', '3D', Box],
           ['performance', '성능', Activity],
         ] as const).map(([id, label, Icon]) => (
-          <button key={id} aria-pressed={mobilePanel === id} onClick={() => setMobilePanel(id)} className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${mobilePanel === id ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}>
-            <Icon className={`size-3.5 ${mobilePanel === id ? 'text-[#3182f6]' : ''}`} /> {label}
+          <button key={id} aria-pressed={mobilePanel === id} onClick={() => setMobilePanel(id)}>
+            <Icon /> {label}
           </button>
         ))}
       </div>
 
-      <div className="grid gap-3 @min-[900px]/lab:h-[calc(100vh-205px)] @min-[900px]/lab:min-h-[560px] @min-[900px]/lab:grid-cols-[minmax(260px,.85fr)_minmax(360px,1.5fr)_minmax(230px,.75fr)]">
-        <aside className={`${mobilePanel === 'parameters' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white shadow-sm @min-[900px]/lab:block`}>
-          <div className="border-b border-[#e5e5ea] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-[#1d1d1f]">설계 파라미터</p>
-                <p className="mt-1 text-xs text-[#6e6e73]">{changedCount ? `${changedCount}개 변경됨` : 'Baseline과 동일'}</p>
-              </div>
-              <Button size="icon-sm" variant="ghost" onClick={resetAll} disabled={!changedCount} aria-label="전체 초기화" className="text-[#6e6e73]"><RotateCcw /></Button>
+      <div className="h-full">
+        {showLeftPanel && <aside
+          // bottom-3로 고정 스트레치하지 않고 max-height만 준다 — 섹션 콘텐츠가 짧으면
+          // 패널도 그만큼만 차지하고, 길면 이 상한에서 꺾여 안에서 스크롤된다.
+          className={`absolute left-3 top-3 z-20 flex w-[310px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur transition-[max-height] ${
+            leftOpen ? 'bottom-3' : 'h-12'
+          }`}
+        >
+          <div className="border-b border-[#e5e5ea] p-2.5">
+            <div className="flex items-center justify-between gap-1">
+              {onCloseTool && (
+                <Button size="icon-sm" variant="ghost" onClick={onCloseTool} aria-label="작업 패널 닫기" className="shrink-0 text-[#6e6e73]">
+                  <ArrowLeft />
+                </Button>
+              )}
+              <button
+                type="button"
+                onClick={() => setLeftOpen((open) => !open)}
+                aria-expanded={leftOpen}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${leftOpen ? '' : '-rotate-90'}`} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-[#1d1d1f]">{activeTool === 'design' ? '설계 선택' : '설계 파라미터'}</span>
+                  {leftOpen && (
+                    <span className="mt-0.5 block text-xs text-[#6e6e73]">{activeTool === 'design' ? `기준 설계 #${selected.id}` : changedCount ? `${changedCount}개 변경됨` : 'Baseline과 동일'}</span>
+                  )}
+                </span>
+              </button>
+              {leftOpen && activeTool === 'parameters' && (
+                <Button size="icon-sm" variant="ghost" onClick={resetAll} disabled={!changedCount} aria-label="전체 초기화" className="text-[#6e6e73]"><RotateCcw /></Button>
+              )}
             </div>
-            <div className="relative mt-3">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#86868b]" />
-              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="파라미터 검색" className="h-9 border-[#e5e5ea] bg-[#f5f5f7] pl-8 text-xs" />
-            </div>
-            {panelTab === 'parameters' && (
+            {leftOpen && effectivePanelTab === 'parameters' && (
               <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-[#f5f5f7] px-3 py-2">
                 <div>
                   <p className="text-xs font-medium text-[#6e6e73]">전문가 모드</p>
@@ -264,20 +368,22 @@ export function DesignLabView({
                 <Switch checked={expertMode} onCheckedChange={toggleExpertMode} size="sm" aria-label="전문가 모드" />
               </div>
             )}
-            {placements && (
-              <div className="mt-3 grid grid-cols-2 rounded-xl bg-[#f5f5f7] p-1">
+            {leftOpen && activeTool === 'parameters' && (
+              <div className={`mt-3 grid rounded-xl bg-[#f5f5f7] p-1 ${placements ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {([
                   ['parameters', '파라미터', SlidersHorizontal],
                   ['parts', '부품', Package],
-                ] as const).map(([id, label, Icon]) => (
+                ] as const)
+                  .filter(([id]) => id !== 'parts' || placements)
+                  .map(([id, label, Icon]) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => setPanelTab(id)}
-                    aria-pressed={panelTab === id}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${panelTab === id ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}
+                    aria-pressed={effectivePanelTab === id}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition ${effectivePanelTab === id ? 'bg-white text-[#1d1d1f] shadow-sm' : 'text-[#6e6e73]'}`}
                   >
-                    <Icon className={`size-3.5 ${panelTab === id ? 'text-[#3182f6]' : ''}`} />
+                    <Icon className={`size-3.5 ${effectivePanelTab === id ? 'text-[#3182f6]' : ''}`} />
                     {label}
                     {id === 'parts' && selectedParts.length > 0 && (
                       <span className="rounded-full bg-[#3182f6] px-1.5 text-[10px] text-white">{selectedParts.length}</span>
@@ -288,10 +394,24 @@ export function DesignLabView({
             )}
           </div>
 
-          <ScrollArea className="h-[500px] @min-[900px]/lab:h-[calc(100%-116px)]">
+          {effectivePanelTab === 'design' ? (
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <DesignPicker
+                designs={datasetDesigns}
+                showcases={showcases}
+                selectedId={selected.id}
+                onSelect={(id) => {
+                  setSelectedParts([]);
+                  onSelect(id);
+                }}
+                onOpenModelInfo={() => setModelInfoHiddenFor(null)}
+              />
+            </div>
+          ) : (
+          <ScrollArea className="min-h-0 flex-1">
             {loading || !draft || !baseline ? (
               <div className="grid h-80 place-items-center text-xs text-[#6e6e73]">설계 파라미터를 준비하고 있습니다…</div>
-            ) : panelTab === 'parts' && placements ? (
+            ) : effectivePanelTab === 'parts' && placements ? (
               <PartsPanel
                 assembly={placements}
                 selected={selectedParts}
@@ -301,11 +421,11 @@ export function DesignLabView({
                   current.includes(type)
                     ? current.filter((item) => item !== type)
                     : [...current, type])}
-                search={search}
+                search=""
               />
             ) : (
               <Accordion multiple value={openSections} onValueChange={(value) => setOpenSections(value.map(String))} className="px-3 pb-5">
-                {groupVisible('structure', ['topology', 'hub', 'arm', 'angle', 'offset', '구조', '길이']) && (
+                {(
                   <ParameterSection value="structure" icon={<Layers3 />} title="기체 구조" count={1 + draft.segments.length * 3} hint={GROUP_HINTS.structure}>
                     <ReadOnlyValue label="허브 형태" value={formatComponent(draft.topology)} note="허브(몸통 중심) 형태 변경은 1단계 설계 선택에서 다른 설계를 고르면 됩니다." />
                     {draft.segments.map((segment, index) => (
@@ -321,7 +441,7 @@ export function DesignLabView({
                   </ParameterSection>
                 )}
 
-                {groupVisible('fuselage', ['동체', 'length', 'diameter', 'floor', '길이', '직경']) && (
+                {(
                   <ParameterSection value="fuselage" icon={<Box />} title="동체" count={4} hint={GROUP_HINTS.fuselage}>
                     <NumberSlider label="길이" unit="mm" min={84} max={559} step={1} value={draft.fuselage.length} baseline={baseline.fuselage.length} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.length = value; })} />
                     <NumberSlider label="가로 지름" unit="mm" min={120} max={805} step={1} value={draft.fuselage.horizontalDiameter} baseline={baseline.fuselage.horizontalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.horizontalDiameter = value; })} />
@@ -330,7 +450,7 @@ export function DesignLabView({
                   </ParameterSection>
                 )}
 
-                {groupVisible('propulsion', ['motor', 'propeller', '추진', '모터', '프로펠러']) && (
+                {(
                   <ParameterSection value="propulsion" icon={<CircleGauge />} title="추진 시스템" count={draft.propulsionGroups.length * 2} hint={GROUP_HINTS.propulsion}>
                     {draft.propulsionGroups.map((propulsion, index) => (
                       <div key={propulsion.id} className="rounded-xl bg-[#f5f5f7] p-3">
@@ -342,7 +462,7 @@ export function DesignLabView({
                   </ParameterSection>
                 )}
 
-                {groupVisible('energy', ['battery', '배터리', '전력', 'energy']) && (
+                {(
                   <ParameterSection value="energy" icon={<BatteryCharging />} title="전력 시스템" count={draft.energy.batteryTypes.length} hint={GROUP_HINTS.energy}>
                     {draft.energy.batteryTypes.map((battery, index) => (
                       <ControlSelect key={`${index}-${battery}`} label={`배터리 ${index + 1}`} value={battery} options={catalogs.batteries} baseline={baseline.energy.batteryTypes[index]} format={formatBatteryLabel} onChange={(value) => mutateDraft('energy', (next) => { next.energy.batteryTypes[index] = value; })} />
@@ -351,7 +471,7 @@ export function DesignLabView({
                   </ParameterSection>
                 )}
 
-                {draft.wings.length > 0 && groupVisible('wing', ['wing', 'naca', 'span', 'chord', '날개']) && (
+                {draft.wings.length > 0 && (
                   <ParameterSection value="wing" icon={<Plane />} title="날개" count={draft.wings.length * 9} hint={GROUP_HINTS.wing}>
                     {draft.wings.map((wing, index) => (
                       <WingControls key={wing.id} wing={wing} baseline={baseline.wings[index] ?? wing} nacaOptions={catalogs.nacaProfiles} onChange={(mutator) => mutateDraft('wing', (next) => mutator(next.wings[index]))} />
@@ -359,13 +479,13 @@ export function DesignLabView({
                   </ParameterSection>
                 )}
 
-                {groupVisible('payload', ['payload', 'cargo', '탑재', '중량']) && (
+                {(
                   <ParameterSection value="payload" icon={<Weight />} title="탑재 중량" count={1} advanced hint={GROUP_HINTS.payload}>
                     <NumberSlider label="탑재 화물 질량" unit="kg" min={0} max={20} step={0.1} value={draft.payload.mass} baseline={baseline.payload.mass} onChange={(value) => mutateDraft('payload', (next) => { next.payload.mass = value; })} geometryOnly />
                   </ParameterSection>
                 )}
 
-                {Object.keys(draft.layout).length > 0 && groupVisible('layout', ['sensor', 'battery x', 'battery y', '센서', '배치']) && (
+                {Object.keys(draft.layout).length > 0 && (
                   <ParameterSection value="layout" icon={<Ruler />} title="내부 배치" count={Object.keys(draft.layout).length * 2} advanced hint={GROUP_HINTS.layout}>
                     {Object.entries(draft.layout).map(([name, position]) => (
                       <div key={name} className="rounded-xl bg-[#f5f5f7] p-3">
@@ -382,9 +502,7 @@ export function DesignLabView({
                   <div className="rounded-xl border border-[#bfdbfe] bg-[#eff6ff] p-3 text-[10px] leading-4 text-[#3c3c43]">
                     설계 원본의 {parameterCount}개 변수를 1:1로 보존합니다. 이름은 데이터셋 원본 표기라 위 그룹보다 낯설 수 있어요. 성능 계산에 쓰이는 변수는 실제로 반영되고, 나머지는 3D 형상에만 반영됩니다.
                   </div>
-                  {(draft.parameterDefinitions ?? [])
-                    .filter((definition) => !query || `${definition.label} ${GROUP_LABELS[definition.group]} ${definition.optimization ?? ''}`.toLocaleLowerCase('ko-KR').includes(query))
-                    .map((definition) => (
+                  {(draft.parameterDefinitions ?? []).map((definition) => (
                       <div key={definition.id} id={`source-parameter-${encodeURIComponent(definition.id)}`} tabIndex={-1} className="rounded-xl outline-none focus:ring-2 focus:ring-[#3182f6]">
                       <SourceParameterControl
                         definition={definition}
@@ -402,47 +520,110 @@ export function DesignLabView({
               </Accordion>
             )}
           </ScrollArea>
-        </aside>
+          )}
+        </aside>}
 
-        <div className={`${mobilePanel === 'preview' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-[#f5f5f7] shadow-sm @min-[900px]/lab:block`}>
+        <div className="absolute inset-0 z-0 bg-[#f5f5f7]">
           <div className="flex h-full flex-col">
-            <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e5ea] bg-white px-3 py-2.5">
+            {/* 아래 작업 메뉴처럼 독립적으로 접을 수 있는 뷰 전환 도구막대. */}
+            {!viewerToolbarOpen && (
+              <button
+                type="button"
+                onClick={() => setViewerToolbarOpen(true)}
+                aria-label="뷰 전환 도구막대 펼치기"
+                className="absolute left-1/2 top-3 z-30 grid size-10 -translate-x-1/2 place-items-center rounded-full border border-[#e5e5ea] bg-white/94 text-[#3182f6] shadow-lg backdrop-blur-xl hover:bg-white"
+              >
+                <ChevronDown className="size-4" />
+              </button>
+            )}
+            {viewerToolbarOpen && <div className="absolute left-1/2 top-3 z-30 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 overflow-x-auto rounded-2xl border border-[#e5e5ea] bg-white/94 p-1.5 shadow-xl backdrop-blur-xl">
               <div className="flex rounded-lg bg-[#f5f5f7] p-1">
-                <ModeButton active={mode === 'parametric-preview'} onClick={() => setMode('parametric-preview')}>설계 미리보기</ModeButton>
-                <ModeButton active={mode === 'exact-stl'} onClick={() => setMode('exact-stl')}>원본 STL</ModeButton>
-                <ModeButton active={sideBySide} onClick={() => setSideBySide((value) => !value)}>나란히</ModeButton>
+                <ModeButton active={!sideBySide && mode === 'parametric-preview'} onClick={() => { setSideBySide(false); setMode('parametric-preview'); }}>파라메트릭스</ModeButton>
+                <ModeButton active={!sideBySide && mode === 'exact-stl'} onClick={() => { setSideBySide(false); setMode('exact-stl'); }}>원본 STL</ModeButton>
+                <ModeButton active={sideBySide} onClick={() => setSideBySide(true)}>듀얼 뷰</ModeButton>
               </div>
-              <Badge variant="outline" className={mode === 'parametric-preview' ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1b64da]' : 'border-[#e5e5ea] bg-white text-[#6e6e73]'}>
-                {mode === 'parametric-preview' ? '개념 형상 · 제조용 CAD 아님' : `AircraftVerse #${selected.id}`}
-              </Badge>
-              <div className="ml-auto flex items-center gap-2 text-xs text-[#6e6e73]">
-                <Switch aria-label="기준 설계 Ghost 표시" checked={showGhost} onCheckedChange={setShowGhost} size="sm" disabled={mode === 'exact-stl'} />
+              {sideBySide && (
+                <div className="flex items-center gap-1.5 rounded-lg bg-[#f5f5f7] p-1">
+                  <div className="flex items-center gap-1.5 px-1.5 text-[10px] font-medium text-[#3c3c43]">
+                    <Switch
+                      aria-label="두 뷰어 카메라 연동"
+                      checked={cameraLinked}
+                      onCheckedChange={(linked) => {
+                        setCameraLinked(linked);
+                        if (linked) {
+                          window.requestAnimationFrame(() => copyViewerCamera(comparisonCameraGroup, 'parametric', 'stl'));
+                        }
+                      }}
+                      size="sm"
+                    />
+                    카메라 연동
+                  </div>
+                  {!cameraLinked && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => copyViewerCamera(comparisonCameraGroup, 'parametric', 'stl')}
+                        className="rounded-md bg-white px-2 py-1 text-[10px] font-medium text-[#3c3c43] shadow-sm hover:text-[#1b64da]"
+                        title="왼쪽 파라메트릭 카메라를 오른쪽 STL에 적용"
+                      >
+                        왼쪽 → 오른쪽
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyViewerCamera(comparisonCameraGroup, 'stl', 'parametric')}
+                        className="rounded-md bg-white px-2 py-1 text-[10px] font-medium text-[#3c3c43] shadow-sm hover:text-[#1b64da]"
+                        title="오른쪽 STL 카메라를 왼쪽 파라메트릭에 적용"
+                      >
+                        왼쪽 ← 오른쪽
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              <div className="flex shrink-0 items-center gap-2 px-1 text-xs text-[#6e6e73]">
+                <Switch aria-label="기준 설계 Ghost 표시" checked={showGhost} onCheckedChange={setShowGhost} size="sm" disabled={!sideBySide && mode === 'exact-stl'} />
                 <span>기준 Ghost</span>
               </div>
-            </div>
+              {showAiPrediction && (mode === 'parametric-preview' || sideBySide) && (
+                <FlightCameraControls
+                  locked={sideViewLocked}
+                  onReset={() => setSideViewResetKey((key) => key + 1)}
+                  onToggleLock={() => setSideViewLocked((locked) => !locked)}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => setViewerToolbarOpen(false)}
+                aria-label="뷰 전환 도구막대 접기"
+                className="grid size-8 shrink-0 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
+              >
+                <ChevronDown className="size-4 rotate-180" />
+              </button>
+            </div>}
             <div className="relative min-h-0 flex-1">
               {loading ? (
                 <div className="absolute inset-0 grid place-items-center text-sm text-[#6e6e73]">Design #{selected.id} 형상을 불러오는 중…</div>
               ) : draft && baseline && sideBySide ? (
                 <div className="absolute inset-0 grid grid-cols-2 divide-x divide-[#e5e5ea]">
                   <div className="relative">
-                    <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} syncGroup={`compare-${selected.id}`} />
-                    <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#3182f6] backdrop-blur">개념 형상</span>
+                    <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} cameraSync={{ group: comparisonCameraGroup, id: 'parametric', linked: cameraLinked }} viewPreset={showAiPrediction ? 'side' : 'perspective'} sideViewLocked={sideViewLocked} sideViewResetKey={sideViewResetKey} pitchDegrees={activeFlightState?.pitch ?? 0} forceVectors={activeForces} showForces={Boolean(activeFlightState)} />
+                    <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#3182f6] backdrop-blur">파라메트릭스</span>
+                    {activeFlightState && !chartsOpen && <FlightVisualizationLegend row={activeFlightState} source={visualizationSource} />}
                   </div>
                   <div className="relative">
-                    <StlViewer key={originalStlUrl} src={originalStlUrl} />
-                    <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#6e6e73] backdrop-blur">원본 STL</span>
+                    <StlViewer key={originalStlUrl} src={originalStlUrl} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} cameraSync={{ group: comparisonCameraGroup, id: 'stl', linked: cameraLinked }} showControls={false} />
+                    <span className="pointer-events-none absolute right-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#6e6e73] backdrop-blur">원본 STL</span>
                   </div>
                 </div>
               ) : draft && baseline && mode === 'parametric-preview' ? (
-                <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} />
+                <>
+                  <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} viewPreset={showAiPrediction ? 'side' : 'perspective'} sideViewLocked={sideViewLocked} sideViewResetKey={sideViewResetKey} pitchDegrees={activeFlightState?.pitch ?? 0} forceVectors={activeForces} showForces={Boolean(activeFlightState)} />
+                  {activeFlightState && !chartsOpen && <FlightVisualizationLegend row={activeFlightState} source={visualizationSource} />}
+                </>
               ) : (
-                <StlViewer key={originalStlUrl} src={originalStlUrl} />
+                <StlViewer key={originalStlUrl} src={originalStlUrl} paused={suspended || compareOpen || chartsOpen} />
               )}
-              {mode === 'parametric-preview' && <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-[#e5e5ea] bg-white/90 px-3 py-2 text-[11px] text-[#6e6e73] shadow-sm backdrop-blur">
-                <MousePointer2 className="size-3" /> 드래그 회전 · 스크롤 확대
-              </div>}
-              {mode === 'parametric-preview' && (
+              {showViewerControls && mode === 'parametric-preview' && (
                 <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-[#e5e5ea] bg-white/90 p-1 text-[11px] shadow-sm backdrop-blur">
                   <span className="px-1.5 text-[#86868b]">프로펠러</span>
                   {([2, 4] as const).map((count) => (
@@ -459,23 +640,84 @@ export function DesignLabView({
                 </div>
               )}
               {changedGroup && (
-                <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-lg bg-[#3182f6] px-3 py-2 text-xs font-semibold text-white shadow-sm">
+                <div className="pointer-events-none absolute right-3 top-[72px] z-20 rounded-lg bg-[#3182f6] px-3 py-2 text-xs font-semibold text-white shadow-sm">
                   {GROUP_LABELS[changedGroup]} 반영됨
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-3 border-t border-[#e5e5ea] bg-white text-center text-xs">
-              <ViewerStat label="팔 전체 폭" value={`${formatMetric(maxArmSpan(draft), 0)} mm`} />
-              <ViewerStat label="동체 길이" value={draft ? `${formatMetric(draft.fuselage.length, 0)} mm` : '—'} />
-              <ViewerStat label="날개 수" value={draft ? `${draft.numWings || draft.wings.length}개` : '—'} />
-            </div>
           </div>
         </div>
 
-        <aside className={`${mobilePanel === 'performance' ? 'block' : 'hidden'} min-h-[560px] overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white shadow-sm @min-[900px]/lab:block`}>
-          <ScrollArea className="h-full">
+        {showModelInfo && <aside className="absolute right-3 top-3 z-20 flex max-h-[calc(100%-24px)] w-[300px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur">
+          <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3 py-2">
+            <Info className="size-4 text-[#3182f6]" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[#1d1d1f]">모델 정보</p>
+              <p className="truncate text-[10px] text-[#6e6e73]">현재 파라메트릭 출력 · #{selected.id}</p>
+            </div>
+            <Button size="icon-sm" variant="ghost" onClick={() => setModelInfoHiddenFor(selected.id)} aria-label="모델 정보 닫기" className="shrink-0 text-[#6e6e73]">
+              <X />
+            </Button>
+          </div>
+          <div className="min-h-0 overflow-y-auto overscroll-contain">
+            <ModelInfoPanel
+              selected={selected}
+              draft={draft}
+              assembly={placements}
+              selectedParts={selectedParts}
+              onSelectionChange={setSelectedParts}
+              estimate={estimate}
+              changedCount={changedCount}
+              loading={loading}
+            />
+          </div>
+        </aside>}
+
+        {showPerformancePanel && <aside
+          className={`absolute right-3 z-20 flex w-[320px] flex-col overflow-hidden border border-[#e5e5ea] bg-white/92 backdrop-blur ${
+            chartsOpen && aiPredictionOpen
+              ? 'hidden'
+              : `top-3 rounded-2xl shadow-lg ${rightOpen ? 'bottom-3' : 'max-h-11'}`
+          }`}
+        >
+          <div className="flex w-full shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3 py-2">
+            {(aiPredictionOpen || onCloseTool) && (
+              <Button size="icon-sm" variant="ghost" onClick={aiPredictionOpen ? closeAiPrediction : onCloseTool} aria-label={aiPredictionOpen ? '기존 성능으로 돌아가기' : '성능 패널 닫기'} className="shrink-0 text-[#6e6e73]">
+                <ArrowLeft />
+              </Button>
+            )}
+            <button type="button" onClick={() => setRightOpen((open) => !open)} aria-expanded={rightOpen} className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left">
+              <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${rightOpen ? '' : '-rotate-90'}`} />
+              <span className="text-sm font-semibold text-[#1d1d1f]">{aiPredictionOpen ? 'AI 속도별 예측' : '성능'}</span>
+            </button>
+            {!aiPredictionOpen && <Button
+              size="sm"
+              onClick={onOpenParts}
+              disabled={loading || !draft}
+              className="h-7 shrink-0 bg-[#3182f6] px-2 text-[11px] text-white hover:bg-[#1b64da]"
+            >
+              <ShoppingBag className="size-3" />부품 찾기
+            </Button>}
+          </div>
+          <ScrollArea className={`min-h-0 flex-1 ${rightOpen ? '' : 'hidden'}`}>
             <div className="p-4">
-              <div className="mb-5"><PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} compact /></div>
+              {aiPredictionOpen ? (
+                <div ref={aiPredictionPanelRef}>
+                  <PerformancePredictionPanel designId={selected.id} draft={draft} disabled={loading || !draft} inputError={loadError} speed={speed} onSpeedChange={setSpeed} onPredictionChange={handlePredictionChange} onResultChange={handlePerformanceResultChange} compact />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (!chartsOpen && !aiPerformanceResult && originalTrimAvailable) setPerformanceSource('dataset');
+                      setChartsOpen((open) => !open);
+                    }}
+                    disabled={!aiPerformanceResult && !originalTrimAvailable}
+                    aria-expanded={chartsOpen}
+                    className={`mt-3 h-10 w-full ${chartsOpen ? 'border border-[#d1d1d6] bg-white text-[#3c3c43] hover:bg-[#f5f5f7]' : 'bg-[#1d1d1f] text-white hover:bg-[#343437]'}`}
+                  >
+                    <Activity className="size-4" /> {chartsOpen ? '분석 보드 닫기' : '분석 보드 열기'} {chartsOpen ? <X className="ml-auto size-4" /> : <ChevronRight className="ml-auto size-4" />}
+                  </Button>
+                </div>
+              ) : <>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-[#1d1d1f]">기존 설계 KPI 비교</p>
@@ -508,6 +750,22 @@ export function DesignLabView({
                   <EstimateRow icon={<Weight />} label="질량" before={selected.mass} after={estimate.mass} unit="kg" better="down" />
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  setAiPredictionOpen(true);
+                  setSideViewLocked(false);
+                  setRightOpen(true);
+                  setSideBySide(false);
+                  setMode('parametric-preview');
+                }}
+                aria-expanded="false"
+                className="mt-4 flex w-full items-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-3 py-3 text-left text-sm font-semibold text-[#1b64da] transition-colors hover:bg-[#e5f0ff]"
+              >
+                <BrainCircuit className="size-4 shrink-0" />
+                <span className="flex-1">AI 속도별 예측</span>
+                <ChevronRight className="size-4" />
+              </button>
 
               <div className="mt-4 rounded-xl border border-[#e5e5ea] bg-white p-3 text-xs">
                 <p className="font-semibold text-[#3c3c43]">변경 요약</p>
@@ -515,16 +773,111 @@ export function DesignLabView({
                 <div className="mt-2 flex items-center justify-between text-[#6e6e73]"><span>파라메트릭 상태</span><strong className="text-emerald-700">실시간</strong></div>
               </div>
 
-              <Button onClick={() => setCompareOpen(true)} disabled={!draft || !baseline} className="mt-4 h-10 w-full bg-[#3182f6] text-white hover:bg-[#1b64da]">
+              <Button onClick={() => { setCompareDetailsOpen(true); setBaselineCompareView('dual'); setBaselineCameraLinked(true); setCompareOpen(true); }} disabled={!draft || !baseline} className="mt-4 h-10 w-full bg-[#3182f6] text-white hover:bg-[#1b64da]">
                 <GitCompareArrows /> Baseline과 비교 <ChevronRight />
               </Button>
               <Button onClick={onOpenDatasetCompare} variant="ghost" className="mt-1 h-9 w-full text-xs text-[#6e6e73] hover:bg-[#f5f5f7]">
                 데이터셋 설계끼리 A/B 비교
               </Button>
               <DataDisclaimer compact />
+              </>}
             </div>
           </ScrollArea>
-        </aside>
+        </aside>}
+
+        {showAiPrediction && chartsOpen && draft && baseline && <section className="absolute bottom-[72px] left-3 right-3 top-[72px] z-20 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[#dbe4ea] bg-white/96 shadow-2xl backdrop-blur-xl">
+          <header className="flex h-11 shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3">
+            {performanceSource === 'ai' ? <BrainCircuit className="size-4 text-[#3182f6]" /> : <Database className="size-4 text-emerald-600" />}
+            <div className="flex min-w-0 flex-1 items-center">
+              <div className="min-w-0 shrink-0">
+                <p className="text-sm font-semibold text-[#1d1d1f]">비행 성능 분석</p>
+              <p className="truncate text-[10px] text-[#86868b]">{performanceSource === 'ai' ? '현재 편집 Draft의 AI 예측' : `기준 설계 #${selected.id}의 저장된 원본 trim`} · {speed} m/s</p>
+              </div>
+              <fieldset className="m-0 ml-8 flex min-w-0 shrink-0 rounded-lg border-0 bg-[#f5f5f7] p-0.5" aria-label="성능 데이터 소스">
+                <ModeButton active={performanceSource === 'ai'} onClick={() => setPerformanceSource('ai')}>AI 예측</ModeButton>
+                <Tooltip>
+                  <TooltipTrigger render={<span />}>
+                    <ModeButton active={performanceSource === 'dataset'} disabled={!originalTrimAvailable} onClick={() => setPerformanceSource('dataset')}>원본 시뮬레이션</ModeButton>
+                  </TooltipTrigger>
+                  {!originalTrimAvailable && <TooltipContent>이 설계에는 배포된 원본 trim 데이터가 없습니다.</TooltipContent>}
+                </Tooltip>
+              </fieldset>
+            </div>
+            <Button size="icon-sm" variant="ghost" onClick={() => setChartsOpen(false)} aria-label="분석 보드 닫기" className="text-[#6e6e73]">
+              <X />
+            </Button>
+          </header>
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_340px]">
+            <div className="grid min-h-0 grid-rows-[minmax(220px,1fr)_300px]">
+              <div className="relative min-h-0 overflow-hidden border-b border-[#e5e5ea] bg-[#eef3f6]">
+                {performanceSource === 'dataset' && packagedReference ? (
+                  <StlViewer
+                    key={packagedReference.modelPath}
+                    src={packagedReference.modelPath}
+                    pitchDegrees={showOriginalFlight ? originalTrimRow?.pitch ?? 0 : 0}
+                    forceVectors={showOriginalFlight ? activeForces : undefined}
+                    showForceVectors={showOriginalFlight}
+                    cameraFitPadding={1.7}
+                    showControls={false}
+                    paused={suspended || compareOpen}
+                  />
+                ) : (
+                  <ParametricUavViewer
+                    draft={draft}
+                    baseline={baseline}
+                    showGhost={showGhost}
+                    changedGroup={changedGroup}
+                    assembly={placements}
+                    bladeCount={bladeCount}
+                    selection={selectedParts}
+                    onSelectionChange={setSelectedParts}
+                    paused={suspended || compareOpen}
+                    cameraFitPadding={1.7}
+                    viewPreset="side"
+                    sideViewLocked={sideViewLocked}
+                    sideViewResetKey={sideViewResetKey}
+                    pitchDegrees={showAiFlight ? aiFlightState.pitch ?? 0 : 0}
+                    forceVectors={showAiFlight ? activeForces : undefined}
+                    showForces={showAiFlight}
+                  />
+                )}
+                <div className={`pointer-events-none absolute left-3 top-3 z-20 rounded-xl border bg-white/92 px-3 py-2 shadow-sm backdrop-blur ${performanceSource === 'ai' ? 'border-[#bfdbfe] text-[#1b64da]' : 'border-emerald-200 text-emerald-700'}`}>
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold">{performanceSource === 'ai' ? <BrainCircuit className="size-3.5" /> : <Database className="size-3.5" />}{performanceSource === 'ai' ? 'AI 예측 · 현재 Draft' : `원본 시뮬레이션 · 기준 #${selected.id}`}</p>
+                  <p className="mt-0.5 text-[10px] font-medium text-[#6e6e73]">{performanceSource === 'ai' ? '파라메트릭 형상' : '원본 STL 형상'} · {speed} m/s</p>
+                </div>
+                {activeFlightState && <FlightVisualizationLegend row={activeFlightState} source={performanceSource} />}
+                {performanceSource === 'dataset' && !showOriginalFlight && <div className="absolute inset-0 z-10 grid place-items-center bg-white/25"><p className="rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-xs font-medium text-amber-900 shadow-sm">{speed} m/s에서는 원본 trim 해석이 수렴하지 않았습니다.</p></div>}
+              </div>
+              <div className="min-h-0 overflow-hidden p-4">
+                {performanceSource === 'dataset' && packagedReference ? (
+                  <SpeedCurveSheet rows={packagedReference.trim} source="dataset" speed={speed} onSpeedChange={setSpeed} />
+                ) : aiPerformanceResult ? (
+                  <SpeedCurveSheet rows={aiPerformanceResult.predictions} source="ai" speed={speed} onSpeedChange={setSpeed} />
+                ) : (
+                  <p className="grid h-full place-items-center text-xs text-[#6e6e73]">현재 편집 설계의 AI 곡선을 계산하고 있습니다…</p>
+                )}
+              </div>
+            </div>
+            <aside className="min-h-0 overflow-hidden border-l border-[#e5e5ea] bg-white p-3">
+              {performanceSource === 'dataset' && packagedReference ? (
+                <OriginalTrimPanel design={packagedReference} speed={speed} onSpeedChange={setSpeed} />
+              ) : aiPerformanceResult ? (
+                <PerformancePredictionPanel
+                  designId={selected.id}
+                  draft={draft}
+                  disabled={false}
+                  speed={speed}
+                  onSpeedChange={setSpeed}
+                  onPredictionChange={handlePredictionChange}
+                  resultOverride={aiPerformanceResult}
+                  compact
+                />
+              ) : (
+                <p className="grid h-full place-items-center text-xs text-[#6e6e73]">AI 예측을 준비하고 있습니다…</p>
+              )}
+            </aside>
+          </div>
+        </section>}
       </div>
 
       {loadError && (
@@ -532,41 +885,95 @@ export function DesignLabView({
       )}
 
       <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto border-[#e5e5ea] bg-[#f5f5f7] p-5 text-[#1d1d1f] sm:max-w-[1180px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Baseline vs 현재 Draft</DialogTitle>
-            <DialogDescription>같은 카메라 방향의 개념 형상과 변경된 파라미터·성능을 함께 비교합니다.</DialogDescription>
+        <DialogContent className="flex h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-h-none max-w-none flex-col gap-0 overflow-hidden border-[#dbe4ea] bg-[#f5f5f7] p-0 text-[#1d1d1f] sm:max-w-none">
+          <DialogHeader className="relative shrink-0 border-b border-[#e5e5ea] bg-white px-5 py-3 pr-14">
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-lg">Baseline vs 현재 Draft</DialogTitle>
+                <DialogDescription className="mt-1">두 파라메트릭 형상을 같은 카메라로 조작하고 변경점과 성능 차이를 확인합니다.</DialogDescription>
+              </div>
+            </div>
+            <div className="absolute left-1/2 top-1/2 z-10 flex max-w-[46vw] -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-2xl border border-[#e5e5ea] bg-white/96 p-1.5 shadow-lg backdrop-blur-xl">
+              <div className="flex rounded-lg bg-[#f5f5f7] p-1">
+                <ModeButton active={baselineCompareView === 'baseline'} onClick={() => setBaselineCompareView('baseline')}>Baseline</ModeButton>
+                <ModeButton active={baselineCompareView === 'draft'} onClick={() => setBaselineCompareView('draft')}>현재 Draft</ModeButton>
+                <ModeButton active={baselineCompareView === 'dual'} onClick={() => setBaselineCompareView('dual')}>듀얼 뷰</ModeButton>
+              </div>
+              {baselineCompareView === 'dual' && <div className="flex items-center gap-1 rounded-lg bg-[#f5f5f7] p-1 text-[10px] font-medium text-[#3c3c43]">
+                <div className="flex items-center gap-1.5 px-1.5">
+                  <Switch
+                    aria-label="Baseline과 현재 Draft 카메라 연동"
+                    checked={baselineCameraLinked}
+                    onCheckedChange={(linked) => {
+                      setBaselineCameraLinked(linked);
+                      if (linked) window.requestAnimationFrame(() => copyViewerCamera(baselineComparisonCameraGroup, 'baseline', 'draft'));
+                    }}
+                    size="sm"
+                  />
+                  카메라 연동
+                </div>
+                {!baselineCameraLinked && <>
+                  <button type="button" onClick={() => copyViewerCamera(baselineComparisonCameraGroup, 'baseline', 'draft')} className="rounded-md bg-white px-2 py-1 shadow-sm hover:text-[#1b64da]" title="Baseline 카메라를 현재 Draft에 적용">A → B</button>
+                  <button type="button" onClick={() => copyViewerCamera(baselineComparisonCameraGroup, 'draft', 'baseline')} className="rounded-md bg-white px-2 py-1 shadow-sm hover:text-[#1b64da]" title="현재 Draft 카메라를 Baseline에 적용">A ← B</button>
+                </>}
+              </div>}
+            </div>
           </DialogHeader>
           {baseline && draft && estimate && (
-            <div className="mt-2 space-y-4">
-              <div className="grid gap-3 lg:grid-cols-2">
-                <ComparePreview label={`A · Baseline #${selected.id}`} draft={baseline} />
-                <ComparePreview label="B · 현재 Draft" draft={draft} />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className={`grid min-h-[280px] flex-1 ${baselineCompareView === 'dual' ? 'grid-cols-2 divide-x divide-[#dbe4ea]' : 'grid-cols-1'}`}>
+                {(baselineCompareView === 'baseline' || baselineCompareView === 'dual') && <ComparePreview
+                  label={`A · Baseline #${selected.id}`}
+                  draft={baseline}
+                  cameraGroup={baselineComparisonCameraGroup}
+                  cameraId="baseline"
+                  cameraLinked={baselineCompareView === 'dual' && baselineCameraLinked}
+                  assembly={placements}
+                  bladeCount={bladeCount}
+                />}
+                {(baselineCompareView === 'draft' || baselineCompareView === 'dual') && <ComparePreview
+                  label="B · 현재 Draft"
+                  draft={draft}
+                  cameraGroup={baselineComparisonCameraGroup}
+                  cameraId="draft"
+                  cameraLinked={baselineCompareView === 'dual' && baselineCameraLinked}
+                  assembly={placements}
+                  bladeCount={bladeCount}
+                />}
               </div>
-              <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr]">
-                <div className="rounded-xl border border-[#e5e5ea] bg-white p-4">
-                  <p className="text-sm font-semibold">변경된 파라미터</p>
-                  <div className="mt-3 max-h-52 overflow-y-auto divide-y divide-[#e5e5ea]">
-                    {draftDifferences(baseline, draft).length ? draftDifferences(baseline, draft).slice(0, 24).map((item, index) => (
-                      <div key={`${item.label}-${index}`} className="grid grid-cols-[1fr_auto_auto] gap-2 py-2 text-xs">
-                        <span className="text-[#6e6e73]">{item.label}</span>
-                        <span className="font-mono text-[#86868b]">{item.before}</span>
-                        <span className="font-mono font-semibold text-[#1b64da]">→ {item.after}</span>
-                      </div>
-                    )) : <p className="py-8 text-center text-xs text-[#86868b]">아직 변경된 파라미터가 없습니다.</p>}
+              <div className="shrink-0 border-t border-[#dbe4ea] bg-white">
+                <button type="button" onClick={() => setCompareDetailsOpen((open) => !open)} aria-expanded={compareDetailsOpen} className="flex h-11 w-full items-center gap-2 px-4 text-left hover:bg-[#fafafa]">
+                  <ChevronDown className={`size-4 text-[#86868b] transition-transform ${compareDetailsOpen ? 'rotate-180' : ''}`} />
+                  <span className="text-sm font-semibold">비교 상세</span>
+                  <span className="rounded-full bg-[#eff6ff] px-2 py-0.5 text-[10px] font-medium text-[#1b64da]">변경 {differences.length}개</span>
+                  <span className="text-[10px] text-[#86868b]">파라미터와 KPI 변화</span>
+                  <span className="ml-auto text-[10px] text-[#6e6e73]">{compareDetailsOpen ? '접기' : '펼치기'}</span>
+                </button>
+                {compareDetailsOpen && <div className="grid h-[286px] min-h-0 grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] gap-3 overflow-hidden border-t border-[#e5e5ea] bg-[#f5f5f7] p-3">
+                  <div className="flex min-h-0 flex-col rounded-xl border border-[#e5e5ea] bg-white p-3">
+                    <p className="text-sm font-semibold">변경된 파라미터</p>
+                    <div className="mt-2 min-h-0 flex-1 overflow-y-auto divide-y divide-[#e5e5ea] pr-1">
+                      {differences.length ? differences.map((item, index) => (
+                        <div key={`${item.label}-${index}`} className="grid grid-cols-[1fr_auto_auto] gap-2 py-2 text-xs">
+                          <span className="truncate text-[#6e6e73]">{item.label}</span>
+                          <span className="font-mono text-[#86868b]">{item.before}</span>
+                          <span className="font-mono font-semibold text-[#1b64da]">→ {item.after}</span>
+                        </div>
+                      )) : <p className="py-8 text-center text-xs text-[#86868b]">아직 변경된 파라미터가 없습니다.</p>}
+                    </div>
                   </div>
-                </div>
-                <div className="rounded-xl border border-[#e5e5ea] bg-white p-4">
-                  <p className="text-sm font-semibold">성능 변화</p>
-                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    <CompareMetric label="비행거리" before={selected.maxDistance / 1000} after={estimate.range / 1000} unit="km" />
-                    <CompareMetric label="체공시간" before={selected.hoverTime} after={estimate.hover} unit="s" />
-                    <CompareMetric label="최고속도" before={selected.maxSpeed} after={estimate.maxSpeed} unit="m/s" />
-                    <CompareMetric label="소비전력" before={selected.power} after={estimate.power} unit="W" invert />
-                    <CompareMetric label="항력" before={selected.dragAt20} after={estimate.drag} unit="N" invert />
-                    <CompareMetric label="질량" before={selected.mass} after={estimate.mass} unit="kg" invert />
+                  <div className="min-h-0 overflow-hidden rounded-xl border border-[#e5e5ea] bg-white p-3">
+                    <p className="text-sm font-semibold">성능 변화</p>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      <CompareMetric label="비행거리" before={selected.maxDistance / 1000} after={estimate.range / 1000} unit="km" />
+                      <CompareMetric label="체공시간" before={selected.hoverTime} after={estimate.hover} unit="s" />
+                      <CompareMetric label="최고속도" before={selected.maxSpeed} after={estimate.maxSpeed} unit="m/s" />
+                      <CompareMetric label="소비전력" before={selected.power} after={estimate.power} unit="W" invert />
+                      <CompareMetric label="항력" before={selected.dragAt20} after={estimate.drag} unit="N" invert />
+                      <CompareMetric label="질량" before={selected.mass} after={estimate.mass} unit="kg" invert />
+                    </div>
                   </div>
-                </div>
+                </div>}
               </div>
             </div>
           )}
@@ -576,11 +983,426 @@ export function DesignLabView({
   );
 }
 
-function ComparePreview({ label, draft }: { label: string; draft: DesignDraft }) {
+function FlightVisualizationLegend({ row, source }: { row: PerformancePrediction | TrimRow; source: PerformanceSource }) {
+  const value = (amount: number | null) => amount == null ? '—' : `${amount.toFixed(2)} N`;
   return (
-    <div className="overflow-hidden rounded-xl border border-[#e5e5ea] bg-white">
-      <div className="border-b border-[#e5e5ea] px-3 py-2 text-xs font-semibold text-[#3c3c43]">{label}</div>
-      <div className="relative h-64 bg-[#f5f5f7]"><ParametricUavViewer draft={draft} syncGroup={`draft-compare-${draft.baselineId}`} /></div>
+    <div className="pointer-events-none absolute bottom-3 left-3 z-20 rounded-xl border border-white/70 bg-white/88 px-3 py-2 shadow-sm backdrop-blur">
+      <div className="flex items-center gap-2 text-[11px] font-semibold text-[#1d1d1f]">
+        <span className={`rounded-md px-1.5 py-0.5 ${source === 'ai' ? 'bg-[#eff6ff] text-[#1b64da]' : 'bg-emerald-50 text-emerald-700'}`}>{source === 'ai' ? 'AI 비행 자세' : '원본 trim 자세'}</span>
+        <span className="tabular-nums">{row.speed} m/s</span>
+        <span className="text-[#86868b]">피치 {row.pitch == null ? '—' : `${row.pitch.toFixed(1)}°`}</span>
+      </div>
+      <div className="mt-1.5 flex items-center gap-3 text-[11px] text-[#6e6e73]">
+        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-[#e97942]" />항력 {value(row.drag)}</span>
+        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-[#1c9b62]" />양력 {value(row.lift)}</span>
+        <span className="flex items-center gap-1"><i className="size-2 rounded-full bg-[#6d5bd0]" />추력 {value(row.thrust)}</span>
+      </div>
+    </div>
+  );
+}
+
+function FlightCameraControls({
+  locked,
+  onReset,
+  onToggleLock,
+}: {
+  locked: boolean;
+  onReset: () => void;
+  onToggleLock: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-1 rounded-lg bg-[#f5f5f7] p-1">
+      <button type="button" onClick={onReset} className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-medium text-[#3c3c43] hover:bg-[#f5f5f7]" title="정확한 측면 카메라로 돌아가기">
+        <RotateCcw className="size-3.5" /> 측면으로 복귀
+      </button>
+      <button
+        type="button"
+        onClick={onToggleLock}
+        aria-pressed={locked}
+        className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-medium ${locked ? 'bg-[#1d1d1f] text-white' : 'text-[#3c3c43] hover:bg-[#f5f5f7]'}`}
+        title={locked ? '측면 고정 해제' : '상하 회전과 화면 이동을 막고 측면 고정'}
+      >
+        {locked ? <Lock className="size-3.5" /> : <Unlock className="size-3.5" />}
+        측면 고정
+      </button>
+    </div>
+  );
+}
+
+const performanceMetricCards = [
+  { key: 'drag', label: '항력', unit: 'N', digits: 2 },
+  { key: 'lift', label: '양력', unit: 'N', digits: 2 },
+  { key: 'thrust', label: '추력', unit: 'N', digits: 2 },
+  { key: 'pitch', label: '피치각', unit: 'deg', digits: 1 },
+  { key: 'power', label: '전력', unit: 'W', digits: 1 },
+  { key: 'current', label: '전류', unit: 'A', digits: 2 },
+  { key: 'flightTime', label: '비행 시간', unit: 's', digits: 1 },
+  { key: 'distance', label: '비행거리', unit: 'm', digits: 1 },
+] as const;
+
+function OriginalTrimPanel({ design, speed, onSpeedChange }: { design: ShowcaseDesign; speed: number; onSpeedChange: (speed: number) => void }) {
+  const [speedDraft, setSpeedDraft] = useState<string | null>(null);
+  const row = design.trim.find((item) => item.speed === speed) ?? null;
+  const validSpeeds = useMemo(() => design.trim.filter((item) => item.valid).map((item) => item.speed), [design]);
+  const commitSpeed = (raw: string) => {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) onSpeedChange(Math.min(50, Math.max(0, Math.round(parsed))));
+    setSpeedDraft(null);
+  };
+
+  return (
+    <section className="min-w-0 rounded-2xl border border-emerald-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-[#1d1d1f]"><Database className="size-4 text-emerald-600" /> 원본 속도별 trim</h2>
+        <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">AircraftVerse 저장값</span>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-[#6e6e73]">기준 설계 #{design.id}의 저장된 시뮬레이션 결과입니다. 현재 Draft의 편집 내용은 반영되지 않습니다.</p>
+      <div className="mt-4">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="font-medium text-[#3c3c43]">trim 속도</span>
+          <label className="flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 py-1 text-emerald-700 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={50}
+              step={1}
+              aria-label="원본 trim 속도 직접 입력"
+              value={speedDraft ?? String(speed)}
+              onFocus={(event) => { setSpeedDraft(String(speed)); event.currentTarget.select(); }}
+              onChange={(event) => setSpeedDraft(event.currentTarget.value)}
+              onBlur={(event) => commitSpeed(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+                if (event.key === 'Escape') setSpeedDraft(null);
+              }}
+              className="w-10 bg-transparent text-right font-mono font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <span className="font-mono font-semibold">m/s</span>
+          </label>
+        </div>
+        <Slider value={[speed]} min={0} max={50} step={1} onValueChange={(value) => onSpeedChange(Number(Array.isArray(value) ? value[0] : value))} className="mt-3 [&_[data-slot=slider-range]]:bg-emerald-600 [&_[data-slot=slider-thumb]]:border-emerald-600" />
+        <div className="mt-1 flex justify-between font-mono text-[11px] text-[#86868b]"><span>0 m/s</span><span>50 m/s</span></div>
+        <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-[11px] leading-4 text-emerald-800">
+          유효 trim 구간 <strong className="ml-1 font-mono">{formatValidSpeedRanges(validSpeeds)}</strong>
+        </div>
+      </div>
+
+      {row?.valid ? (
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {performanceMetricCards.map((metric) => {
+            const amount = row[metric.key];
+            return <div key={metric.key} className="min-w-0 rounded-xl bg-[#f5f5f7] p-2.5">
+              <p className="text-[11px] text-[#6e6e73]">{metric.label}</p>
+              <p className="mt-1 break-words font-mono text-base font-semibold text-[#1d1d1f]">{amount == null ? '—' : formatMetric(amount, metric.digits)} <span className="text-[11px] font-normal text-[#86868b]">{metric.unit}</span></p>
+            </div>;
+          })}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">
+          <p className="font-semibold">이 속도에서는 원본 해석값이 없습니다.</p>
+          <p className="mt-1">Design #{design.id}의 {speed} m/s trim 계산이 수렴하지 않았습니다.</p>
+        </div>
+      )}
+      <p className="mt-3 text-[11px] text-[#86868b]">원본 데이터 · 기준 설계 #{design.id}</p>
+    </section>
+  );
+}
+
+function ModelInfoPanel({
+  selected,
+  draft,
+  assembly,
+  selectedParts,
+  onSelectionChange,
+  estimate,
+  changedCount,
+  loading,
+}: {
+  selected: DesignSummary;
+  draft: DesignDraft | null;
+  assembly: AssemblyInfo | null;
+  selectedParts: string[];
+  onSelectionChange: (names: string[]) => void;
+  estimate: ReturnType<typeof estimateDraft> | null;
+  changedCount: number;
+  loading: boolean;
+}) {
+  if (loading || !draft) {
+    return <div className="grid h-48 place-items-center px-5 text-center text-xs text-[#6e6e73]">현재 모델 정보를 준비하고 있습니다…</div>;
+  }
+
+  const partNames = (category: 'hub' | 'structure' | 'propeller' | 'wing' | 'battery') => {
+    if (!assembly) return [];
+    return assembly.placements.flatMap((part) => {
+      const type = assembly.typeOf.get(part.n) ?? '';
+      const name = part.n;
+      const isMainHub = /^MAINHUB/i.test(name);
+      const matches = category === 'hub'
+        ? isMainHub
+        : category === 'structure'
+          ? !isMainHub && /tube|para[_ ]?hub|flange|bend|branch|cross|connector|joint|arm/i.test(`${type} ${name}`)
+          : category === 'propeller'
+            ? /propeller/i.test(`${type} ${name}`)
+            : category === 'wing'
+              ? /wing/i.test(type) || /^WING/i.test(name)
+              : /battery/i.test(`${type} ${name}`);
+      return matches ? [name] : [];
+    });
+  };
+
+  const configuration = [
+    { label: '기준 설계', value: `#${selected.id}`, parts: [] as string[], icon: <Info />, tone: 'bg-slate-100 text-slate-500' },
+    { label: '허브 형태', value: formatComponent(draft.topology), parts: partNames('hub'), icon: <Box />, tone: 'bg-cyan-50 text-cyan-700' },
+    { label: '편집 가능한 구조 단계', value: `${draft.segments.length}개`, parts: partNames('structure'), icon: <Layers3 />, tone: 'bg-blue-50 text-blue-700' },
+    { label: '프로펠러', value: `${draft.numPropellers}개`, parts: partNames('propeller'), icon: <CircleGauge />, tone: 'bg-violet-50 text-violet-700' },
+    { label: '날개', value: `${draft.numWings}개`, parts: partNames('wing'), icon: <Plane />, tone: 'bg-sky-50 text-sky-700' },
+    { label: '배터리', value: `${draft.energy.batteryTypes.length}개`, parts: partNames('battery'), icon: <BatteryCharging />, tone: 'bg-emerald-50 text-emerald-700' },
+  ];
+
+  const visibleParts = assembly?.placements.filter((part) => {
+    const type = assembly.typeOf.get(part.n);
+    return type && type !== 'Orient';
+  }) ?? [];
+  const visibleTypes = new Set(visibleParts.map((part) => assembly?.typeOf.get(part.n)).filter(Boolean)).size;
+
+  const toggleParts = (names: string[]) => {
+    const chosen = new Set(selectedParts);
+    const allChosen = names.every((name) => chosen.has(name));
+    onSelectionChange(
+      allChosen
+        ? selectedParts.filter((name) => !names.includes(name))
+        : [...selectedParts, ...names.filter((name) => !chosen.has(name))],
+    );
+  };
+
+  const metrics = [
+    { label: '최대 비행거리', value: estimate ? formatMetric(estimate.range / 1000, 2) : '—', unit: 'km', icon: <Ruler className="size-3.5" /> },
+    { label: '체공 시간', value: estimate ? formatMetric(estimate.hover, 0) : '—', unit: 'sec', icon: <Timer className="size-3.5" /> },
+    { label: '최고 속도', value: estimate ? formatMetric(estimate.maxSpeed, 1) : '—', unit: 'm/s', icon: <Gauge className="size-3.5" /> },
+    { label: '현재 질량', value: estimate ? formatMetric(estimate.mass, 2) : formatMetric(selected.mass, 2), unit: 'kg', icon: <Weight className="size-3.5" /> },
+  ];
+
+  return (
+    <div className="p-3">
+      <div className="rounded-xl border border-[#bfdbfe] bg-[#eff6ff] p-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#1b64da]"><Box className="size-3.5" />현재 출력 모델</span>
+          <Badge variant="outline" className="border-[#bfdbfe] bg-white text-[9px] text-[#1b64da]">실시간</Badge>
+        </div>
+        <p className="mt-2 text-[10px] leading-4 text-[#526579]">
+          화면의 파라메트릭 형상과 편집 상태를 기준으로 표시합니다. 설계를 다시 고르면 이 패널도 자동으로 갱신됩니다.
+        </p>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-[#e5e5ea] bg-[#f5f5f7]/80 p-2">
+        <div className="flex items-center justify-between px-1 py-1.5">
+          <div>
+            <p className="text-xs font-semibold text-[#3c3c43]">형상 구성</p>
+            <p className="mt-0.5 text-[9px] text-[#86868b]">항목을 누르면 관련 부품 전체가 강조됩니다</p>
+          </div>
+          <span className="text-right text-[9px] leading-4 text-[#6e6e73]">
+            {visibleParts.length ? `${visibleParts.length}개 · ${visibleTypes}종` : changedCount ? `${changedCount}개 편집됨` : '원본 상태'}
+          </span>
+        </div>
+        <div className="mt-1 grid gap-1.5">
+          {configuration.map(({ label, value, parts, icon, tone }) => {
+            const selectedCount = parts.filter((name) => selectedParts.includes(name)).length;
+            const active = parts.length > 0 && selectedCount === parts.length;
+            const partial = selectedCount > 0 && !active;
+            return (
+              <button
+                key={label}
+                type="button"
+                disabled={!parts.length}
+                aria-pressed={parts.length ? active : undefined}
+                onClick={() => toggleParts(parts)}
+                className={`flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-[11px] transition ${
+                  active
+                    ? 'border-[#93c5fd] bg-[#eff6ff] shadow-sm'
+                    : partial
+                      ? 'border-[#bfdbfe] bg-white shadow-sm'
+                      : 'border-transparent bg-white hover:border-[#dbe4ea] hover:shadow-sm'
+                } ${parts.length ? '' : 'cursor-default'}`}
+              >
+                <span className={`grid size-7 shrink-0 place-items-center rounded-lg [&>svg]:size-3.5 ${active ? 'bg-[#3182f6] text-white' : tone}`}>
+                  {icon}
+                </span>
+                <span className="min-w-0 flex-1 text-left">
+                  <span className={`block truncate font-medium ${active ? 'text-[#1b64da]' : 'text-[#3c3c43]'}`}>{label}</span>
+                  {parts.length > 0 && <small className="mt-0.5 block text-[9px] text-[#86868b]">연결 부품 {parts.length}개</small>}
+                </span>
+                <span className={`max-w-[112px] truncate text-right font-mono text-[10px] font-semibold ${active ? 'text-[#1b64da]' : 'text-[#3c3c43]'}`}>
+                  {value}
+                  {selectedCount > 0 && <small className="ml-1 block font-sans font-normal text-[#3182f6]">선택 {selectedCount}/{parts.length}</small>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="rounded-xl border border-[#e5e5ea] bg-gradient-to-br from-white to-[#f7f9fb] p-2.5 shadow-[0_1px_1px_rgba(15,23,42,0.03)]">
+            <p className="flex items-center gap-1.5 text-[10px] text-[#6e6e73]"><span className="grid size-6 place-items-center rounded-md bg-[#eff6ff] text-[#3182f6]">{metric.icon}</span>{metric.label}</p>
+            <p className="mt-1.5 font-mono text-base font-semibold tracking-tight text-[#1d1d1f]">
+              {metric.value}<span className="ml-1 text-[9px] font-normal text-[#86868b]">{metric.unit}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-3 rounded-lg bg-[#f5f5f7] px-2.5 py-2 text-[9px] leading-4 text-[#86868b]">
+        {estimate?.source === 'dataset'
+          ? '성능 수치는 편집 전 기준 설계의 저장된 데이터셋 값입니다.'
+          : '편집 후 성능 수치는 현재 파라미터와 인접 설계를 이용한 추정값입니다.'}
+      </p>
+    </div>
+  );
+}
+
+const speedOverviewConfig = {
+  pitch: { label: '피치각 (deg)', color: '#3182f6' },
+  power: { label: '전력 (W)', color: '#6750a4' },
+} satisfies ChartConfig;
+
+const speedAeroConfig = {
+  drag: { label: '항력 (N)', color: '#f4773c' },
+  thrust: { label: '추력 (N)', color: '#6554d9' },
+  lift: { label: '양력 (N)', color: '#00a86b' },
+} satisfies ChartConfig;
+
+const speedElectricConfig = {
+  power: { label: '전력 (W)', color: '#6750a4' },
+  current: { label: '전류 (A)', color: '#3182f6' },
+} satisfies ChartConfig;
+
+const speedEnduranceConfig = {
+  flightTime: { label: '비행 시간 (s)', color: '#178653' },
+  distance: { label: '비행거리 (m)', color: '#c47a13' },
+} satisfies ChartConfig;
+
+type SpeedCurveMode = 'overview' | 'aero' | 'electric' | 'endurance';
+
+/** 같은 차트에서 AI 예측과 저장된 원본 trim을 전환해 비교한다. */
+function SpeedCurveSheet({ rows, source, speed, onSpeedChange }: { rows: Array<PerformancePrediction | TrimRow>; source: PerformanceSource; speed: number; onSpeedChange: (speed: number) => void }) {
+  const [curveMode, setCurveMode] = useState<SpeedCurveMode>('overview');
+  const selectedCandidate = rows.find((row) => row.speed === speed) ?? null;
+  const selectedRow = selectedCandidate && (!('valid' in selectedCandidate) || selectedCandidate.valid) ? selectedCandidate : null;
+  const chartRows = useMemo(() => rows.map((row) => 'valid' in row && !row.valid ? { speed: row.speed } : row), [rows]);
+  const config = curveMode === 'overview'
+    ? speedOverviewConfig
+    : curveMode === 'aero'
+      ? speedAeroConfig
+      : curveMode === 'electric'
+        ? speedElectricConfig
+        : speedEnduranceConfig;
+
+  return (
+    <div className="min-w-0">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-[#6e6e73]">{source === 'ai' ? '현재 Draft의 AI 예측' : '기준 설계의 원본 trim'} · 세로선은 선택한 속도 <strong className={`ml-1 font-mono ${source === 'ai' ? 'text-[#1b64da]' : 'text-emerald-700'}`}>{speed} m/s</strong> · 차트를 눌러 변경</p>
+          <div className="flex rounded-lg bg-[#f5f5f7] p-1">
+            {([
+              ['overview', '요약'],
+              ['aero', '공력'],
+              ['electric', '전력'],
+              ['endurance', '운항'],
+            ] as const).map(([id, label]) => (
+              <Button key={id} size="sm" variant="ghost" onClick={() => setCurveMode(id)} className={curveMode === id ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73]'}>{label}</Button>
+            ))}
+          </div>
+        </div>
+        <ChartContainer config={config} className="h-[240px] w-full aspect-auto" initialDimension={{ width: 700, height: 240 }}>
+          <LineChart
+            data={chartRows}
+            margin={{ left: 0, right: 12, top: 8, bottom: 0 }}
+            onClick={(chart) => {
+              const nextSpeed = Number(chart?.activeLabel);
+              if (Number.isFinite(nextSpeed)) onSpeedChange(nextSpeed);
+            }}
+          >
+            <CartesianGrid vertical={false} stroke="#e2e8ec" />
+            <XAxis dataKey="speed" tickLine={false} axisLine={false} tickMargin={10} unit="m/s" />
+            <YAxis yAxisId="left" tickLine={false} axisLine={false} width={42} />
+            <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} width={48} />
+            <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+            <ReferenceLine
+              x={speed}
+              stroke={source === 'ai' ? '#1b64da' : '#178653'}
+              strokeWidth={2}
+              label={{ value: `${speed} m/s`, position: 'insideTopRight', fill: source === 'ai' ? '#1b64da' : '#178653', fontSize: 10 }}
+            />
+            {curveMode === 'overview' && (
+              <>
+                <Line yAxisId="left" type="monotone" dataKey="pitch" stroke="var(--color-pitch)" strokeWidth={2.2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="power" stroke="var(--color-power)" strokeWidth={2.2} dot={false} />
+                {selectedRow?.pitch != null && <ReferenceDot yAxisId="left" x={speed} y={selectedRow.pitch} r={4.5} fill="var(--color-pitch)" stroke="white" strokeWidth={2} />}
+                {selectedRow?.power != null && <ReferenceDot yAxisId="right" x={speed} y={selectedRow.power} r={4.5} fill="var(--color-power)" stroke="white" strokeWidth={2} />}
+              </>
+            )}
+            {curveMode === 'aero' && (
+              <>
+                <Line yAxisId="left" type="monotone" dataKey="drag" stroke="var(--color-drag)" strokeWidth={2.2} dot={false} />
+                <Line yAxisId="left" type="monotone" dataKey="thrust" stroke="var(--color-thrust)" strokeWidth={2.2} dot={false} />
+                <Line yAxisId="left" type="monotone" dataKey="lift" stroke="var(--color-lift)" strokeWidth={2.2} dot={false} />
+                {selectedRow?.drag != null && <ReferenceDot yAxisId="left" x={speed} y={selectedRow.drag} r={4.5} fill="var(--color-drag)" stroke="white" strokeWidth={2} />}
+                {selectedRow?.thrust != null && <ReferenceDot yAxisId="left" x={speed} y={selectedRow.thrust} r={4.5} fill="var(--color-thrust)" stroke="white" strokeWidth={2} />}
+                {selectedRow?.lift != null && <ReferenceDot yAxisId="left" x={speed} y={selectedRow.lift} r={4.5} fill="var(--color-lift)" stroke="white" strokeWidth={2} />}
+              </>
+            )}
+            {curveMode === 'electric' && (
+              <>
+                <Line yAxisId="right" type="monotone" dataKey="power" stroke="var(--color-power)" strokeWidth={2.2} dot={false} />
+                <Line yAxisId="left" type="monotone" dataKey="current" stroke="var(--color-current)" strokeWidth={2.2} dot={false} />
+                {selectedRow?.power != null && <ReferenceDot yAxisId="right" x={speed} y={selectedRow.power} r={4.5} fill="var(--color-power)" stroke="white" strokeWidth={2} />}
+                {selectedRow?.current != null && <ReferenceDot yAxisId="left" x={speed} y={selectedRow.current} r={4.5} fill="var(--color-current)" stroke="white" strokeWidth={2} />}
+              </>
+            )}
+            {curveMode === 'endurance' && (
+              <>
+                <Line yAxisId="left" type="monotone" dataKey="flightTime" stroke="var(--color-flightTime)" strokeWidth={2.2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="distance" stroke="var(--color-distance)" strokeWidth={2.2} dot={false} />
+                {selectedRow?.flightTime != null && <ReferenceDot yAxisId="left" x={speed} y={selectedRow.flightTime} r={4.5} fill="var(--color-flightTime)" stroke="white" strokeWidth={2} />}
+                {selectedRow?.distance != null && <ReferenceDot yAxisId="right" x={speed} y={selectedRow.distance} r={4.5} fill="var(--color-distance)" stroke="white" strokeWidth={2} />}
+              </>
+            )}
+          </LineChart>
+        </ChartContainer>
+    </div>
+  );
+}
+
+function ComparePreview({
+  label,
+  draft,
+  cameraGroup,
+  cameraId,
+  cameraLinked,
+  assembly,
+  bladeCount,
+}: {
+  label: string;
+  draft: DesignDraft;
+  cameraGroup: string;
+  cameraId: 'baseline' | 'draft';
+  cameraLinked: boolean;
+  assembly: AssemblyInfo | null;
+  bladeCount: 2 | 4;
+}) {
+  return (
+    <div className="relative min-h-0 overflow-hidden bg-[#eef3f6]">
+      <ParametricUavViewer
+        draft={draft}
+        assembly={assembly}
+        bladeCount={bladeCount}
+        cameraFitPadding={1.62}
+        cameraSync={{ group: cameraGroup, id: cameraId, linked: cameraLinked }}
+      />
+      <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-lg border border-white/70 bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#3c3c43] shadow-sm backdrop-blur">
+        {label}
+      </span>
     </div>
   );
 }
@@ -816,10 +1638,6 @@ function ModeButton({ active, onClick, children, disabled = false }: { active: b
   return <button onClick={onClick} disabled={disabled} className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${active ? 'bg-white text-[#1b64da] shadow-sm' : 'text-[#6e6e73] hover:text-[#3c3c43]'}`}>{children}</button>;
 }
 
-function ViewerStat({ label, value }: { label: string; value: string }) {
-  return <div className="border-r border-[#e5e5ea] px-2 py-2.5 last:border-r-0"><span className="block text-[9px] uppercase tracking-[0.08em] text-[#86868b]">{label}</span><strong className="mt-0.5 block font-mono text-[11px] text-[#3c3c43]">{value}</strong></div>;
-}
-
 function EstimateRow({ icon, label, before, after, unit, better }: { icon: React.ReactNode; label: string; before: number; after: number; unit: string; better: 'up' | 'down' }) {
   const change = percentChange(before, after);
   const improved = change != null && (better === 'up' ? change >= 0 : change <= 0);
@@ -949,19 +1767,6 @@ function draftDifferences(baseline: DesignDraft, draft: DesignDraft) {
   add('Cargo mass', baseline.payload.mass, draft.payload.mass, 'kg');
   return rows;
 }
-
-function maxArmSpan(draft: DesignDraft | null) {
-  if (!draft) return 0;
-  const distanceByPath = new Map<string, number>();
-  const ordered = [...draft.segments].sort((left, right) => left.path.split('.').length - right.path.split('.').length);
-  for (const segment of ordered) {
-    const parentDistance = segment.parentPath ? distanceByPath.get(segment.parentPath) ?? 0 : 0;
-    distanceByPath.set(segment.path, parentDistance + segment.length);
-  }
-  return Math.max(...distanceByPath.values(), ...draft.segments.map((segment) => segment.length), 0) * 2;
-}
-
-
 
 /**
  * 부품 탭. 종류별로 묶어 보여주고, 고르면 3D에서 그 부품만 제 색으로 남고

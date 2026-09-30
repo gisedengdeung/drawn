@@ -50,14 +50,11 @@ export function ShapeIcon({
   );
 }
 
-/** 날개 평면 모양. 앞전이 곧고 뒤로 갈수록 좁아지는 직각 사다리꼴이다. */
-const WING_SHAPE = '-42,-18 42,-18 42,4 -42,26';
-
 /**
  * 날개 유무를 나타내는 도형.
  *
- * 프로펠러 도형 아이콘에 날개 막대를 덧그렸더니 "있음"과 "없음"이 거의 같아
- * 보였다. 날개만 따로 그리고, 없는 경우는 같은 자리에 ✕ 를 넣어 가른다.
+ * 사용자가 제공한 `wing_icon_no_x.svg`, `wing_icon_with_x.svg`의 벡터를 사용한다.
+ * 카드의 선택 색을 그대로 받을 수 있도록 원본의 고정 회색은 currentColor로 바꿨다.
  */
 export function WingIcon({
   present,
@@ -69,22 +66,35 @@ export function WingIcon({
   className?: string;
 }) {
   return (
-    <svg viewBox="-50 -50 100 100" width={size} height={size} className={className} aria-hidden="true">
-      <polygon
-        points={WING_SHAPE}
-        fill={present ? 'currentColor' : 'none'}
-        fillOpacity={present ? 0.5 : 0}
-        stroke="currentColor"
-        strokeWidth={5}
-        strokeLinejoin="round"
-        opacity={present ? 1 : 0.4}
-      />
-      {!present && (
-        // 날개 모양을 가리지 않도록 가운데 작게. 크게 그으면 사다리꼴이 안 보인다.
-        <g stroke="currentColor" strokeWidth={7} strokeLinecap="round">
-          <line x1={-10} y1={-7} x2={10} y2={9} />
-          <line x1={-10} y1={9} x2={10} y2={-7} />
-        </g>
+    <svg viewBox="0 0 512 512" width={size} height={size} className={className} aria-hidden="true">
+      {present ? (
+        <path
+          d="M 140 170 Q 95 172 95 215 L 95 325 Q 95 365 135 368 Q 265 370 350 354 Q 410 342 450 285 L 478 225 Q 498 180 452 176 Q 300 182 140 170 Z"
+          fill="currentColor"
+          fillOpacity={0.18}
+          stroke="currentColor"
+          strokeWidth={18}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          opacity={0.95}
+        />
+      ) : (
+        <>
+          <path
+            d="M106 157C76 158.333 61 173.333 61 202V312C61 338.667 74.3333 353 101 355C187.667 356.333 259.333 351.667 316 341C356 333 389.333 310 416 272L444 212C457.333 182 448.667 165.667 418 163C316.667 167 212.667 165 106 157Z"
+            fill="currentColor"
+            fillOpacity={0.08}
+            stroke="currentColor"
+            strokeWidth={18}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={0.68}
+          />
+          <g stroke="currentColor" strokeWidth={30} strokeLinecap="round" opacity={0.95}>
+            <line x1={119} y1={119} x2={392} y2={392} />
+            <line x1={392} y1={119} x2={119} y2={392} />
+          </g>
+        </>
       )}
     </svg>
   );

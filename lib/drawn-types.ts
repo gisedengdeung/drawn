@@ -338,6 +338,14 @@ export type WorkspaceView =
   | 'gallery'
   | 'guide';
 
+/** 통합 편집 페이지 안에서 바뀌는 작업 도구. URL 페이지 전환과는 구분한다. */
+export type EditorTool =
+  | 'menu'
+  | 'design'
+  | 'parameters'
+  | 'performance'
+  | 'gallery';
+
 export function formatMetric(value: number, digits = 1) {
   return new Intl.NumberFormat('ko-KR', {
     minimumFractionDigits: digits,

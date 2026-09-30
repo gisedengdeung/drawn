@@ -7,6 +7,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 
 import { Button } from '@/components/ui/button';
+import { broadcastViewerCamera, registerViewerCamera } from '@/lib/viewer-camera-sync';
+import { configureInfiniteGrid, createInfiniteGrid, disposeInfiniteGrid, updateInfiniteGrid } from '@/lib/three-infinite-grid';
 
 const AUTO_ROTATE_STORAGE_KEY = 'drawn-stl-auto-rotate';
 
@@ -19,6 +21,11 @@ type StlViewerProps = {
     thrust?: number | null;
   };
   showForceVectors?: boolean;
+  cameraFitPadding?: number;
+  cameraSync?: { group: string; id: string; linked: boolean };
+  showControls?: boolean;
+  /** 다른 전체 화면 UI에 가려졌을 때 WebGL 렌더링만 일시 정지한다. */
+  paused?: boolean;
 };
 
 export function StlViewer({
@@ -26,6 +33,10 @@ export function StlViewer({
   pitchDegrees = 0,
   forceVectors,
   showForceVectors = false,
+  cameraFitPadding = 1.62,
+  cameraSync,
+  showControls = true,
+  paused = false,
 }: StlViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const dynamicsRef = useRef({ pitchDegrees, forceVectors, showForceVectors });
@@ -34,6 +45,16 @@ export function StlViewer({
   const [retryKey, setRetryKey] = useState(0);
   const [autoRotate, setAutoRotate] = useState(true);
   const autoRotateRef = useRef(true);
+  const pausedRef = useRef(paused);
+  const cameraSyncRef = useRef(cameraSync);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
+
+  useEffect(() => {
+    cameraSyncRef.current = cameraSync;
+  }, [cameraSync]);
 
   useEffect(() => {
     let active = true;
@@ -119,13 +140,8 @@ export function StlViewer({
     rim.position.set(-5, 2, -4);
     scene.add(rim);
 
-    const grid = new THREE.GridHelper(1200, 20, 0x9cb3bd, 0xd4e0e5);
-    const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material];
-    gridMaterials.forEach((material) => {
-      material.transparent = true;
-      material.opacity = 0.58;
-    });
-    scene.add(grid);
+    const grid = createInfiniteGrid(-0.9);
+    scene.add(grid.mesh);
 
     const modelPivot = new THREE.Group();
     scene.add(modelPivot);
@@ -146,6 +162,9 @@ export function StlViewer({
     let lastWidth = 0;
     let lastHeight = 0;
     let lastDynamics = '';
+    let applyingCamera = false;
+    const homeTarget = new THREE.Vector3();
+    let homeDistance = 0;
 
     const updateDynamics = () => {
       const dynamics = dynamicsRef.current;
@@ -174,26 +193,108 @@ export function StlViewer({
     };
 
     const fitCamera = () => {
-      if (!modelRadius) return;
+      if (!modelRadius || !model) return;
+      modelPivot.updateWorldMatrix(true, true);
+      if (!model.geometry.boundingBox) model.geometry.computeBoundingBox();
+      const bounds = model.geometry.boundingBox;
+      if (!bounds) return;
+      const points: THREE.Vector3[] = [];
+      for (const x of [bounds.min.x, bounds.max.x]) {
+        for (const y of [bounds.min.y, bounds.max.y]) {
+          for (const z of [bounds.min.z, bounds.max.z]) {
+            points.push(new THREE.Vector3(x, y, z).applyMatrix4(model.matrixWorld));
+          }
+        }
+      }
+      const box = new THREE.Box3().setFromPoints(points);
+      const centre = box.getCenter(new THREE.Vector3());
+      const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 1);
       const verticalFov = THREE.MathUtils.degToRad(camera.fov);
       const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
-      const limitingFov = Math.max(Math.min(verticalFov, horizontalFov), 0.1);
-      const distance = (modelRadius / Math.sin(limitingFov / 2)) * 1.15;
-      const direction = new THREE.Vector3(1.25, 0.95, 1.4).normalize();
+      const view = new THREE.Vector3(1.12, 0.88, 1.2).normalize();
+      const right = new THREE.Vector3().crossVectors(view, new THREE.Vector3(0, 1, 0)).normalize();
+      const up = new THREE.Vector3().crossVectors(right, view);
+      const spanWide = Math.tan(horizontalFov / 2);
+      const spanHigh = Math.tan(verticalFov / 2);
+      let distance = 0;
+      for (let pass = 0; pass < 4; pass += 1) {
+        distance = 0;
+        for (const point of points) {
+          const local = point.clone().sub(centre);
+          const depth = local.dot(view);
+          distance = Math.max(
+            distance,
+            Math.abs(local.dot(right)) / spanWide + depth,
+            Math.abs(local.dot(up)) / spanHigh + depth,
+          );
+        }
+        distance = Math.max(distance * cameraFitPadding, radius * 0.6);
+        let minWide = Infinity, maxWide = -Infinity;
+        let minHigh = Infinity, maxHigh = -Infinity;
+        for (const point of points) {
+          const local = point.clone().sub(centre);
+          const depth = Math.max(distance - local.dot(view), 1e-4);
+          const across = local.dot(right) / depth;
+          const above = local.dot(up) / depth;
+          minWide = Math.min(minWide, across); maxWide = Math.max(maxWide, across);
+          minHigh = Math.min(minHigh, above); maxHigh = Math.max(maxHigh, above);
+        }
+        const shiftWide = ((minWide + maxWide) / 2) * distance;
+        const shiftHigh = ((minHigh + maxHigh) / 2) * distance;
+        if (Math.hypot(shiftWide, shiftHigh) < radius * 0.004) break;
+        centre.addScaledVector(right, shiftWide).addScaledVector(up, shiftHigh);
+      }
 
-      camera.position.copy(direction.multiplyScalar(distance));
-      camera.near = Math.max(modelRadius / 100, 0.01);
-      camera.far = Math.max(distance + modelRadius * 8, modelRadius * 20);
+      camera.position.copy(view.clone().multiplyScalar(distance).add(centre));
+      camera.near = Math.max(radius / 100, 0.02);
+      camera.far = Math.max(distance + radius * 10, 100);
       camera.updateProjectionMatrix();
-      controls.target.set(0, modelRadius * 0.12, 0);
-      controls.minDistance = modelRadius * 0.8;
-      controls.maxDistance = modelRadius * 7;
+      controls.target.copy(centre);
+      homeTarget.copy(centre);
+      controls.minDistance = Math.max(radius * 0.55, 1.5);
+      controls.maxDistance = Math.max(radius * 8, 12);
       controls.update();
-
-      const gridScale = Math.max((modelRadius * 4) / 1200, 0.2);
-      grid.scale.setScalar(gridScale);
-      grid.position.y = -modelRadius * 0.03;
+      homeDistance = camera.position.distanceTo(controls.target);
+      configureInfiniteGrid(grid, {
+        step: Math.max(radius / 7, 0.65),
+        fadeDistance: Math.max(radius * 14, 45),
+      });
+      updateInfiniteGrid(grid, camera);
     };
+
+    const externalGroup = cameraSync?.group;
+    const externalId = cameraSync?.id;
+    const unregisterExternal = externalGroup && externalId
+      ? registerViewerCamera(externalGroup, externalId, {
+          read: () => {
+            if (!modelRadius || !homeDistance) return null;
+            const scale = 1 / modelRadius;
+            const offset = camera.position.clone().sub(controls.target);
+            return {
+              direction: offset.clone().normalize().toArray(),
+              distanceScale: offset.length() / homeDistance,
+              targetOffset: controls.target.clone().sub(homeTarget).multiplyScalar(scale).toArray(),
+              zoom: camera.zoom,
+            };
+          },
+          apply: (pose) => {
+            if (!modelRadius || !homeDistance) return;
+            applyingCamera = true;
+            controls.target.copy(homeTarget).add(new THREE.Vector3(...pose.targetOffset).multiplyScalar(modelRadius));
+            camera.position.copy(controls.target).add(new THREE.Vector3(...pose.direction).multiplyScalar(homeDistance * pose.distanceScale));
+            camera.zoom = pose.zoom;
+            camera.updateProjectionMatrix();
+            controls.update();
+            applyingCamera = false;
+          },
+        })
+      : null;
+    const syncExternalCamera = () => {
+      const config = cameraSyncRef.current;
+      if (!config?.linked || applyingCamera) return;
+      broadcastViewerCamera(config.group, config.id);
+    };
+    controls.addEventListener('change', syncExternalCamera);
 
     const resize = () => {
       const width = Math.max(1, Math.floor(mount.clientWidth));
@@ -233,7 +334,7 @@ export function StlViewer({
         geometry.center();
         geometry.computeBoundingSphere();
         const radius = Math.max(geometry.boundingSphere?.radius ?? 1, 1);
-        modelRadius = radius;
+        modelRadius = radius * 0.01;
         model = new THREE.Mesh(
           geometry,
           new THREE.MeshStandardMaterial({
@@ -243,8 +344,9 @@ export function StlViewer({
             side: THREE.DoubleSide,
           }),
         );
+        model.scale.setScalar(0.01);
         model.rotation.x = -Math.PI / 2;
-        model.position.y = radius * 0.12;
+        model.position.y = modelRadius * 0.12;
         modelPivot.add(model);
         updateDynamics();
         fitCamera();
@@ -259,10 +361,13 @@ export function StlViewer({
     );
 
     const animate = () => {
-      updateDynamics();
-      controls.autoRotate = autoRotateRef.current;
-      controls.update();
-      renderer.render(scene, camera);
+      if (!pausedRef.current) {
+        updateDynamics();
+        controls.autoRotate = autoRotateRef.current && !cameraSyncRef.current?.linked;
+        controls.update();
+        updateInfiniteGrid(grid, camera);
+        renderer.render(scene, camera);
+      }
       frame = requestAnimationFrame(animate);
     };
     animate();
@@ -275,6 +380,8 @@ export function StlViewer({
       renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
       renderer.domElement.removeEventListener('keydown', handleKeyboard);
       controls.dispose();
+      controls.removeEventListener('change', syncExternalCamera);
+      unregisterExternal?.();
       model?.geometry.dispose();
       if (model?.material && !Array.isArray(model.material)) model.material.dispose();
       for (const arrow of [dragArrow, liftArrow, thrustArrow]) {
@@ -285,12 +392,11 @@ export function StlViewer({
         const coneMaterials = Array.isArray(arrow.cone.material) ? arrow.cone.material : [arrow.cone.material];
         coneMaterials.forEach((material) => material.dispose());
       }
-      grid.geometry.dispose();
-      gridMaterials.forEach((material) => material.dispose());
+      disposeInfiniteGrid(grid);
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [retryKey, src]);
+  }, [cameraFitPadding, cameraSync?.group, cameraSync?.id, retryKey, src]);
 
   return (
     <div
@@ -302,7 +408,7 @@ export function StlViewer({
       data-force-thrust={forceVectors?.thrust ?? ''}
       className="absolute inset-0 overflow-hidden"
     >
-      {status === 'ready' && (
+      {status === 'ready' && showControls && (
         <div className="pointer-events-none absolute bottom-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-2">
           <div className="flex h-9 items-center gap-2 rounded-lg border border-[#e5e5ea] bg-white/90 px-3 text-[11px] text-[#6e6e73] shadow-sm backdrop-blur">
             <MousePointer2 className="size-3" /> 드래그 회전 · 스크롤 확대

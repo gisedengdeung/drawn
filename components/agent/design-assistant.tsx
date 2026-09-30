@@ -200,7 +200,7 @@ export function DesignAssistant({
       id="design-assistant-panel"
       aria-label="설계 도우미 AI"
       style={{ width: expanded ? 'min(640px, calc(100vw - 480px))' : '420px' }}
-      className="sticky top-[103px] flex h-[calc(100dvh-103px)] min-w-0 shrink-0 flex-col border-l border-[#e5e5ea] bg-[#f5f5f7]"
+      className="sticky top-0 flex h-dvh min-w-0 shrink-0 flex-col border-l border-[#e5e5ea] bg-[#f5f5f7]"
     >
       <div className="flex items-start justify-between border-b border-[#e5e5ea] p-4">
         <div>

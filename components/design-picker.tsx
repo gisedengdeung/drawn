@@ -69,13 +69,11 @@ const PRESET_ICONS: Record<string, typeof PackageCheck> = {
 };
 
 type Section = 'browse' | 'recommend' | 'favorites';
-type PickerAction = Section | 'model-info';
 
-const SECTIONS: { id: PickerAction; label: string }[] = [
+const SECTIONS: { id: Section; label: string }[] = [
   { id: 'browse', label: '탐색' },
   { id: 'recommend', label: '추천' },
   { id: 'favorites', label: '즐겨찾기' },
-  { id: 'model-info', label: '모델 정보' },
 ];
 
 function readStoredIds(key: string): number[] {
@@ -111,14 +109,12 @@ export function DesignPicker({
   showcases,
   selectedId,
   onSelect,
-  onOpenModelInfo,
   layout = 'stacked',
 }: {
   designs: DesignSummary[];
   showcases: ShowcaseMap;
   selectedId: number | null;
   onSelect: (id: number) => void;
-  onOpenModelInfo?: () => void;
   /** 비교 화면처럼 폭이 넓고 높이가 짧을 때 필터와 결과 목록을 나란히 둔다. */
   layout?: 'stacked' | 'split';
 }) {
@@ -224,7 +220,6 @@ export function DesignPicker({
 
   const selectDesign = (id: number) => {
     onSelect(id);
-    onOpenModelInfo?.();
   };
 
   const cancelPendingRun = () => {
@@ -265,14 +260,14 @@ export function DesignPicker({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex items-center gap-0.5 border-b border-[#e5e5ea] p-2">
-        {SECTIONS.filter((item) => item.id !== 'model-info' || onOpenModelInfo).map((item) => (
+        {SECTIONS.map((item) => (
           <button
             key={item.id}
             type="button"
-            onClick={() => item.id === 'model-info' ? onOpenModelInfo?.() : setSection(item.id)}
-            aria-pressed={item.id !== 'model-info' && section === item.id}
+            onClick={() => setSection(item.id)}
+            aria-pressed={section === item.id}
             className={`flex-1 rounded-lg px-1.5 py-1.5 text-[10px] font-medium transition ${
-              item.id !== 'model-info' && section === item.id ? 'bg-[#eff6ff] text-[#1b64da]' : 'text-[#6e6e73] hover:bg-[#f5f5f7]'
+              section === item.id ? 'bg-[#eff6ff] text-[#1b64da]' : 'text-[#6e6e73] hover:bg-[#f5f5f7]'
             }`}
           >
             {item.label}

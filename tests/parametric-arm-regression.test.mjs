@@ -5,6 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { createServer } from 'vite';
+import * as THREE from 'three';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -30,6 +31,23 @@ function positionOf(model, name) {
   assert.ok(object, `${name} should be rendered`);
   model.updateWorldMatrix(true, true);
   return object.getWorldPosition(object.position.clone());
+}
+
+function worldSizeOf(model, name) {
+  const object = model.getObjectByName(name);
+  assert.ok(object, `${name} should be rendered`);
+  model.updateWorldMatrix(true, true);
+  if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
+  const size = object.geometry.boundingBox.getSize(object.position.clone());
+  const scale = object.getWorldScale(object.scale.clone());
+  return size.multiply(scale);
+}
+
+function boundsSizeOf(model, name) {
+  const object = model.getObjectByName(name);
+  assert.ok(object, `${name} should be rendered`);
+  model.updateWorldMatrix(true, true);
+  return new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
 }
 
 function quaternionOf(model, name) {
@@ -197,6 +215,111 @@ void test('representative arm structures preserve edit invariants', async (conte
   );
   assert.ok(instanceTarget.names.includes('ARM_4068_1') && instanceTarget.names.includes('MOTOR_1'));
   assert.ok(!instanceTarget.names.includes('ARM_4068_2'), 'instance scope should highlight only one branch');
+
+  const wingFixture = loadFixture(13077, draftsModule, assemblyModule);
+  const wingArmTarget = viewer.resolveParametricEditTarget(
+    'ARM_3610_1',
+    wingFixture.assembly,
+    wingFixture.baseline,
+    wingFixture.baseline,
+  );
+  const wingTarget = viewer.resolveParametricEditTarget(
+    'WING_472_1',
+    wingFixture.assembly,
+    wingFixture.baseline,
+    wingFixture.baseline,
+  );
+  assert.deepEqual(
+    [...new Set(wingTarget.names)].sort((left, right) => left.localeCompare(right)),
+    [...new Set(wingArmTarget.names)].sort((left, right) => left.localeCompare(right)),
+    'selecting a wing should highlight the same arm branches as selecting its parent arm group',
+  );
+  assert.equal(wingTarget.parameterGroup, 'wing', 'wing selection should still open wing controls');
+
+  const pickedMotor = viewer.resolveParametricEditTarget('MOTOR_5', assembly, baseline, baseline);
+  assert.equal(
+    pickedMotor.propulsionIndex,
+    baseline.propulsionGroups.findIndex((group) => group.motorInstance === 'Motor_5'),
+    'a picked motor should open its own propulsion set instead of the first set on the segment',
+  );
+
+  const motorEdited = draftsModule.cloneDraft(baseline);
+  const motorIndex = motorEdited.propulsionGroups.findIndex((group) => group.motorInstance === 'Motor_1');
+  motorEdited.propulsionGroups[motorIndex].motorType = 'kde_direct_KDE600XF_530_G3';
+  const motorEditedModel = viewer.buildAircraftForAudit(motorEdited, assembly, 2, baseline);
+  const originalMotor1 = worldSizeOf(viewer.buildAircraftForAudit(baseline, assembly), 'MOTOR_1');
+  const editedMotor1 = worldSizeOf(motorEditedModel, 'MOTOR_1');
+  const originalMotor2 = worldSizeOf(viewer.buildAircraftForAudit(baseline, assembly), 'MOTOR_2');
+  const editedMotor2 = worldSizeOf(motorEditedModel, 'MOTOR_2');
+  assert.ok(
+    editedMotor1.distanceTo(originalMotor1) > 0.01,
+    'changing Motor_1 should change the Motor_1 preview size',
+  );
+  assert.ok(
+    editedMotor2.distanceTo(originalMotor2) < 1e-9,
+    'changing Motor_1 should not resize Motor_2',
+  );
+
+  const dualBattery = loadFixture(2, draftsModule, assemblyModule);
+  const dualBatteryEdited = draftsModule.cloneDraft(dualBattery.baseline);
+  dualBatteryEdited.energy.batteryTypes[1] = 'Tattu10C40000mAh6S1PHV';
+  const originalBatteries = viewer.buildAircraftForAudit(
+    dualBattery.baseline,
+    dualBattery.assembly,
+  );
+  const editedBatteries = viewer.buildAircraftForAudit(
+    dualBatteryEdited,
+    dualBattery.assembly,
+    2,
+    dualBattery.baseline,
+  );
+  assert.ok(
+    worldSizeOf(editedBatteries, 'BATTERY_2').distanceTo(
+      worldSizeOf(originalBatteries, 'BATTERY_2'),
+    ) > 0.01,
+    'changing Battery_2 should change the Battery_2 preview size',
+  );
+  assert.ok(
+    worldSizeOf(editedBatteries, 'BATTERY_1').distanceTo(
+      worldSizeOf(originalBatteries, 'BATTERY_1'),
+    ) < 1e-9,
+    'changing Battery_2 should not resize Battery_1',
+  );
+
+  const friendlyEdited = draftsModule.cloneDraft(baseline);
+  friendlyEdited.fuselage.length *= 1.15;
+  friendlyEdited.fuselage.horizontalDiameter *= 1.1;
+  friendlyEdited.fuselage.verticalDiameter *= 1.2;
+  friendlyEdited.payload.mass = 5;
+  friendlyEdited.wings[0].span *= 1.2;
+  friendlyEdited.wings[0].chordInner *= 0.8;
+  friendlyEdited.wings[0].chordOuter *= 1.3;
+  friendlyEdited.wings[0].nacaProfile = '0006';
+  const propellerIndex = friendlyEdited.propulsionGroups.findIndex(
+    (group) => group.propellerInstance === 'Propeller_1',
+  );
+  friendlyEdited.propulsionGroups[propellerIndex].propellerType = 'apc_propellers_22x10E';
+  const friendlyOriginalModel = viewer.buildAircraftForAudit(baseline, assembly);
+  const friendlyEditedModel = viewer.buildAircraftForAudit(
+    friendlyEdited,
+    assembly,
+    2,
+    baseline,
+  );
+  for (const name of ['FUSELAGE_1', 'CARGO', 'WING_517_1', 'PROPELLER_1']) {
+    assert.ok(
+      boundsSizeOf(friendlyEditedModel, name).distanceTo(
+        boundsSizeOf(friendlyOriginalModel, name),
+      ) > 0.01,
+      `${name} should visibly respond to its friendly parameter control`,
+    );
+  }
+  assert.ok(
+    boundsSizeOf(friendlyEditedModel, 'PROPELLER_2').distanceTo(
+      boundsSizeOf(friendlyOriginalModel, 'PROPELLER_2'),
+    ) < 1e-9,
+    'changing Propeller_1 should not resize Propeller_2',
+  );
 
   const bentGroupFromLower = viewer.resolveParametricEditTarget(
     'ARM_4071_1',

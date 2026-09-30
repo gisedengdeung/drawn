@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowLeft,
@@ -100,6 +100,18 @@ const GROUP_HINTS: Record<ParameterGroup, string> = {
   layout: '센서·배터리 같은 내부 부품의 배치 위치예요. 무게중심에 영향을 줄 수 있지만, 데이터셋 성능 점수 계산에는 반영되지 않는 참조용 값이에요.',
 };
 
+const FRIENDLY_GROUP_ORDER = ['structure', 'fuselage', 'propulsion', 'energy', 'wing', 'payload'] as const;
+type FriendlyParameterGroup = (typeof FRIENDLY_GROUP_ORDER)[number];
+
+function isFriendlyParameterGroup(group: ParameterGroup): group is FriendlyParameterGroup {
+  return (FRIENDLY_GROUP_ORDER as readonly ParameterGroup[]).includes(group);
+}
+
+function prioritizedIndices(length: number, priority: number[]) {
+  const valid = [...new Set(priority.filter((index) => index >= 0 && index < length))];
+  return [...valid, ...Array.from({ length }, (_, index) => index).filter((index) => !valid.includes(index))];
+}
+
 const EXPERT_MODE_STORAGE_KEY = 'aerotwin:design-lab-expert-mode';
 
 export function DesignLabView({
@@ -147,8 +159,8 @@ export function DesignLabView({
   const [editTarget, setEditTarget] = useState<ParametricEditTarget | null>(null);
   const [armEditScope, setArmEditScope] = useState<ArmEditScope>('group');
   const [openTypes, setOpenTypes] = useState<string[]>([]);
-  /** 프로펠러 날개 수는 데이터에 없어 보는 사람이 고르는 표시 설정이다. */
-  const [bladeCount, setBladeCount] = useState<2 | 4>(2);
+  /** 데이터에 날개 수가 없으므로 파라메트릭 표시에서는 기본 2엽을 사용한다. */
+  const bladeCount = 2 as const;
   /**
    * 개념 형상과 원본 STL을 나란히 둔다. 겹쳐 그리면 회색끼리 묻혀서 어느 쪽이
    * 무엇인지 읽기 어려웠다. 원본은 로컬에 있을 때만 뜬다.
@@ -161,15 +173,15 @@ export function DesignLabView({
   // 아일랜드는 3D 위에 떠 있으므로 접어서 화면을 완전히 비울 수 있어야 한다.
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
-  // 설계를 고르면 현재 3D에 반영된 파라메트릭 모델 정보를 오른쪽에 바로 보여준다.
-  const [modelInfoHiddenFor, setModelInfoHiddenFor] = useState<number | null>(null);
+  const [modelInfoOpen, setModelInfoOpen] = useState(true);
+  const [modelInfoExpanded, setModelInfoExpanded] = useState(true);
   // 성능 확인 탭에서 흡수한 속도별 시트. AI 예측과 같은 speed를 공유해 한 값으로 본다.
   const [chartsOpen, setChartsOpen] = useState(false);
   const [speed, setSpeed] = useState(20);
   const [aiPredictionOpen, setAiPredictionOpen] = useState(false);
   const [performanceSource, setPerformanceSource] = useState<PerformanceSource>('ai');
   const [sideViewLocked, setSideViewLocked] = useState(false);
-  const [sideViewResetKey, setSideViewResetKey] = useState(0);
+  const [cameraResetKey, setCameraResetKey] = useState(0);
   /** 선택한 속도의 AI 출력. STL이 아니라 현재 파라메트릭 형상에만 적용한다. */
   const [aiFlightState, setAiFlightState] = useState<PerformancePrediction | null>(null);
   const [aiPerformanceResult, setAiPerformanceResult] = useState<PerformanceResult | null>(null);
@@ -178,6 +190,7 @@ export function DesignLabView({
   const highlightTimeoutRef = useRef<number | null>(null);
   const estimateTimeoutRef = useRef<number | null>(null);
   const aiPredictionPanelRef = useRef<HTMLDivElement>(null);
+  const parameterScrollRef = useRef<HTMLDivElement>(null);
   const packagedReference = referenceDesign ?? ('modelPath' in selected ? selected as ShowcaseDesign : null);
   const originalTrimAvailable = Boolean(packagedReference?.trim.some((row) => row.valid));
   const originalTrimRow = packagedReference?.trim.find((row) => row.speed === speed) ?? null;
@@ -264,6 +277,13 @@ export function DesignLabView({
     setPanelTab('parameters');
     setLeftOpen(true);
     setOpenSections([target.parameterGroup]);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        parameterScrollRef.current
+          ?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+          ?.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
   }, []);
 
   const changeArmEditScope = useCallback((scope: ArmEditScope) => {
@@ -342,13 +362,57 @@ export function DesignLabView({
   const changedCount = useMemo(() => draft && baseline ? countChanges(draft, baseline) : 0, [baseline, draft]);
   const differences = useMemo(() => draft && baseline ? draftDifferences(baseline, draft) : [], [baseline, draft]);
   const parameterCount = draft?.parameterDefinitions?.length ?? 0;
-  const showLeftPanel = activeTool === 'design' || activeTool === 'parameters';
-  const showPerformancePanel = activeTool === 'performance';
-  const showViewerControls = showLeftPanel || showPerformancePanel;
+  const selectedEditTargets = useMemo(() => {
+    if (!placements || !draft || !selectedParts.length) return [];
+    return [...selectedParts]
+      .reverse()
+      .map((name) => resolveParametricEditTarget(name, placements, draft, baseline, armEditScope));
+  }, [armEditScope, baseline, draft, placements, selectedParts]);
+  const selectedGroupOrder = useMemo(() => {
+    const groups = [editTarget?.parameterGroup, ...selectedEditTargets.map((target) => target.parameterGroup)];
+    return [...new Set(groups.filter((group): group is FriendlyParameterGroup => group != null && isFriendlyParameterGroup(group)))];
+  }, [editTarget?.parameterGroup, selectedEditTargets]);
+  const parameterSectionOrder = [
+    ...selectedGroupOrder,
+    ...FRIENDLY_GROUP_ORDER.filter((group) => !selectedGroupOrder.includes(group)),
+  ];
+  const selectedSegmentIndices = [...new Set(
+    selectedEditTargets.flatMap((target) => target.segmentIndex == null ? [] : [target.segmentIndex]),
+  )].filter((index) => index >= 0 && index < (draft?.segments.length ?? 0));
+  const prioritySegmentIndices = prioritizedIndices(draft?.segments.length ?? 0, selectedSegmentIndices);
+  const selectedPropulsionIndices = [...new Set(
+    selectedEditTargets.flatMap((target) => target.propulsionIndex == null ? [] : [target.propulsionIndex]),
+  )].filter((index) => index >= 0 && index < (draft?.propulsionGroups.length ?? 0));
+  const priorityPropulsionIndices = prioritizedIndices(draft?.propulsionGroups.length ?? 0, selectedPropulsionIndices);
+  const selectedWingIndices = [...new Set(
+    selectedEditTargets.flatMap((target) => target.wingIndex == null ? [] : [target.wingIndex]),
+  )].filter((index) => index >= 0 && index < (draft?.wings.length ?? 0));
+  const priorityWingIndices = prioritizedIndices(draft?.wings.length ?? 0, selectedWingIndices);
+  const selectedBatteryIndices = [...new Set(
+    selectedParts.flatMap((name) => {
+      const instance = name.match(/^BATTERY_(\d+)/i)?.[1];
+      return instance ? [Number(instance) - 1] : [];
+    }),
+  )].filter((index) => index >= 0 && index < (draft?.energy.batteryTypes.length ?? 0));
+  const priorityBatteryIndices = prioritizedIndices(draft?.energy.batteryTypes.length ?? 0, selectedBatteryIndices);
+  useEffect(() => {
+    if (!editTarget || !selectedGroupOrder.length) return;
+    window.queueMicrotask(() => {
+      setOpenSections((current) => {
+        const next = [...selectedGroupOrder, ...current.filter((group) => !selectedGroupOrder.includes(group as FriendlyParameterGroup))];
+        return next.length === current.length && next.every((group, index) => group === current[index]) ? current : next;
+      });
+    });
+  }, [editTarget, selectedGroupOrder]);
+  // 작업 공간은 두 세트다: 설계 선택+모델 정보, 파라미터 편집+성능 확인.
+  // 예전 `performance` 딥링크는 두 번째 세트로 호환한다.
+  const parameterWorkspace = activeTool === 'parameters' || activeTool === 'performance';
+  const showLeftPanel = activeTool === 'design' || parameterWorkspace;
+  const showPerformancePanel = parameterWorkspace;
   const effectivePanelTab = activeTool === 'design'
     ? 'design'
     : panelTab === 'design' ? 'parameters' : panelTab;
-  const showModelInfo = activeTool === 'design' && modelInfoHiddenFor !== selected.id;
+  const showModelInfo = activeTool === 'design' && modelInfoOpen;
   const handlePredictionChange = useCallback((prediction: PerformancePrediction | null) => {
     setAiFlightState(prediction);
   }, []);
@@ -378,6 +442,13 @@ export function DesignLabView({
       window.queueMicrotask(() => setPerformanceSource('ai'));
     }
   }, [originalTrimAvailable, performanceSource]);
+  useEffect(() => {
+    if (activeTool !== 'design') return;
+    window.queueMicrotask(() => {
+      setModelInfoOpen(true);
+      setModelInfoExpanded(true);
+    });
+  }, [activeTool]);
   useEffect(() => {
     if (!aiPredictionOpen) return;
     const frame = window.requestAnimationFrame(() => {
@@ -429,13 +500,13 @@ export function DesignLabView({
               >
                 <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${leftOpen ? '' : '-rotate-90'}`} />
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-[#1d1d1f]">{activeTool === 'design' ? '설계 선택' : '설계 파라미터'}</span>
+                  <span className="block text-sm font-semibold text-[#1d1d1f]">{activeTool === 'design' ? '설계 선택' : '파라미터 편집'}</span>
                   {leftOpen && (
                     <span className="mt-0.5 block text-xs text-[#6e6e73]">{activeTool === 'design' ? `기준 설계 #${selected.id}` : changedCount ? `${changedCount}개 변경됨` : 'Baseline과 동일'}</span>
                   )}
                 </span>
               </button>
-              {leftOpen && activeTool === 'parameters' && (
+              {leftOpen && parameterWorkspace && (
                 <Button size="icon-sm" variant="ghost" onClick={resetAll} disabled={!changedCount} aria-label="전체 초기화" className="text-[#6e6e73]"><RotateCcw /></Button>
               )}
             </div>
@@ -448,7 +519,7 @@ export function DesignLabView({
                 <Switch checked={expertMode} onCheckedChange={toggleExpertMode} size="sm" aria-label="전문가 모드" />
               </div>
             )}
-            {leftOpen && activeTool === 'parameters' && (
+            {leftOpen && parameterWorkspace && (
               <div className={`mt-3 grid rounded-xl bg-[#f5f5f7] p-1 ${placements ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {([
                   ['parameters', '파라미터', SlidersHorizontal],
@@ -485,11 +556,10 @@ export function DesignLabView({
                   setEditTarget(null);
                   onSelect(id);
                 }}
-                onOpenModelInfo={() => setModelInfoHiddenFor(null)}
               />
             </div>
           ) : (
-          <ScrollArea className="min-h-0 flex-1">
+          <ScrollArea ref={parameterScrollRef} className="min-h-0 flex-1">
             {loading || !draft || !baseline ? (
               <div className="grid h-80 place-items-center text-xs text-[#6e6e73]">설계 파라미터를 준비하고 있습니다…</div>
             ) : effectivePanelTab === 'parts' && placements ? (
@@ -594,64 +664,82 @@ export function DesignLabView({
                 </div>
               )}
               <Accordion multiple value={openSections} onValueChange={(value) => setOpenSections(value.map(String))} className="px-3 pb-5">
-                {(
-                  <ParameterSection value="structure" icon={<Layers3 />} title="기체 구조" count={1 + draft.segments.length * 3} hint={GROUP_HINTS.structure}>
-                    <ReadOnlyValue label="허브 형태" value={formatComponent(draft.topology)} note="허브(몸통 중심) 형태 변경은 1단계 설계 선택에서 다른 설계를 고르면 됩니다." />
-                    {draft.segments.map((segment, index) => ({ segment, index })).filter(({ index }) => editTarget?.parameterGroup !== 'structure' || editTarget.segmentIndex == null || editTarget.segmentIndex === index).map(({ segment, index }) => (
-                      <div key={segment.id} className="rounded-xl bg-[#f5f5f7] p-3">
-                        <p className="mb-3 flex items-center justify-between text-xs font-semibold text-[#3c3c43]">
-                          팔 {index + 1}<span className="font-normal text-[#6e6e73]">{formatComponent(segment.nodeType)}</span>
-                        </p>
-                        <NumberSlider label="팔 길이" unit="mm" min={50} max={520} step={1} value={armValue(index, 'length')} baseline={armEditScope === 'instance' ? armGroupValue(index, 'length') : baseline.segments[index]?.length ?? segment.length} onChange={(value) => editArm(index, 'length', value)} />
-                        <NumberSlider label="장착 각도" unit="°" min={-135} max={360} step={1} value={armValue(index, 'angle')} baseline={armEditScope === 'instance' ? armGroupValue(index, 'angle') : baseline.segments[index]?.angle ?? segment.angle} onChange={(value) => editArm(index, 'angle', value)} geometryOnly />
-                        <NumberSlider label="결합 위치 오프셋" unit="mm" min={-50} max={50} step={1} value={armValue(index, 'offset')} baseline={armEditScope === 'instance' ? armGroupValue(index, 'offset') : baseline.segments[index]?.offset ?? segment.offset} onChange={(value) => editArm(index, 'offset', value)} geometryOnly />
-                      </div>
-                    ))}
-                  </ParameterSection>
-                )}
-
-                {(
-                  <ParameterSection value="fuselage" icon={<Box />} title="동체" count={3} hint={GROUP_HINTS.fuselage}>
-                    <NumberSlider label="길이" unit="mm" min={84} max={559} step={1} value={draft.fuselage.length} baseline={baseline.fuselage.length} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.length = value; })} />
-                    <NumberSlider label="가로 지름" unit="mm" min={120} max={805} step={1} value={draft.fuselage.horizontalDiameter} baseline={baseline.fuselage.horizontalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.horizontalDiameter = value; })} />
-                    <NumberSlider label="세로 지름" unit="mm" min={51} max={354} step={1} value={draft.fuselage.verticalDiameter} baseline={baseline.fuselage.verticalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.verticalDiameter = value; })} />
-                  </ParameterSection>
-                )}
-
-                {(
-                  <ParameterSection value="propulsion" icon={<CircleGauge />} title="추진 시스템" count={draft.propulsionGroups.length * 2} hint={GROUP_HINTS.propulsion}>
-                    {draft.propulsionGroups.map((propulsion, index) => ({ propulsion, index })).filter(({ index }) => editTarget?.parameterGroup !== 'propulsion' || editTarget.propulsionIndex == null || editTarget.propulsionIndex === index).map(({ propulsion, index }) => (
-                      <div key={propulsion.id} className="rounded-xl bg-[#f5f5f7] p-3">
-                        <p className="mb-2 text-xs font-semibold text-[#3c3c43]">모터·프로펠러 세트 {index + 1}</p>
-                        <ControlSelect label="모터" value={propulsion.motorType} options={catalogs.motors} baseline={baseline.propulsionGroups[index]?.motorType} format={formatMotorLabel} onChange={(value) => mutateDraft('propulsion', (next) => { next.propulsionGroups[index].motorType = value; syncSegmentComponent(next, propulsion.segmentId, 'motorType', value); })} />
-                        <ControlSelect label="프로펠러" value={propulsion.propellerType} options={catalogs.propellers} baseline={baseline.propulsionGroups[index]?.propellerType} format={formatPropellerLabel} onChange={(value) => mutateDraft('propulsion', (next) => { next.propulsionGroups[index].propellerType = value; syncSegmentComponent(next, propulsion.segmentId, 'propellerType', value); })} />
-                      </div>
-                    ))}
-                  </ParameterSection>
-                )}
-
-                {(
-                  <ParameterSection value="energy" icon={<BatteryCharging />} title="전력 시스템" count={draft.energy.batteryTypes.length} hint={GROUP_HINTS.energy}>
-                    {draft.energy.batteryTypes.map((battery, index) => (
-                      <ControlSelect key={`${index}-${battery}`} label={`배터리 ${index + 1}`} value={battery} options={catalogs.batteries} baseline={baseline.energy.batteryTypes[index]} format={formatBatteryLabel} onChange={(value) => mutateDraft('energy', (next) => { next.energy.batteryTypes[index] = value; })} />
-                    ))}
-                    <ReadOnlyValue label="배터리 구성" value={formatEnergyConfiguration(draft.energy.configuration)} />
-                  </ParameterSection>
-                )}
-
-                {draft.wings.length > 0 && (
-                  <ParameterSection value="wing" icon={<Plane />} title="날개" count={draft.wings.length * 4} hint={GROUP_HINTS.wing}>
-                    {draft.wings.map((wing, index) => ({ wing, index })).filter(({ index }) => editTarget?.parameterGroup !== 'wing' || editTarget.wingIndex == null || editTarget.wingIndex === index).map(({ wing, index }) => (
-                      <WingControls key={wing.id} wing={wing} baseline={baseline.wings[index] ?? wing} nacaOptions={catalogs.nacaProfiles} onChange={(mutator) => mutateDraft('wing', (next) => mutator(next.wings[index]))} />
-                    ))}
-                  </ParameterSection>
-                )}
-
-                {(
-                  <ParameterSection value="payload" icon={<Weight />} title="탑재 중량" count={1} advanced hint={GROUP_HINTS.payload}>
-                    <NumberSlider label="탑재 화물 질량" unit="kg" min={0} max={20} step={0.1} value={draft.payload.mass} baseline={baseline.payload.mass} onChange={(value) => mutateDraft('payload', (next) => { next.payload.mass = value; })} geometryOnly />
-                  </ParameterSection>
-                )}
+                {parameterSectionOrder.map((group) => {
+                  if (group === 'structure') return (
+                    <ParameterSection key={group} value="structure" icon={<Layers3 />} title="기체 구조" count={1 + draft.segments.length * 3} hint={GROUP_HINTS.structure} selected={selectedGroupOrder.includes(group)}>
+                      {prioritySegmentIndices.map((index, position) => {
+                        const segment = draft.segments[index];
+                        return <Fragment key={segment.id}>
+                          {position === selectedSegmentIndices.length && (
+                            <ReadOnlyValue label="허브 형태" value={formatComponent(draft.topology)} note="허브(몸통 중심) 형태 변경은 1단계 설계 선택에서 다른 설계를 고르면 됩니다." />
+                          )}
+                          <div className="rounded-xl bg-[#f5f5f7] p-3">
+                          <p className="mb-3 flex items-center justify-between gap-2 text-xs font-semibold text-[#3c3c43]">
+                            <span>팔 {index + 1}</span>
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              {selectedSegmentIndices.includes(index) && <SelectedPartBadge />}
+                              <span className="truncate font-normal text-[#6e6e73]">{formatComponent(segment.nodeType)}</span>
+                            </span>
+                          </p>
+                          <NumberSlider label="팔 길이" unit="mm" min={50} max={520} step={1} value={armValue(index, 'length')} baseline={armEditScope === 'instance' ? armGroupValue(index, 'length') : baseline.segments[index]?.length ?? segment.length} onChange={(value) => editArm(index, 'length', value)} />
+                          <NumberSlider label="장착 각도" unit="°" min={-135} max={360} step={1} value={armValue(index, 'angle')} baseline={armEditScope === 'instance' ? armGroupValue(index, 'angle') : baseline.segments[index]?.angle ?? segment.angle} onChange={(value) => editArm(index, 'angle', value)} geometryOnly />
+                          <NumberSlider label="결합 위치 오프셋" unit="mm" min={-50} max={50} step={1} value={armValue(index, 'offset')} baseline={armEditScope === 'instance' ? armGroupValue(index, 'offset') : baseline.segments[index]?.offset ?? segment.offset} onChange={(value) => editArm(index, 'offset', value)} geometryOnly />
+                          </div>
+                        </Fragment>;
+                      })}
+                      {selectedSegmentIndices.length >= prioritySegmentIndices.length && (
+                        <ReadOnlyValue label="허브 형태" value={formatComponent(draft.topology)} note="허브(몸통 중심) 형태 변경은 1단계 설계 선택에서 다른 설계를 고르면 됩니다." />
+                      )}
+                    </ParameterSection>
+                  );
+                  if (group === 'fuselage') return (
+                    <ParameterSection key={group} value="fuselage" icon={<Box />} title="동체" count={3} hint={GROUP_HINTS.fuselage} selected={selectedGroupOrder.includes(group)}>
+                      <NumberSlider label="길이" unit="mm" min={84} max={559} step={1} value={draft.fuselage.length} baseline={baseline.fuselage.length} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.length = value; })} />
+                      <NumberSlider label="가로 지름" unit="mm" min={120} max={805} step={1} value={draft.fuselage.horizontalDiameter} baseline={baseline.fuselage.horizontalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.horizontalDiameter = value; })} />
+                      <NumberSlider label="세로 지름" unit="mm" min={51} max={354} step={1} value={draft.fuselage.verticalDiameter} baseline={baseline.fuselage.verticalDiameter} onChange={(value) => mutateDraft('fuselage', (next) => { next.fuselage.verticalDiameter = value; })} />
+                    </ParameterSection>
+                  );
+                  if (group === 'propulsion') return (
+                    <ParameterSection key={group} value="propulsion" icon={<CircleGauge />} title="추진 시스템" count={draft.propulsionGroups.length * 2} hint={GROUP_HINTS.propulsion} selected={selectedGroupOrder.includes(group)}>
+                      {priorityPropulsionIndices.map((index) => {
+                        const propulsion = draft.propulsionGroups[index];
+                        return <div key={propulsion.id} className="rounded-xl bg-[#f5f5f7] p-3">
+                          <p className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-[#3c3c43]">
+                            <span className="min-w-0 truncate">모터·프로펠러 세트 {index + 1}{propulsion.motorInstance ? ` · ${propulsion.motorInstance}` : ''}</span>
+                            {selectedPropulsionIndices.includes(index) && <SelectedPartBadge />}
+                          </p>
+                          <ControlSelect label="모터" value={propulsion.motorType} options={catalogs.motors} baseline={baseline.propulsionGroups[index]?.motorType} format={formatMotorLabel} onChange={(value) => mutateDraft('propulsion', (next) => { next.propulsionGroups[index].motorType = value; syncSegmentComponent(next, propulsion.segmentId, 'motorType', value); })} />
+                          <ControlSelect label="프로펠러" value={propulsion.propellerType} options={catalogs.propellers} baseline={baseline.propulsionGroups[index]?.propellerType} format={formatPropellerLabel} onChange={(value) => mutateDraft('propulsion', (next) => { next.propulsionGroups[index].propellerType = value; syncSegmentComponent(next, propulsion.segmentId, 'propellerType', value); })} />
+                        </div>;
+                      })}
+                      <p className="px-1 text-[11px] leading-4 text-[#6e6e73]">
+                        기존 부품 인스턴스의 모델만 교체합니다. 3D 크기는 카탈로그 모델명 기반 근사이며, 마운트·전압·ESC 호환성과 정밀 간섭은 별도 확인이 필요합니다.
+                      </p>
+                    </ParameterSection>
+                  );
+                  if (group === 'energy') return (
+                    <ParameterSection key={group} value="energy" icon={<BatteryCharging />} title="전력 시스템" count={draft.energy.batteryTypes.length} hint={GROUP_HINTS.energy} selected={selectedGroupOrder.includes(group)}>
+                      {priorityBatteryIndices.map((index) => {
+                        const battery = draft.energy.batteryTypes[index];
+                        return <ControlSelect key={`${index}-${battery}`} label={`배터리 ${index + 1}`} selected={selectedBatteryIndices.includes(index)} value={battery} options={catalogs.batteries} baseline={baseline.energy.batteryTypes[index]} format={formatBatteryLabel} onChange={(value) => mutateDraft('energy', (next) => { next.energy.batteryTypes[index] = value; })} />;
+                      })}
+                      <ReadOnlyValue label="배터리 구성" value={formatEnergyConfiguration(draft.energy.configuration)} />
+                    </ParameterSection>
+                  );
+                  if (group === 'wing') return draft.wings.length > 0 ? (
+                    <ParameterSection key={group} value="wing" icon={<Plane />} title="날개" count={draft.wings.length * 4} hint={GROUP_HINTS.wing} selected={selectedGroupOrder.includes(group)}>
+                      {priorityWingIndices.map((index) => {
+                        const wing = draft.wings[index];
+                        return <WingControls key={wing.id} label={`날개 세트 ${index + 1}`} selected={selectedWingIndices.includes(index)} wing={wing} baseline={baseline.wings[index] ?? wing} nacaOptions={catalogs.nacaProfiles} onChange={(mutator) => mutateDraft('wing', (next) => mutator(next.wings[index]))} />;
+                      })}
+                    </ParameterSection>
+                  ) : null;
+                  return (
+                    <ParameterSection key={group} value="payload" icon={<Weight />} title="탑재 중량" count={1} advanced hint={GROUP_HINTS.payload} selected={selectedGroupOrder.includes(group)}>
+                      <NumberSlider label="탑재 화물 질량" unit="kg" min={0} max={20} step={0.1} value={draft.payload.mass} baseline={baseline.payload.mass} onChange={(value) => mutateDraft('payload', (next) => { next.payload.mass = value; })} geometryOnly />
+                    </ParameterSection>
+                  );
+                })}
 
                 {expertMode && (
                 <ParameterSection value="source-parameters" icon={<SlidersHorizontal />} title="전문가용 원본 변수" count={parameterCount} advanced hint="AircraftVerse 데이터셋 원본 변수명을 그대로 보여줍니다. 위 친화적 그룹과 같은 값이 다시 나타날 수 있어요 — 대부분은 위에서 조정하는 것만으로 충분하고, 이 목록은 원본 그대로 세밀하게 맞추고 싶을 때만 쓰면 됩니다.">
@@ -741,10 +829,22 @@ export function DesignLabView({
                 <Switch aria-label="기준 설계 Ghost 표시" checked={showGhost} onCheckedChange={setShowGhost} size="sm" disabled={!sideBySide && mode === 'exact-stl'} />
                 <span>기준 Ghost</span>
               </div>
+              <button
+                type="button"
+                onClick={() => setCameraResetKey((key) => key + 1)}
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-medium text-[#3c3c43] hover:bg-[#f5f5f7]"
+                title="설계 원점을 바라보는 처음 카메라로 돌아가기"
+              >
+                <RotateCcw className="size-3.5" /> 원점으로
+              </button>
+              <span className="hidden shrink-0 items-center gap-1 text-[10px] text-[#86868b] xl:flex" title="3D 화면을 클릭한 뒤 W/A/S/D로 화면을 이동합니다">
+                <kbd className="rounded border border-[#d2d2d7] bg-[#f5f5f7] px-1.5 py-0.5 font-mono text-[9px] text-[#3c3c43]">WASD</kbd>
+                이동
+              </span>
               {showAiPrediction && (mode === 'parametric-preview' || sideBySide) && (
                 <FlightCameraControls
                   locked={sideViewLocked}
-                  onReset={() => setSideViewResetKey((key) => key + 1)}
+                  onReset={() => setCameraResetKey((key) => key + 1)}
                   onToggleLock={() => setSideViewLocked((locked) => !locked)}
                 />
               )}
@@ -763,38 +863,22 @@ export function DesignLabView({
               ) : draft && baseline && sideBySide ? (
                 <div className="absolute inset-0 grid grid-cols-2 divide-x divide-[#e5e5ea]">
                   <div className="relative">
-                    <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} onEditTargetChange={handleEditTargetChange} armEditScope={armEditScope} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} cameraSync={{ group: comparisonCameraGroup, id: 'parametric', linked: cameraLinked }} viewPreset={showAiPrediction ? 'side' : 'perspective'} sideViewLocked={sideViewLocked} sideViewResetKey={sideViewResetKey} pitchDegrees={activeFlightState?.pitch ?? 0} forceVectors={activeForces} showForces={Boolean(activeFlightState)} />
+                    <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} onEditTargetChange={handleEditTargetChange} armEditScope={armEditScope} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} cameraSync={{ group: comparisonCameraGroup, id: 'parametric', linked: cameraLinked }} cameraResetKey={cameraResetKey} viewPreset={showAiPrediction ? 'side' : 'perspective'} sideViewLocked={sideViewLocked} pitchDegrees={activeFlightState?.pitch ?? 0} forceVectors={activeForces} showForces={Boolean(activeFlightState)} />
                     <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#3182f6] backdrop-blur">파라메트릭스</span>
                     {activeFlightState && !chartsOpen && <FlightVisualizationLegend row={activeFlightState} source={visualizationSource} />}
                   </div>
                   <div className="relative">
-                    <StlViewer key={originalStlUrl} src={originalStlUrl} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} cameraSync={{ group: comparisonCameraGroup, id: 'stl', linked: cameraLinked }} showControls={false} />
+                    <StlViewer key={originalStlUrl} src={originalStlUrl} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} cameraSync={{ group: comparisonCameraGroup, id: 'stl', linked: cameraLinked }} cameraResetKey={cameraResetKey} showControls={false} />
                     <span className="pointer-events-none absolute right-3 top-3 z-20 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#6e6e73] backdrop-blur">원본 STL</span>
                   </div>
                 </div>
               ) : draft && baseline && mode === 'parametric-preview' ? (
                 <>
-                  <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} onEditTargetChange={handleEditTargetChange} armEditScope={armEditScope} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} viewPreset={showAiPrediction ? 'side' : 'perspective'} sideViewLocked={sideViewLocked} sideViewResetKey={sideViewResetKey} pitchDegrees={activeFlightState?.pitch ?? 0} forceVectors={activeForces} showForces={Boolean(activeFlightState)} />
+                  <ParametricUavViewer draft={draft} baseline={baseline} showGhost={showGhost} changedGroup={changedGroup} assembly={placements} bladeCount={bladeCount} selection={selectedParts} onSelectionChange={setSelectedParts} onEditTargetChange={handleEditTargetChange} selectionOverlayInsetRight={showPerformancePanel ? 332 : showModelInfo ? 312 : 0} armEditScope={armEditScope} paused={suspended || compareOpen || chartsOpen} cameraFitPadding={1.62} cameraResetKey={cameraResetKey} viewPreset={showAiPrediction ? 'side' : 'perspective'} sideViewLocked={sideViewLocked} pitchDegrees={activeFlightState?.pitch ?? 0} forceVectors={activeForces} showForces={Boolean(activeFlightState)} />
                   {activeFlightState && !chartsOpen && <FlightVisualizationLegend row={activeFlightState} source={visualizationSource} />}
                 </>
               ) : (
-                <StlViewer key={originalStlUrl} src={originalStlUrl} paused={suspended || compareOpen || chartsOpen} />
-              )}
-              {showViewerControls && mode === 'parametric-preview' && (
-                <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-[#e5e5ea] bg-white/90 p-1 text-[11px] shadow-sm backdrop-blur">
-                  <span className="px-1.5 text-[#86868b]">프로펠러</span>
-                  {([2, 4] as const).map((count) => (
-                    <button
-                      key={count}
-                      type="button"
-                      onClick={() => setBladeCount(count)}
-                      aria-pressed={bladeCount === count}
-                      className={`rounded-md px-2 py-1 font-medium tabular-nums ${bladeCount === count ? 'bg-[#1d1d1f] text-white' : 'text-[#6e6e73] hover:bg-[#f5f5f7]'}`}
-                    >
-                      {count}엽
-                    </button>
-                  ))}
-                </div>
+                <StlViewer key={originalStlUrl} src={originalStlUrl} paused={suspended || compareOpen || chartsOpen} cameraResetKey={cameraResetKey} />
               )}
               {changedGroup && (
                 <div className="pointer-events-none absolute right-3 top-[72px] z-20 rounded-lg bg-[#3182f6] px-3 py-2 text-xs font-semibold text-white shadow-sm">
@@ -805,18 +889,21 @@ export function DesignLabView({
           </div>
         </div>
 
-        {showModelInfo && <aside className="absolute right-3 top-3 z-20 flex max-h-[calc(100%-24px)] w-[300px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur">
+        {showModelInfo && <aside className={`absolute right-3 top-3 z-20 flex w-[300px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur ${modelInfoExpanded ? 'max-h-[calc(100%-24px)]' : 'h-12'}`}>
           <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3 py-2">
-            <Info className="size-4 text-[#3182f6]" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-[#1d1d1f]">모델 정보</p>
-              <p className="truncate text-[10px] text-[#6e6e73]">현재 파라메트릭 출력 · #{selected.id}</p>
-            </div>
-            <Button size="icon-sm" variant="ghost" onClick={() => setModelInfoHiddenFor(selected.id)} aria-label="모델 정보 닫기" className="shrink-0 text-[#6e6e73]">
+            <button type="button" onClick={() => setModelInfoExpanded((expanded) => !expanded)} aria-expanded={modelInfoExpanded} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+              <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${modelInfoExpanded ? '' : '-rotate-90'}`} />
+              <Info className="size-4 shrink-0 text-[#3182f6]" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-[#1d1d1f]">모델 정보</p>
+                {modelInfoExpanded && <p className="truncate text-[10px] text-[#6e6e73]">현재 파라메트릭 출력 · #{selected.id}</p>}
+              </div>
+            </button>
+            <Button size="icon-sm" variant="ghost" onClick={() => setModelInfoOpen(false)} aria-label="모델 정보 닫기" className="shrink-0 text-[#6e6e73]">
               <X />
             </Button>
           </div>
-          <div className="min-h-0 overflow-y-auto overscroll-contain">
+          {modelInfoExpanded && <div className="min-h-0 overflow-y-auto overscroll-contain">
             <ModelInfoPanel
               selected={selected}
               draft={draft}
@@ -827,8 +914,19 @@ export function DesignLabView({
               changedCount={changedCount}
               loading={loading}
             />
-          </div>
+          </div>}
         </aside>}
+
+        {activeTool === 'design' && !modelInfoOpen && (
+          <button
+            type="button"
+            onClick={() => setModelInfoOpen(true)}
+            className="absolute right-3 top-3 z-20 flex h-10 items-center gap-1.5 rounded-xl border border-[#e5e5ea] bg-white/92 px-3 text-xs font-semibold text-[#3c3c43] shadow-lg backdrop-blur hover:bg-white"
+            aria-label="모델 정보 다시 열기"
+          >
+            <Info className="size-4 text-[#3182f6]" /> 모델 정보
+          </button>
+        )}
 
         {showPerformancePanel && <aside
           className={`absolute right-3 z-20 flex w-[320px] flex-col overflow-hidden border border-[#e5e5ea] bg-white/92 backdrop-blur ${
@@ -845,7 +943,7 @@ export function DesignLabView({
             )}
             <button type="button" onClick={() => setRightOpen((open) => !open)} aria-expanded={rightOpen} className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left">
               <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${rightOpen ? '' : '-rotate-90'}`} />
-              <span className="text-sm font-semibold text-[#1d1d1f]">{aiPredictionOpen ? 'AI 속도별 예측' : '성능'}</span>
+              <span className="text-sm font-semibold text-[#1d1d1f]">{aiPredictionOpen ? 'AI 속도별 예측' : '성능 확인'}</span>
             </button>
             {!aiPredictionOpen && <Button
               size="sm"
@@ -994,7 +1092,7 @@ export function DesignLabView({
                     cameraFitPadding={1.7}
                     viewPreset="side"
                     sideViewLocked={sideViewLocked}
-                    sideViewResetKey={sideViewResetKey}
+                    cameraResetKey={cameraResetKey}
                     pitchDegrees={showAiFlight ? aiFlightState.pitch ?? 0 : 0}
                     forceVectors={showAiFlight ? activeForces : undefined}
                     showForces={showAiFlight}
@@ -1582,12 +1680,17 @@ function CompareMetric({ label, before, after, unit, invert = false }: { label: 
   );
 }
 
-function ParameterSection({ value, icon, title, count, advanced = false, hint, children }: { value: string; icon: React.ReactNode; title: string; count: number; advanced?: boolean; hint?: string; children: React.ReactNode }) {
+function SelectedPartBadge() {
+  return <Badge className="h-5 shrink-0 border border-[#bfdbfe] bg-[#eff6ff] px-1.5 text-[9px] font-semibold text-[#1b64da]">선택한 부품</Badge>;
+}
+
+function ParameterSection({ value, icon, title, count, advanced = false, selected = false, hint, children }: { value: string; icon: React.ReactNode; title: string; count: number; advanced?: boolean; selected?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <AccordionItem value={value} className="border-[#e5e5ea]">
       <AccordionTrigger className="px-1 py-3 hover:no-underline">
         <span className="flex items-center gap-2 text-[#3c3c43] [&>svg]:size-4 [&>svg]:text-[#3182f6]">
           {icon}{title}
+          {selected && <SelectedPartBadge />}
           {advanced && <Badge variant="outline" className="h-5 border-[#e5e5ea] text-[9px] text-[#86868b]">전문가용</Badge>}
           {hint && (
             <Tooltip>
@@ -1749,13 +1852,13 @@ function SourceParameterControl({
   );
 }
 
-function ControlSelect({ label, value, options, baseline, format = formatComponent, onChange }: { label: string; value: string; options: string[]; baseline?: string; format?: (value: string) => string; onChange: (value: string) => void }) {
+function ControlSelect({ label, selected = false, value, options, baseline, format = formatComponent, onChange }: { label: string; selected?: boolean; value: string; options: string[]; baseline?: string; format?: (value: string) => string; onChange: (value: string) => void }) {
   const changed = Boolean(baseline && value !== baseline);
   const safeOptions = options.includes(value) ? options : [value, ...options];
   return (
     <div className="mb-3 last:mb-0">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[11px] text-[#6e6e73]">{label}</span>
+        <span className="flex items-center gap-1.5 text-[11px] text-[#6e6e73]">{label}{selected && <SelectedPartBadge />}</span>
         {changed && baseline && <button onClick={() => onChange(baseline)} aria-label={`${label} 초기화`} className="rounded p-0.5 text-[#86868b] hover:bg-[#e5e5ea]"><RotateCcw className="size-3" /></button>}
       </div>
       <Select value={value} onValueChange={(next) => onChange(String(next))}>
@@ -1768,10 +1871,16 @@ function ControlSelect({ label, value, options, baseline, format = formatCompone
   );
 }
 
-function WingControls({ wing, baseline, nacaOptions, onChange }: { wing: WingParameters; baseline: WingParameters; nacaOptions: string[]; onChange: (mutator: (wing: WingParameters) => void) => void }) {
+function WingControls({ label = '날개 세트', selected = false, wing, baseline, nacaOptions, onChange }: { label?: string; selected?: boolean; wing: WingParameters; baseline: WingParameters; nacaOptions: string[]; onChange: (mutator: (wing: WingParameters) => void) => void }) {
   return (
     <div className="rounded-xl bg-[#f5f5f7] p-3">
-      <p className="mb-3 flex items-center justify-between text-xs font-semibold text-[#3c3c43]">날개 세트<span className="font-normal text-[#6e6e73]">{formatComponent(wing.type)}</span></p>
+      <p className="mb-3 flex items-center justify-between gap-2 text-xs font-semibold text-[#3c3c43]">
+        <span>{label}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          {selected && <SelectedPartBadge />}
+          <span className="truncate font-normal text-[#6e6e73]">{formatComponent(wing.type)}</span>
+        </span>
+      </p>
       <ControlSelect label="날개 단면 (NACA)" value={wing.nacaProfile} options={nacaOptions} baseline={baseline.nacaProfile} onChange={(value) => onChange((next) => { next.nacaProfile = value; })} />
       <NumberSlider label="날개 폭 (Span)" unit="mm" min={200} max={2000} step={1} value={wing.span} baseline={baseline.span} onChange={(value) => onChange((next) => { next.span = value; })} />
       <NumberSlider label="안쪽 날개 깊이" unit="mm" min={50} max={500} step={1} value={wing.chordInner} baseline={baseline.chordInner} onChange={(value) => onChange((next) => { next.chordInner = value; })} />

@@ -71,6 +71,8 @@ type ParametricUavViewerProps = {
   onSelectionChange?: (names: string[]) => void;
   /** 3D 클릭으로 해석한 편집 그룹. 부품 목록의 임의 다중 선택과 구분한다. */
   onEditTargetChange?: (target: ParametricEditTarget | null) => void;
+  /** 오른쪽 작업 패널과 겹치지 않도록 선택 정보 카드가 비워 둘 너비(px). */
+  selectionOverlayInsetRight?: number;
   /** 팔 클릭 시 한 인스턴스만 고를지, 공유 파라미터 그룹 전체를 고를지 결정한다. */
   armEditScope?: ArmEditScope;
   /** 배경 장식용 등, 조작 없이 저절로 돌아가야 할 때. */
@@ -85,8 +87,8 @@ type ParametricUavViewerProps = {
   viewPreset?: 'perspective' | 'side';
   /** 측면 고정 중에는 상하 회전과 패닝을 막고 수평 궤도·확대만 허용한다. */
   sideViewLocked?: boolean;
-  /** 값이 바뀔 때마다 현재 모델을 정확한 측면 홈 카메라로 다시 맞춘다. */
-  sideViewResetKey?: number;
+  /** 값이 바뀔 때마다 현재 프리셋의 설계 원점 홈 카메라로 돌아간다. */
+  cameraResetKey?: number;
   /** 서로 다른 종류의 뷰어와 정규화된 카메라 자세를 공유한다. */
   cameraSync?: { group: string; id: string; linked: boolean };
 };
@@ -230,10 +232,38 @@ export function resolveParametricEditTarget(
   else if (/^(?:FUSELAGE|CARGOCASE|MAINHUB)/i.test(upper)) parameterGroup = 'fuselage';
 
   let related: string[];
+  const collectArmBranches = (anchors: string[]) => {
+    const branchNames: string[] = [];
+    for (const anchor of anchors) {
+      if (!branchNames.includes(anchor)) branchNames.push(anchor);
+      const stack = [anchor];
+      while (stack.length) {
+        const current = stack.pop() as string;
+        for (const next of neighbours.get(current) ?? []) {
+          if (parentOf.get(next) !== current || branchNames.includes(next)) continue;
+          branchNames.push(next);
+          stack.push(next);
+        }
+      }
+      const anchorParent = parentOf.get(anchor);
+      if (anchorParent && STRUCTURE_NAME.test(anchorParent) && !branchNames.includes(anchorParent)) {
+        branchNames.unshift(anchorParent);
+      }
+    }
+    return branchNames;
+  };
   if (wingMatch) {
-    related = placements
+    const wingNames = placements
       .map((part) => part.n)
       .filter((name) => name.startsWith(`WING_${wingMatch[1]}_`));
+    const wingArmAnchors = [...new Set(wingNames.flatMap((name) => {
+      let ancestor = parentOf.get(name);
+      while (ancestor && !ARM_NAME.test(ancestor)) ancestor = parentOf.get(ancestor);
+      return ancestor ? [ancestor] : [];
+    }))];
+    // 팔에서 날개를 골랐을 때와 날개에서 팔을 골랐을 때의 선택 집합이
+    // 달라지지 않게, 같은 날개 그룹이 달린 팔 branch 전체를 선택한다.
+    related = wingArmAnchors.length ? collectArmBranches(wingArmAnchors) : wingNames;
   } else if (armAnchor) {
     // 한 세그먼트 파라미터는 대칭 배치된 여러 실제 ARM 인스턴스를 공유한다.
     // 편집 시 함께 움직이는 모든 branch를 강조해야 선택 범위와 결과가 일치한다.
@@ -245,23 +275,7 @@ export function resolveParametricEditTarget(
             return key != null && segmentArmKeys.includes(key);
           })
       : [armAnchor];
-    related = [];
-    for (const anchor of anchors) {
-      if (!related.includes(anchor)) related.push(anchor);
-      const stack = [anchor];
-      while (stack.length) {
-        const current = stack.pop() as string;
-        for (const next of neighbours.get(current) ?? []) {
-          if (parentOf.get(next) !== current || related.includes(next)) continue;
-          related.push(next);
-          stack.push(next);
-        }
-      }
-      const anchorParent = parentOf.get(anchor);
-      if (anchorParent && STRUCTURE_NAME.test(anchorParent) && !related.includes(anchorParent)) {
-        related.unshift(anchorParent);
-      }
-    }
+    related = collectArmBranches(anchors);
   } else {
     related = placements.flatMap((part) => {
       const candidateType = assembly.typeOf.get(part.n) ?? '';
@@ -302,9 +316,22 @@ export function resolveParametricEditTarget(
   const wingGroup = wingMatch ? Number(wingMatch[1]) : null;
   const wingIndex = wingGroup == null ? null : Math.max(wingGroups.indexOf(wingGroup), 0);
   const segmentId = segmentIndex == null ? null : draft.segments[segmentIndex]?.id;
-  const propulsionIndex = segmentId == null
-    ? null
-    : draft.propulsionGroups.findIndex((group) => group.segmentId === segmentId);
+  // 같은 세그먼트에 대칭 모터가 여러 개 달릴 수 있다. 세그먼트만으로 찾으면
+  // Motor_4를 눌러도 언제나 그 세그먼트의 첫 Motor_1 카드가 열렸다. 실제로
+  // 클릭한 물리 인스턴스를 먼저 찾고, 인스턴스 정보가 없는 구형 데이터만
+  // 세그먼트 기준으로 되돌아간다.
+  const propulsionInstance = /motor/i.test(type) || /^MOTOR/i.test(upper)
+    ? 'motorInstance'
+    : /propeller/i.test(type) || /^PROPELLER/i.test(upper)
+      ? 'propellerInstance'
+      : null;
+  const propulsionIndex = propulsionInstance
+    ? draft.propulsionGroups.findIndex(
+        (group) => group[propulsionInstance]?.toUpperCase() === upper,
+      )
+    : segmentId == null
+      ? null
+      : draft.propulsionGroups.findIndex((group) => group.segmentId === segmentId);
 
   return {
     anchor: partName,
@@ -402,6 +429,7 @@ export function ParametricUavViewer({
   selection,
   onSelectionChange,
   onEditTargetChange,
+  selectionOverlayInsetRight = 0,
   armEditScope = 'group',
   autoRotate = false,
   paused = false,
@@ -409,7 +437,7 @@ export function ParametricUavViewer({
   cameraFitPadding = 1.24,
   viewPreset = 'perspective',
   sideViewLocked = false,
-  sideViewResetKey = 0,
+  cameraResetKey = 0,
   cameraSync,
 }: ParametricUavViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -553,11 +581,22 @@ export function ParametricUavViewer({
     controls.enableDamping = true;
     controls.dampingFactor = 0.065;
     controls.enablePan = true;
+    // 휠 확대가 화면 중앙만 향하지 않고 사용자가 가리키는 부품을 향한다.
+    // 멀리 떨어진 날개 끝이나 개별 모터를 먼저 패닝하지 않고 바로 살펴볼 수 있다.
+    controls.zoomToCursor = true;
     controls.autoRotate = autoRotateRef.current;
     controls.autoRotateSpeed = 1.4;
+    const movementKeys = new Set<string>();
+    const panVelocity = new THREE.Vector2();
+    let lastMovementAt = 0;
     const handleKeyboard = (event: KeyboardEvent) => {
       const offset = camera.position.clone().sub(controls.target);
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      const key = event.key.toLowerCase();
+      if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
+        movementKeys.add(key);
+        event.preventDefault();
+        return;
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         offset.applyAxisAngle(
           new THREE.Vector3(0, 1, 0),
           event.key === 'ArrowLeft' ? 0.12 : -0.12,
@@ -571,13 +610,47 @@ export function ParametricUavViewer({
       camera.position.copy(controls.target).add(offset);
       controls.update();
     };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      movementKeys.delete(event.key.toLowerCase());
+    };
+    const stopKeyboardMovement = () => movementKeys.clear();
+    const updateKeyboardMovement = (time: number) => {
+      const delta = lastMovementAt
+        ? Math.min(Math.max((time - lastMovementAt) / 1000, 0), 0.05)
+        : 0;
+      lastMovementAt = time;
+      const input = new THREE.Vector2(
+        Number(movementKeys.has('d')) - Number(movementKeys.has('a')),
+        Number(movementKeys.has('w')) - Number(movementKeys.has('s')),
+      );
+      if (input.lengthSq() > 1) input.normalize();
+      const distance = camera.position.distanceTo(controls.target);
+      const desired = input.multiplyScalar(Math.max(distance * 0.294, 0.56));
+      panVelocity.lerp(desired, 1 - Math.exp(-10 * delta));
+      if (!movementKeys.size && panVelocity.lengthSq() < 1e-5) {
+        panVelocity.set(0, 0);
+        return;
+      }
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+      const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+      const move = right
+        .multiplyScalar(panVelocity.x * delta)
+        .addScaledVector(up, panVelocity.y * delta);
+      camera.position.add(move);
+      controls.target.add(move);
+    };
     renderer.domElement.addEventListener('keydown', handleKeyboard);
+    window.addEventListener('keyup', handleKeyUp);
+    renderer.domElement.addEventListener('blur', stopKeyboardMovement);
 
     // 클릭으로 부품 고르기. 화면을 돌리려고 드래그한 것과 구분하려면 누른
     // 자리에서 거의 움직이지 않았을 때만 선택으로 친다.
     const raycaster = new THREE.Raycaster();
     let pressedAt: { x: number; y: number } | null = null;
     const handlePointerDown = (event: PointerEvent) => {
+      renderer.domElement.focus({ preventScroll: true });
       pressedAt = { x: event.clientX, y: event.clientY };
     };
     const handlePointerUp = (event: PointerEvent) => {
@@ -646,7 +719,10 @@ export function ParametricUavViewer({
       const runtime = runtimeRef.current;
       if (!runtime || !points.length) return;
       const box = new THREE.Box3().setFromPoints(points);
-      const centre = box.getCenter(new THREE.Vector3());
+      // 홈 화면은 형상 AABB의 중심이 아니라 설계 좌표 원점을 바라본다. 날개나
+      // 비대칭 branch가 한쪽으로 긴 설계도 허브/동체 기준점이 화면 중앙에 와야
+      // 원본 STL과 파라메트릭 뷰의 시작 구도가 일치한다.
+      const centre = new THREE.Vector3();
       const radius = Math.max(
         box.getBoundingSphere(new THREE.Sphere()).radius,
         2.5,
@@ -682,46 +758,21 @@ export function ParametricUavViewer({
       const right = new THREE.Vector3().crossVectors(view, UP).normalize();
       const up = new THREE.Vector3().crossVectors(right, view);
       // 점 하나가 화면에 들어오려면 |가로| ≤ (거리 − 깊이)·tan(시야/2) 여야
-      // 한다. 카메라 쪽으로 튀어나온 점일수록 더 물러나야 하므로, 각 점이
-      // 요구하는 거리 중 가장 큰 값을 쓴다. 그다음 실제로 찍힌 자리의 한가운데를
-      // 보도록 시선을 옮기고 다시 잰다 — 상자 중심과 투영 중심은 원근 때문에
-      // 어긋나서, 한 번만 재면 모델이 한쪽으로 쏠린다.
+      // 한다. 카메라 쪽으로 튀어나온 점일수록 더 물러나야 하므로, 설계 원점을
+      // 고정한 채 각 점이 요구하는 거리 중 가장 큰 값을 쓴다.
       const spanWide = Math.tan(horizontalFov / 2);
       const spanHigh = Math.tan(verticalFov / 2);
       let distance = 0;
-      for (let pass = 0; pass < 4; pass += 1) {
-        distance = 0;
-        for (const point of points) {
-          const local = point.clone().sub(centre);
-          const depth = local.dot(view);
-          distance = Math.max(
-            distance,
-            Math.abs(local.dot(right)) / spanWide + depth,
-            Math.abs(local.dot(up)) / spanHigh + depth,
-          );
-        }
-        distance = Math.max(distance * cameraFitPadding, radius * 0.6);
-        let minWide = Infinity,
-          maxWide = -Infinity;
-        let minHigh = Infinity,
-          maxHigh = -Infinity;
-        for (const point of points) {
-          const local = point.clone().sub(centre);
-          const depth = Math.max(distance - local.dot(view), 1e-4);
-          const across = local.dot(right) / depth;
-          const above = local.dot(up) / depth;
-          minWide = Math.min(minWide, across);
-          maxWide = Math.max(maxWide, across);
-          minHigh = Math.min(minHigh, above);
-          maxHigh = Math.max(maxHigh, above);
-        }
-        const shiftWide = ((minWide + maxWide) / 2) * distance;
-        const shiftHigh = ((minHigh + maxHigh) / 2) * distance;
-        if (Math.hypot(shiftWide, shiftHigh) < radius * 0.004) break;
-        centre.addScaledVector(right, shiftWide).addScaledVector(up, shiftHigh);
+      for (const point of points) {
+        const local = point.clone().sub(centre);
+        const depth = local.dot(view);
+        distance = Math.max(
+          distance,
+          Math.abs(local.dot(right)) / spanWide + depth,
+          Math.abs(local.dot(up)) / spanHigh + depth,
+        );
       }
-      // 예전에는 늘 원점을 보았는데, 부품 중심이 원점에 있는 설계는 절반도
-      // 되지 않는다. 팔이 한쪽으로만 뻗은 기체는 화면 구석으로 밀려났다.
+      distance = Math.max(distance * cameraFitPadding, radius * 0.6);
       camera.position.copy(view.clone().multiplyScalar(distance).add(centre));
       camera.near = Math.max(radius / 100, 0.02);
       camera.far = Math.max(distance + radius * 10, 100);
@@ -732,6 +783,10 @@ export function ParametricUavViewer({
       controls.maxDistance = Math.max(radius * 8, 12);
       controls.update();
       runtime.homeDistance = camera.position.distanceTo(controls.target);
+      const sync = cameraSyncRef.current;
+      if (sync?.linked) {
+        window.queueMicrotask(() => broadcastViewerCamera(sync.group, sync.id));
+      }
       configureInfiniteGrid(grid, {
         step: Math.max(radius / 7, 0.65),
         fadeDistance: Math.max(radius * 14, 45),
@@ -865,6 +920,7 @@ export function ParametricUavViewer({
     let nextRenderAt = 0;
     const animate = (time = 0) => {
       if (!pausedRef.current && time >= nextRenderAt) {
+        updateKeyboardMovement(time);
         controls.update();
         updateInfiniteGrid(grid, camera);
         renderer.render(scene, camera);
@@ -884,6 +940,8 @@ export function ParametricUavViewer({
         handleContextLost,
       );
       renderer.domElement.removeEventListener('keydown', handleKeyboard);
+      window.removeEventListener('keyup', handleKeyUp);
+      renderer.domElement.removeEventListener('blur', stopKeyboardMovement);
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       controls.dispose();
@@ -921,11 +979,11 @@ export function ParametricUavViewer({
     runtime.controls.maxPolarAngle = sideViewLocked
       ? Math.PI / 2
       : Math.PI - 0.05;
-    if (viewPreset === 'side' && runtime.hull.length) {
+    if (runtime.hull.length) {
       runtime.fitCamera(runtime.hull, true);
     }
     runtime.controls.update();
-  }, [sideViewLocked, sideViewResetKey, viewPreset]);
+  }, [cameraResetKey, sideViewLocked, viewPreset]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -1048,7 +1106,10 @@ export function ParametricUavViewer({
       className="absolute inset-0 overflow-hidden bg-[#f5f5f7] outline-none [&>canvas:focus-visible]:ring-2 [&>canvas:focus-visible]:ring-inset [&>canvas:focus-visible]:ring-[#3182f6]"
     >
       {pickedInfo && (
-        <div className="pointer-events-auto absolute right-3 top-3 z-20 w-56 rounded-xl border border-[#e5e5ea] bg-white/95 p-3 text-xs shadow-lg backdrop-blur">
+        <div
+          className="pointer-events-auto absolute top-3 z-20 w-56 rounded-xl border border-[#e5e5ea] bg-white/95 p-3 text-xs shadow-lg backdrop-blur"
+          style={{ right: 12 + selectionOverlayInsetRight }}
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate font-semibold text-[#1d1d1f]">
@@ -1715,15 +1776,29 @@ function buildFromPlacements(
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
   };
 
-  const propeller = propellerSize(draft.propulsionGroups[0]?.propellerType);
-  const catalogRotorRadius = (propeller.diameter * 25.4 * SCALE) / 2;
-  const catalogMotorRadius = motorRadius(draft.propulsionGroups[0]?.motorType);
   // 실측 치수가 있으면 그것을 쓴다. 같은 설계 안에서도 프로펠러 지름이
   // 부품마다 다르므로 카탈로그 문자열 하나로는 맞출 수 없다.
   const measured = (part: PartPlacement) =>
     part.s ? (part.s.map((v) => v * SCALE) as [number, number, number]) : null;
   const largestOf = (size: [number, number, number] | null) =>
     size ? Math.max(...size) : null;
+  const propulsionFor = (
+    source: DesignDraft,
+    part: PartPlacement,
+    instance: 'motorInstance' | 'propellerInstance',
+  ) => {
+    const name = part.n.toUpperCase();
+    return source.propulsionGroups.find(
+      (item) => item[instance]?.toUpperCase() === name,
+    );
+  };
+  const batteryFor = (source: DesignDraft, part: PartPlacement) => {
+    const name = part.n.toUpperCase();
+    const index = source.physicalComponents.batteries.findIndex(
+      (item) => item.instance.toUpperCase() === name,
+    );
+    return source.energy.batteryTypes[index >= 0 ? index : 0];
+  };
 
   /**
    * 팔 끝 로터 뭉치(플랜지·모터·프로펠러)에 적용할 보정. 장착 각도와 결합
@@ -2012,6 +2087,10 @@ function buildFromPlacements(
 
     if (name.startsWith('MOTOR')) {
       const size = measured(part);
+      const currentPropulsion = propulsionFor(draft, part, 'motorInstance');
+      const referencePropulsion = propulsionFor(reference, part, 'motorInstance');
+      const currentMotor = currentPropulsion?.motorType ?? referencePropulsion?.motorType;
+      const referenceMotor = referencePropulsion?.motorType ?? currentMotor;
       // 축이 항상 로컬 Z라고 보던 탓에, 캔처럼 길쭉한 모터가 납작한 원반이
       // 되어 암 끝과 프로펠러 사이가 비어 보였다. 실측 세 변에서 지름 한
       // 쌍을 찾아 나머지를 길이로 쓴다.
@@ -2024,11 +2103,11 @@ function buildFromPlacements(
       // 모터 종류를 바꾸면 카탈로그 반지름이 달라진다. 그 변화율만 실측에
       // 곱해, 편집 전에는 실측 그대로이면서 편집은 형상에 보이게 한다.
       const edit = growth(
-        motorRadius(draft.propulsionGroups[0]?.motorType),
-        motorRadius(reference.propulsionGroups[0]?.motorType),
+        motorRadius(currentMotor),
+        motorRadius(referenceMotor),
       );
       const radius =
-        (girth ? (girth[0] + girth[1]) / 4 : catalogMotorRadius) * edit;
+        (girth ? (girth[0] + girth[1]) / 4 : motorRadius(currentMotor)) * edit;
       const height = (size ? Math.max(size[axisIndex], 0.02) : 0.28) * edit;
       const instanceGeometry = componentGeometry(
         componentInstanceMeshKey(draft.baselineId, part.n),
@@ -2076,11 +2155,18 @@ function buildFromPlacements(
 
     if (name.startsWith('PROPELLER')) {
       const size = measured(part);
+      const currentPropulsion = propulsionFor(draft, part, 'propellerInstance');
+      const referencePropulsion = propulsionFor(reference, part, 'propellerInstance');
+      const currentPropeller = currentPropulsion?.propellerType ?? referencePropulsion?.propellerType;
+      const referencePropeller = referencePropulsion?.propellerType ?? currentPropeller;
+      const propeller = propellerSize(currentPropeller);
       // 프로펠러는 회전면이 납작한 원판이라 가장 긴 변이 지름이다.
       const edit = growth(
-        propellerSize(draft.propulsionGroups[0]?.propellerType).diameter,
-        propellerSize(reference.propulsionGroups[0]?.propellerType).diameter,
+        propeller.diameter,
+        propellerSize(referencePropeller).diameter,
       );
+      const catalogRotorRadius =
+        (propeller.diameter * 25.4 * SCALE) / 2;
       const rotorRadius =
         ((largestOf(size) ?? catalogRotorRadius * 2) / 2) * edit;
       const instanceGeometry = componentGeometry(
@@ -2308,10 +2394,12 @@ function buildFromPlacements(
       // 실측이 있는데도 용량으로 추정한 상자를 그리고 있었다. 방향도 맞추지
       // 않아, 눕혀 실린 배터리가 세로로 서서 동체 밖으로 삐져나왔다.
       const size = measured(part);
-      const capacity = batteryInfo(draft.energy.batteryTypes[0]).capacity;
+      const currentBattery = batteryFor(draft, part);
+      const referenceBattery = batteryFor(reference, part) ?? currentBattery;
+      const capacity = batteryInfo(currentBattery).capacity;
       const edit = growth(
         capacity,
-        batteryInfo(reference.energy.batteryTypes[0]).capacity,
+        batteryInfo(referenceBattery).capacity,
       );
       const battery = new THREE.Mesh(
         size

@@ -890,7 +890,7 @@ export function DesignLabView({
         </div>
 
         {showModelInfo && <aside className={`absolute right-3 top-3 z-20 flex w-[300px] flex-col overflow-hidden rounded-2xl border border-[#e5e5ea] bg-white/92 shadow-lg backdrop-blur ${modelInfoExpanded ? 'max-h-[calc(100%-24px)]' : 'h-12'}`}>
-          <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3 py-2">
+          <div className={`flex shrink-0 items-center gap-2 px-3 py-2 ${modelInfoExpanded ? 'border-b border-[#e5e5ea]' : ''}`}>
             <button type="button" onClick={() => setModelInfoExpanded((expanded) => !expanded)} aria-expanded={modelInfoExpanded} className="flex min-w-0 flex-1 items-center gap-2 text-left">
               <ChevronDown className={`size-4 shrink-0 text-[#86868b] transition-transform ${modelInfoExpanded ? '' : '-rotate-90'}`} />
               <Info className="size-4 shrink-0 text-[#3182f6]" />
@@ -1182,6 +1182,7 @@ export function DesignLabView({
                 {(baselineCompareView === 'baseline' || baselineCompareView === 'dual') && <ComparePreview
                   label={`A · Baseline #${selected.id}`}
                   draft={baseline}
+                  baseline={baseline}
                   cameraGroup={baselineComparisonCameraGroup}
                   cameraId="baseline"
                   cameraLinked={baselineCompareView === 'dual' && baselineCameraLinked}
@@ -1191,6 +1192,7 @@ export function DesignLabView({
                 {(baselineCompareView === 'draft' || baselineCompareView === 'dual') && <ComparePreview
                   label="B · 현재 Draft"
                   draft={draft}
+                  baseline={baseline}
                   cameraGroup={baselineComparisonCameraGroup}
                   cameraId="draft"
                   cameraLinked={baselineCompareView === 'dual' && baselineCameraLinked}
@@ -1634,6 +1636,7 @@ function SpeedCurveSheet({ rows, source, speed, onSpeedChange }: { rows: Array<P
 function ComparePreview({
   label,
   draft,
+  baseline,
   cameraGroup,
   cameraId,
   cameraLinked,
@@ -1642,6 +1645,7 @@ function ComparePreview({
 }: {
   label: string;
   draft: DesignDraft;
+  baseline: DesignDraft;
   cameraGroup: string;
   cameraId: 'baseline' | 'draft';
   cameraLinked: boolean;
@@ -1652,6 +1656,7 @@ function ComparePreview({
     <div className="relative min-h-0 overflow-hidden bg-[#eef3f6]">
       <ParametricUavViewer
         draft={draft}
+        baseline={baseline}
         assembly={assembly}
         bladeCount={bladeCount}
         cameraFitPadding={1.62}

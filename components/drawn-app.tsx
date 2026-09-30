@@ -463,6 +463,7 @@ export function DrawnApp() {
                   dataset={dataset}
                   showcases={showcases}
                   pair={comparePair}
+                  currentDraft={activeWorkspace?.draft ?? null}
                   onPairChange={setComparePair}
                 />
               </div>

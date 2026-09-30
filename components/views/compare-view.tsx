@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/chart';
 import type {
   DatasetIndex,
+  DesignDraft,
   DesignSummary,
   ShowcaseMap,
   TrimRow,
@@ -63,17 +64,20 @@ export function CompareView({
   dataset,
   showcases,
   pair,
+  currentDraft,
   onPairChange,
 }: {
   dataset: DatasetIndex;
   showcases: ShowcaseMap;
   pair: ComparePair;
+  currentDraft: DesignDraft | null;
   onPairChange: (pair: ComparePair) => void;
 }) {
   const [viewerMode, setViewerMode] = useState<'a' | 'b' | 'dual'>('dual');
   const [cameraLinked, setCameraLinked] = useState(true);
   const [pickerSlot, setPickerSlot] = useState<'a' | 'b' | null>(null);
   const [curveMetric, setCurveMetric] = useState<CurveMetric>('power');
+  const [draftPreviewEnabled, setDraftPreviewEnabled] = useState(false);
   const designById = useMemo(
     () => new Map(dataset.designs.map((design) => [design.id, design])),
     [dataset.designs],
@@ -82,6 +86,12 @@ export function CompareView({
   const b = designById.get(pair.bId);
   const aPreview = useDesignPreview(a?.id ?? null);
   const bPreview = useDesignPreview(b?.id ?? null);
+  const draftBaselineId = currentDraft ? Number(currentDraft.baselineId) : null;
+  const draftSlot = draftBaselineId === a?.id
+    ? 'a'
+    : draftBaselineId === b?.id
+      ? 'b'
+      : null;
   const cameraGroup = `dataset-compare-${useId()}`;
 
   if (!a || !b) {
@@ -137,8 +147,8 @@ export function CompareView({
               </div>}
             </div>
             <div className={`absolute inset-0 grid ${viewerMode === 'dual' ? 'grid-cols-2 divide-x divide-[#dbe4ea]' : 'grid-cols-1'}`}>
-              {(viewerMode === 'a' || viewerMode === 'dual') && <CompareParametricPane key="a" preview={aPreview} label={`A · #${a.id}`} tone="cyan" cameraGroup={cameraGroup} cameraId="a" cameraLinked={viewerMode === 'dual' && cameraLinked} paused={pickerSlot != null} />}
-              {(viewerMode === 'b' || viewerMode === 'dual') && <CompareParametricPane key="b" preview={bPreview} label={`B · #${b.id}`} tone="violet" cameraGroup={cameraGroup} cameraId="b" cameraLinked={viewerMode === 'dual' && cameraLinked} paused={pickerSlot != null} />}
+              {(viewerMode === 'a' || viewerMode === 'dual') && <CompareParametricPane key="a" preview={aPreview} draftOverride={draftSlot === 'a' ? currentDraft : null} draftEnabled={draftSlot === 'a' && draftPreviewEnabled} onDraftEnabledChange={setDraftPreviewEnabled} showDraftToggle={pickerSlot == null} label={`A · #${a.id}`} tone="cyan" cameraGroup={cameraGroup} cameraId="a" cameraLinked={viewerMode === 'dual' && cameraLinked} paused={pickerSlot != null} />}
+              {(viewerMode === 'b' || viewerMode === 'dual') && <CompareParametricPane key="b" preview={bPreview} draftOverride={draftSlot === 'b' ? currentDraft : null} draftEnabled={draftSlot === 'b' && draftPreviewEnabled} onDraftEnabledChange={setDraftPreviewEnabled} showDraftToggle={pickerSlot == null} label={`B · #${b.id}`} tone="violet" cameraGroup={cameraGroup} cameraId="b" cameraLinked={viewerMode === 'dual' && cameraLinked} paused={pickerSlot != null} />}
             </div>
             {pickerSlot && <div className={`absolute top-0 z-50 flex h-[min(460px,100%)] w-1/2 flex-col overflow-hidden border border-t-2 bg-white shadow-2xl animate-in slide-in-from-top-2 ${pickerSlot === 'a' ? 'left-0 border-[#93c5fd]' : 'right-0 border-violet-300'}`}>
               <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[#e5e5ea] px-3">
@@ -272,6 +282,10 @@ function CompareModeButton({ active, onClick, children }: { active: boolean; onC
 
 function CompareParametricPane({
   preview,
+  draftOverride,
+  draftEnabled,
+  onDraftEnabledChange,
+  showDraftToggle,
   label,
   tone,
   cameraGroup,
@@ -280,6 +294,10 @@ function CompareParametricPane({
   paused,
 }: {
   preview: ReturnType<typeof useDesignPreview>;
+  draftOverride: DesignDraft | null;
+  draftEnabled: boolean;
+  onDraftEnabledChange: (enabled: boolean) => void;
+  showDraftToggle: boolean;
   label: string;
   tone: 'cyan' | 'violet';
   cameraGroup: string;
@@ -287,10 +305,19 @@ function CompareParametricPane({
   cameraLinked: boolean;
   paused: boolean;
 }) {
+  const displayedDraft = draftEnabled && draftOverride ? draftOverride : preview?.draft;
   return (
     <div className="relative min-h-0 overflow-hidden bg-[#eef3f6]">
-      {preview ? <ParametricUavViewer draft={preview.draft} assembly={preview.assembly} paused={paused} maxFps={30} cameraFitPadding={1.62} cameraSync={{ group: cameraGroup, id: cameraId, linked: cameraLinked }} /> : <div className="absolute inset-0 grid place-items-center text-xs font-semibold text-[#6e6e73]">파라메트릭 형상 준비 중…</div>}
-      <span className={`pointer-events-none absolute left-3 top-3 z-20 rounded-lg border border-white/70 bg-white/90 px-2.5 py-1.5 text-[10px] font-semibold shadow-sm backdrop-blur ${tone === 'cyan' ? 'text-[#1b64da]' : 'text-violet-700'}`}>{label}</span>
+      {preview && displayedDraft ? <ParametricUavViewer draft={displayedDraft} baseline={preview.draft} assembly={preview.assembly} paused={paused} maxFps={30} cameraFitPadding={1.62} cameraSync={{ group: cameraGroup, id: cameraId, linked: cameraLinked }} /> : <div className="absolute inset-0 grid place-items-center text-xs font-semibold text-[#6e6e73]">파라메트릭 형상 준비 중…</div>}
+      <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+        <span className={`pointer-events-none rounded-lg border border-white/70 bg-white/90 px-2.5 py-1.5 text-[10px] font-semibold shadow-sm backdrop-blur ${tone === 'cyan' ? 'text-[#1b64da]' : 'text-violet-700'}`}>{label}{draftEnabled ? ' · 현재 Draft' : ' · 원본'}</span>
+        {draftOverride && showDraftToggle && (
+          <div className="flex rounded-lg border border-[#e5e5ea] bg-white/94 p-1 text-[10px] font-semibold shadow-sm backdrop-blur" aria-label={`${label} 원본과 현재 Draft 전환`}>
+            <button type="button" onClick={() => onDraftEnabledChange(false)} aria-pressed={!draftEnabled} className={`rounded-md px-2 py-1 transition ${!draftEnabled ? 'bg-[#1d1d1f] text-white shadow-sm' : 'text-[#6e6e73] hover:bg-[#f5f5f7]'}`}>원본</button>
+            <button type="button" onClick={() => onDraftEnabledChange(true)} aria-pressed={draftEnabled} className={`rounded-md px-2 py-1 transition ${draftEnabled ? 'bg-[#3182f6] text-white shadow-sm' : 'text-[#6e6e73] hover:bg-[#f5f5f7]'}`}>현재 Draft</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

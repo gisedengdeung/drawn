@@ -6,6 +6,12 @@
 
 우리는 이 정보를 하나의 작업 공간에서 다룰 수 있도록 Drawn을 만들었습니다. AircraftVerse의 **27,714개 설계와 시뮬레이션 결과**를 출발점으로, 설계 탐색 → 파라미터 편집 → 성능 확인 → 비교 → 부품 견적을 연결합니다. 현재는 데이터에 근거해 설계 대안을 탐색하는 MVP이며, 편집한 기체의 실제 성능 검증은 후속 과제입니다.
 
+## 소개 영상
+
+[![Drawn 프로젝트 소개 영상](https://img.youtube.com/vi/Ies5ZSquPdg/hqdefault.jpg)](https://www.youtube.com/watch?v=Ies5ZSquPdg)
+
+[YouTube에서 소개 영상 보기](https://www.youtube.com/watch?v=Ies5ZSquPdg)
+
 ## 무엇을 할 수 있나요?
 
 | 기능 | 사용자가 할 수 있는 일 |
@@ -151,6 +157,21 @@ npm run model:check
 상세 완료 기준은 [에이전트 완성도와 남은 작업](docs/AGENT_READINESS.md), 모델 개선 방향은 [AI 모델 한계와 개선 과제](docs/AI_MODEL_LIMITATIONS.md)에 있습니다.
 
 Drawn의 프리뷰와 예측은 설계 탐색을 위한 자료입니다. 제작 안전성, 실제 비행 가능성이나 비행 인증을 보증하지 않습니다. 비행 장소 지도 역시 연간 공역 스냅샷이므로 실제 비행 전에는 [드론 원스톱](https://drone.onestop.go.kr)에서 최신 제한을 확인해야 합니다.
+
+## 팀원과 역할
+
+팀원과 담당 역할은 다음과 같습니다.
+
+| 이름 | GitHub | 역할 |
+| --- | --- | --- |
+| 조수민 | [barcybarcy](https://github.com/barcybarcy) | 팀장 |
+| 이지혜 | [jihye20030320](https://github.com/jihye20030320) | 기획·문서 |
+| 박정현 | [jaypower199](https://github.com/jaypower199) | 기획·문서 |
+| 정헌용 | [combo124](https://github.com/combo124) | 프런트엔드 |
+| 이동현 | [ldh0784](https://github.com/ldh0784) | 프런트엔드 |
+| 김명진 | [kmj8575](https://github.com/kmj8575) | 기획·문서 |
+| 최형우 | [vvater00](https://github.com/vvater00) | 백엔드 |
+| 김동하 | [EastHA2403](https://github.com/EastHA2403) | 백엔드 |
 
 ## 저장소 둘러보기
 

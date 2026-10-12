@@ -6,6 +6,12 @@
 
 우리는 이 정보를 하나의 작업 공간에서 다룰 수 있도록 Drawn을 만들었습니다. AircraftVerse의 **27,714개 설계와 시뮬레이션 결과**를 출발점으로, 설계 탐색 → 파라미터 편집 → 성능 확인 → 비교 → 부품 견적을 연결합니다. 현재는 데이터에 근거해 설계 대안을 탐색하는 MVP이며, 편집한 기체의 실제 성능 검증은 후속 과제입니다.
 
+## 소개 영상
+
+[![Drawn 프로젝트 소개 영상](https://img.youtube.com/vi/Ies5ZSquPdg/hqdefault.jpg)](https://www.youtube.com/watch?v=Ies5ZSquPdg)
+
+[YouTube에서 소개 영상 보기](https://www.youtube.com/watch?v=Ies5ZSquPdg)
+
 ## 무엇을 할 수 있나요?
 
 | 기능 | 사용자가 할 수 있는 일 |
@@ -151,6 +157,19 @@ npm run model:check
 상세 완료 기준은 [에이전트 완성도와 남은 작업](docs/AGENT_READINESS.md), 모델 개선 방향은 [AI 모델 한계와 개선 과제](docs/AI_MODEL_LIMITATIONS.md)에 있습니다.
 
 Drawn의 프리뷰와 예측은 설계 탐색을 위한 자료입니다. 제작 안전성, 실제 비행 가능성이나 비행 인증을 보증하지 않습니다. 비행 장소 지도 역시 연간 공역 스냅샷이므로 실제 비행 전에는 [드론 원스톱](https://drone.onestop.go.kr)에서 최신 제한을 확인해야 합니다.
+
+## 팀원과 역할
+
+GitHub 기여 이력을 기준으로 정리한 각 팀원의 주요 작업 영역입니다.
+
+| 팀원 | 주요 역할 | 기여 내용 |
+| --- | --- | --- |
+| [barcybarcy](https://github.com/barcybarcy) | 데이터·에이전트·서비스 통합 | AircraftVerse 데이터 통합, 파라메트릭 설계 스튜디오, 설계·부품 에이전트, FastAPI 연동과 실행 구조 통합 |
+| [combo124](https://github.com/combo124) | 3D 형상·파라미터 편집·프런트엔드 | 파라메트릭 기체 형상과 편집 기능, STEP 부품 좌표 추출, 설계·탐색 화면 개선 |
+| 이동현 · [ldh0784](https://github.com/ldh0784) | 사용자 경험·설계 탐색·비행 지도 | 설계 비교와 후보 탐색, 비행 공역 지도, 즐겨찾기와 정밀 입력, 화면 사용성 개선 |
+| [EastHA2403](https://github.com/EastHA2403) | 성능 모델·학습 데이터 | XGBoost 성능 예측 데이터 파이프라인, 딥러닝 학습용 trim 물리량 데이터 확장 |
+| [kmj8575](https://github.com/kmj8575) | 기체 외관·스킨 편집 | 드론 스킨 선택, 외관 미리보기, 스킨 파라미터 UI |
+| [jaypower199](https://github.com/jaypower199) | 설계 공유·상품 화면·브랜딩 | 설계 공유와 갤러리, 패키지 상품 페이지, 프로젝트 로고 |
 
 ## 저장소 둘러보기
 

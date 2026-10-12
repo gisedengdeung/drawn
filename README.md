@@ -1,123 +1,173 @@
 # Drawn
 
-AircraftVerse 기반 UAV 설계 탐색·성능 시뮬레이션·A/B 비교·목적 기반 최적화 MVP입니다.
+**드론 설계를 고르고, 바꾸고, 비교하는 웹 기반 UAV 설계 워크벤치.**
 
-## 실행
+드론을 설계할 때는 기체의 형상, 부품 구성, 비행 성능을 함께 살펴봐야 합니다. 하지만 설계 파일과 시뮬레이션 결과가 서로 떨어져 있으면, 어떤 선택이 어떤 성능과 연결되는지 이해하기 어렵습니다.
 
-Docker Compose로 프런트(Node/Vinext), FastAPI, PostgreSQL, nginx를 함께 실행합니다.
+우리는 이 정보를 하나의 작업 공간에서 다룰 수 있도록 Drawn을 만들었습니다. AircraftVerse의 **27,714개 설계와 시뮬레이션 결과**를 출발점으로, 설계 탐색 → 파라미터 편집 → 성능 확인 → 비교 → 부품 견적을 연결합니다. 현재는 데이터에 근거해 설계 대안을 탐색하는 MVP이며, 편집한 기체의 실제 성능 검증은 후속 과제입니다.
+
+## 무엇을 할 수 있나요?
+
+| 기능 | 사용자가 할 수 있는 일 |
+| --- | --- |
+| **Design Explorer** | 설계 ID와 토폴로지로 기체를 찾고, 목표·제약 조건에 맞는 후보를 비교합니다. 후보 검색은 원본 성능 데이터와 Pareto front를 사용합니다. |
+| **Design Studio** | 동체, 날개, 팔, 추진계, 배터리와 배치를 편집하고 파라메트릭 3D 형상으로 확인합니다. 원본 설계당 27–225개 변수를 보존합니다. |
+| **Performance Simulator** | 속도별 성능 곡선을 읽고, 대표 설계의 피치 자세와 항력·양력·추력 벡터를 확인합니다. |
+| **A/B Compare** | 기준 설계와 편집본, 또는 서로 다른 데이터셋 설계의 형상·구성·성능을 나란히 비교합니다. |
+| **설계 도우미 AI** | 현재 프로젝트를 바탕으로 성능을 질문하고, 제한된 변경안을 검토하거나 BOM 기반 부품 후보와 견적을 정리합니다. 변경안은 사용자가 적용해야 반영됩니다. |
+| **공유 갤러리** | 설계를 게시하고 다른 사람의 설계를 복사해 새로운 편집의 출발점으로 사용합니다. |
+| **비행 장소 지도** | 국토교통부 초경량비행장치 비행공역 34곳을 지도에서 확인합니다. |
+
+27,714개 설계에는 파라메트릭 개념 형상을 제공하며, **대표 12개 설계에는 원본 STL과 저장된 trim 곡선**을 함께 제공합니다. 파라메트릭 프리뷰와 원본 CAD 형상은 표현 방식과 정밀도가 다릅니다.
+
+## 설계와 성능을 연결하는 방법
+
+Drawn에는 서로 다른 계산 경로가 있습니다. 화면에 숫자가 표시되더라도 그 숫자의 출처와 적용 범위를 함께 읽어야 합니다.
+
+| 경로 | 근거와 역할 | 해석 범위 |
+| --- | --- | --- |
+| **원본 시뮬레이션** | AircraftVerse의 `output.json`과 저장된 trim 결과 | 데이터셋에 포함된 기준 설계의 시뮬레이션 결과입니다. |
+| **Neighbor Estimate v1** | 가까운 설계 5개의 KPI와 경험적 보정 | 편집 설계의 요약 KPI를 추정합니다. similarity는 정확도나 비행 성공 확률이 아닙니다. |
+| **로컬 성능 모델** | PyTorch MLP의 속도별 추론 | 기준 설계의 성능 앵커에 조건화된 예측입니다. |
+| **대화형 에이전트** | OpenAI의 목표 해석과 서버 도구가 반환한 근거 | 계산·조회 결과를 설명하고 허용된 작업을 제안합니다. |
+
+로컬 모델은 `274 → 256 → 256 → 128 → 8` 구조의 MLP로, **항력, 양력, 추력, 피치, 전력, 전류, 비행시간, 거리**를 예측합니다. 원본 호버와 가능한 경우 20 m/s 시뮬레이션 값을 입력 앵커로 사용하며, 학습 속도 범위는 0–49 m/s입니다.
+
+기체를 편집해도 이 앵커는 기준 설계의 값으로 유지됩니다. 따라서 예측값이 달라졌다는 사실만으로 실제 기체의 성능 변화가 검증되었다고 볼 수는 없습니다. 질량·최대속도·비행 유효성은 이 모델의 출력에 포함되지 않으며, 모델이 사용하지 않는 편집 항목도 별도로 표시합니다.
+
+입력 계약, 평가 수치와 재현 범위는 [AI 모델 한계와 개선 과제](docs/AI_MODEL_LIMITATIONS.md), 요약 추정기의 동작은 [Neighbor Estimate 모델 카드](docs/MODEL_CARD.md)에 정리했습니다. 로컬 성능 추론에는 OpenAI 키나 잔액이 필요하지 않습니다.
+
+## 시스템 구조
+
+```mermaid
+flowchart LR
+    Browser[브라우저] --> Nginx[nginx]
+    Nginx --> Frontend[React / Vinext]
+    Nginx --> API[FastAPI]
+    Frontend --> Assets[가공 설계 데이터 / STL]
+    API --> DB[(PostgreSQL)]
+    API --> Model[PyTorch CPU 모델]
+    API --> OpenAI[OpenAI]
+    API --> Parts[AliExpress]
+```
+
+Docker 실행에서는 nginx가 화면과 API를 같은 origin으로 연결합니다. 프런트엔드 개발 서버를 별도로 실행할 때는 Vinext의 API 프록시가 FastAPI로 요청을 전달합니다.
+
+| 영역 | 기술 |
+| --- | --- |
+| 화면과 상태 | React 19, TypeScript, Vinext, Tailwind CSS |
+| 3D와 시각화 | Three.js, Recharts, Leaflet |
+| API와 추론 | FastAPI, PyTorch CPU, NumPy |
+| 저장소와 마이그레이션 | PostgreSQL 16, SQLAlchemy, Alembic |
+| 실행 환경 | Docker Compose, nginx |
+
+구현에서 중요하게 다룬 선택은 다음과 같습니다.
+
+- **필요한 설계만 읽습니다.** 전체 메타데이터는 compact index로 제공하고, 설계 트리와 원본 파라미터는 29개 shard로 나누어 선택한 설계를 지연 로드합니다. 대규모 원본 데이터를 브라우저에 모두 올리지 않습니다.
+- **편집과 근거를 함께 유지합니다.** 기준 설계, 편집본, 원본 변수와 성능 출처를 연결해 비교할 수 있도록 구성했습니다. 저장된 모델 번들은 시작 시 파일 해시와 검증 예측을 검사하며, 검증에 실패하면 추론을 비활성화합니다.
+- **공유 상태는 서버가 관리합니다.** 개인 프로젝트, revision, 실행 기록과 견적은 PostgreSQL에 저장합니다. 변경안 적용은 소유권과 revision을 검사하고, 에이전트 진행 상황은 NDJSON으로 전달합니다.
+
+현재 API 구현은 `backend/app/`입니다. `lib/agent/server/`, `lib/parts/server/`, `drizzle/`에는 이전 TypeScript·D1 구현과 이식 대조를 위한 참조 코드가 남아 있습니다. 자세한 실행 경로는 [구조 안내](docs/ARCHITECTURE.md)를 참고하세요.
+
+## 시작하기
+
+### 실행 환경
+
+- Docker Engine 또는 Docker Desktop과 Docker Compose
+- 초기 설정 스크립트를 실행할 Node.js 22.15 이상
+- 별도 로컬 개발 시 Python 3.13과 PostgreSQL 16
+
+**현재 clean install과 Linux CPU 모델 검증에는 아래에 기록한 재현성 문제가 있습니다.** 다음은 저장소가 지원하는 실행 구성입니다. 설치나 readiness 확인에 실패하면 [현재 상태와 남은 작업](#현재-상태와-남은-작업)을 먼저 확인하세요.
 
 ```bash
+git clone --branch main https://github.com/gisedengdeung/drawn.git
+cd drawn
+
+# 기존 설정을 보존하고 로컬 설정 파일을 생성합니다.
 node scripts/init-local-env.mjs
-# .env.local에 필요한 Google / AliExpress / OpenAI 키를 설정
+
+# 필요한 외부 서비스 키를 .env.local에 설정한 뒤 실행합니다.
 docker compose --env-file .env.docker.local up -d --build
 ```
 
-Windows + Ubuntu WSL에서는 `powershell -ExecutionPolicy Bypass -File scripts/start-docker.ps1`을 실행합니다. 접속 주소는 **http://localhost:3000**, API 문서는 **http://localhost:3000/api/docs**입니다.
+앱 주소는 `http://localhost:3000`, API 문서는 `http://localhost:3000/api/docs`입니다. Windows + Ubuntu WSL에서는 `scripts/start-docker.ps1`을 사용할 수 있습니다.
 
-개발 서버를 따로 실행하거나 기존 D1 데이터를 옮기는 방법은 [FastAPI 실행·이전 안내](docs/FASTAPI_MIGRATION.md)를 참고하세요. Google 로그인에는 등록된 Client ID/Secret과 `/api/auth/callback/google` 반환 주소가 필요합니다. 새 세션 방식으로 전환했으므로 기존 사용자는 한 번 다시 로그인합니다.
+앱 실행에는 Git에 포함된 `public/data`, `public/models`, `backend/model_bundle`을 사용합니다. **원본 AircraftVerse 데이터 다운로드나 모델 재학습은 필요하지 않습니다.** 원본 데이터가 있을 때만 `npm run data:prepare`로 웹 자산을 다시 생성하세요.
 
-앱 실행에는 Git에 포함된 가공 데이터를 사용하므로 원본이 없어도 됩니다. 원본에서 가공 데이터를 다시 만들 때만 `npm run data:prepare`를 실행하세요.
+### 외부 서비스 설정
 
-`npm run data:prepare`는 프로그램 내부의 `data/raw/AircraftVerse_1/2/3`을 우선 탐색해 다음 정적 웹 자산을 만듭니다. 내부 데이터가 없으면 이전 구조인 상위 폴더의 `AircraftVerse_1/2/3`을 사용합니다. 필요하면 `npm run data:prepare -- --data-root <part-path>`를 세 파트 각각 반복 지정할 수 있으며, 명시한 경로가 자동 탐색보다 우선합니다.
+`.env.example`을 기준으로 서버 설정을 준비합니다. 비밀값은 `.env.local` 등 Git에서 제외된 로컬 파일에 보관하며, 브라우저에 공개되는 환경변수 접두사를 사용하지 않습니다.
 
-- 27,714개 전체 설계 compact metadata index
-- 1,000 ID 구간 단위의 29개 설계 트리·원본 파라미터 shard
-- Motor 49 / Propeller 146 / Battery 56 / Servo 27 / NACA 68 전체 카탈로그
-- Range↑·Power↓·Mass↓ 실제 비지배 Pareto front와 knee point
-- 목적·토폴로지별 대표 12개 binary STL
-- 시연 설계의 0–50m/s trim curve JSON
+| 기능 | 필요한 설정 |
+| --- | --- |
+| 로컬 저장소와 세션 | `DATABASE_URL`, `SESSION_SECRET`, `APP_BASE_URL` — Docker 실행에서는 생성된 로컬 설정과 Compose를 사용합니다. |
+| Google 로그인과 개인 프로젝트 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, 등록된 OAuth callback |
+| 대화형 설계 도우미 | `OPENAI_API_KEY`, 이용 가능한 API 프로젝트 |
+| 실제 부품 조회 | `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET` 및 해당 API 권한. 제휴 링크 생성에는 `ALIEXPRESS_TRACKING_ID`도 사용합니다. |
+| 별도 프런트 개발 서버 | `API_INTERNAL_URL` — 기본값은 `http://127.0.0.1:8000`입니다. |
 
-원본 84.34GiB 데이터는 `data/raw`에 보관하며 전처리에서 변경하지 않습니다. `data/` 전체는 Git 추적·개발 파일 감시·TypeScript 탐색에서 제외하고, 앱에서 사용하는 `public/data`와 대표 `public/models`만 기존처럼 추적합니다. 위치 변경과 배포 원칙은 [docs/DATA_LAYOUT.md](docs/DATA_LAYOUT.md)를 참고하세요.
+기본 화면과 공개 데이터 탐색에는 외부 API 키가 필요하지 않습니다. Google 로그인 callback은 `APP_BASE_URL/api/auth/callback/google`로 등록하며, 프런트와 FastAPI의 origin 설정을 맞춰야 합니다.
 
-### 내 주변 비행 장소 (국토부 UL 공역)
+Python 가상환경, 마이그레이션, 별도 개발 서버 실행과 기존 D1 데이터 이전은 [FastAPI 실행 안내](docs/FASTAPI_MIGRATION.md)에 정리했습니다. `npm run dev`는 FastAPI와 DB의 준비 상태를 먼저 확인하므로 백엔드를 먼저 실행해야 합니다.
 
-헤더의 "주변 비행지" 위젯은 국토교통부 초경량비행장치 비행공역(UA, data.go.kr
-dataset 15061946) 34곳을 사용합니다. 원본 CSV는 저장소에 포함하지 않으며,
-아래 명령으로 직접 내려받아 갱신합니다.
+## 검증
 
-```bash
-# https://www.data.go.kr/data/15061946/fileData.do 에서 로그인 없이 CSV 다운로드 후
-# 혹은 drive에 "국토교통부_항공레저_초경량비행장치공역_20251231.csv" 파일을 다운로드 후
-npm run data:prepare-drone-zones -- --csv <다운로드한 CSV 경로>
-```
-
-연 1회 갱신되는 스냅샷이라 실시간 NOTAM·임시 공역 변경은 반영하지 않습니다.
-실제 비행 전에는 [드론 원스톱](https://drone.onestop.go.kr)에서 최종 확인이 필요합니다.
-
-## 구현된 사용자 흐름
-
-1. **Design Explorer** — 27,714개 ID/topology 검색과 대표 12개 원본 STL 또는 전체 파라메트릭 프리뷰 진입
-2. **Design Studio** — 설계당 원본 27–225개 변수를 1:1 보존하고 구조·동체·추진·전력·날개·탑재·배치를 실시간 개념 형상에 반영
-3. **Performance Simulator** — 0–50m/s trim slider, STL Pitch 자세, Drag/Lift/Thrust 벡터와 실제 성능 곡선
-4. **A/B Compare** — Baseline vs Draft 및 데이터셋 두 설계의 변경 파라미터/KPI/trim 비교. 별도 단계가 아니라 Design Explorer·Design Studio 어디서든 팝업으로 바로 확인
-5. **Dataset Candidate Search** — 목표·제약 필터와 실제 output.json 기반 랭킹(균형형은 non-dominated Pareto knee). 별도 단계가 아니라 Design Explorer 사이드바의 "조건으로 후보 찾기" 모드로 통합되어 있으며, 계산된 추천안은 바로 선택되어 3D·성능·A/B 비교로 이어짐
-6. **부품 agent** — 현재 설계의 부품 목록, 상품 후보 비교, 최종 구매 정리표와 CSV 저장
-
-## 설계 도우미 AI
-
-현재는 로컬 통합과 핵심 계약 검증 단계입니다. 실제 Google 로그인부터 정상 OpenAI 답변·변경안 적용·견적 재조회까지 이어지는 전체 흐름과 답변 품질은 추가 검증이 필요합니다. 구현 범위와 우선순위별 완료 기준은 [에이전트 완성도와 남은 작업](docs/AGENT_READINESS.md)에 정리했습니다.
-
-상단 **설계 도우미 AI** 패널에서 **부품 찾기·설계 개선·질문하기**를 이용합니다. 현재 프로젝트의 저장된 설계를 기준으로 실제 BOM 수량과 상품 후보를 확인하고, 견적 저장·CSV 내보내기·변경안 적용·되돌리기를 제공합니다. 패널을 닫거나 작업 화면을 바꿔도 선택한 견적을 유지합니다.
-
-비공개 프로젝트와 유료 API 호출은 Google 로그인 후 이용합니다. 상품 가격·링크는 AliExpress 응답에서 가져오며 옵션과 묶음 수량이 확인된 항목만 확정 소계에 넣습니다. OpenAI는 의도 해석과 근거 설명을 담당하며 학습된 비행 성능 모델과 별개입니다.
-
-키가 없거나 공급자 호출이 실패하면 해당 상태를 표시합니다. 자세한 기능은 [설계 도우미 명세](docs/AGENT_SPEC.md), [부품 찾기](docs/PARTS_AGENT.md)를 참고하세요.
+프런트엔드와 데이터 검증은 저장소 루트에서 실행합니다.
 
 ```bash
 npm test
 npm run typecheck
-python -m pytest backend/tests
+npm run build
+npm run data:validate
 ```
 
-실제 부품 조회 점검은 로그인한 프로젝트를 준비한 뒤 `npm run parts:check`로 수행합니다. 쿠키와 프로젝트 설정이 필요하며 기본 주소는 `http://localhost:3000`입니다.
-
-## 데이터 원칙
-
-- 요약 KPI는 `output.json`을 사용합니다.
-- 속도별 곡선은 `trims.npy`를 사용합니다.
-- trim의 전부 0인 행과 non-finite 값은 유효하지 않은 상태로 처리합니다.
-- 제공된 부분 데이터의 point cloud는 명세와 달리 `100×3`입니다.
-- 세 데이터 파트의 27,714개 고유 설계를 하나의 인덱스로 통합합니다.
-- 전체 ID는 1–28,080 사이에 희소하게 분포하므로 최대 ID를 설계 수로 사용하지 않습니다.
-- `design_tree.json`의 압축된 대칭 subtree는 부모→자식 transform으로 누적한 뒤 hub topology에 따라 복제합니다.
-- `design_low_level.json`의 1,279,376개 원본 변수는 compact tuple로 shard에 보존하고 선택한 설계만 브라우저에서 `ParameterDefinition`으로 지연 해석합니다.
-- 물리 component instance를 별도로 보존하므로 동일 모델의 dual battery나 대칭 motor/propeller를 Set으로 축약하지 않습니다.
-- `corpus_dic`은 신뢰되지 않은 Python pickle이므로 런타임에서 역직렬화하지 않습니다.
-
-## 코드·모델 구조
-
-현재 실행 코드, 이전 서버 참조 코드, 학습 원본의 위치는 [구조 안내](docs/ARCHITECTURE.md)와 [ML 안내](ml/README.md)에 정리했습니다. 루트의 모델 파일은 ML 보관 폴더로 이동하고 실행용 번들은 `backend/model_bundle`에서 관리합니다.
-
-로컬 학습 모델은 OpenAI 잔액과 독립적으로 동작합니다. 서버 실행 후 `npm run model:check`로 실제 예측 응답을 점검할 수 있습니다.
-
-## 현재 모델 경계
-
-입력·출력, 평가 수치의 해석, 편집 설계 예측의 한계와 다음 학습 과제는 [AI 모델 한계와 개선 과제](docs/AI_MODEL_LIMITATIONS.md)를 먼저 참고하세요.
-
-`ml/sources/dongha/20260920_160522/best_model.pt`의 MLP를 FastAPI에 연결했습니다. 전처리·가중치·모델 버전·검증 샘플을 [작은 배포 번들](backend/model_bundle/README.md)로 고정하고 시작 시 검증합니다. 런타임에서 원본 pickle이나 학습 데이터 전체를 읽지 않습니다.
-
-- **원본 시뮬레이션**: 데이터셋 KPI와 저장된 trim을 표시합니다.
-- **Neighbor Estimate v1**: 편집 설계의 기존 요약 KPI와 제한된 치수 최적화를 유지합니다.
-- **학습된 속도별 예측**: drag, lift, thrust, pitch, power, current, flightTime, distance를 제공합니다. 원본 호버·20m/s 앵커에 조건화되며 형상만 사용하는 모델은 아닙니다.
-
-학습 모델은 질량·최대속도·비행 유효성을 예측하지 않습니다. 필요한 원본 입력이 없는 설계는 오류로 표시하고, 학습 범위 밖 입력·알 수 없는 부품·반영되지 않는 변경을 안내합니다. 물리 범위를 벗어난 출력은 그래프에서 비워 두되 API의 `rawPredictions`에 원래 값을 보존합니다. 원본 유효 trim의 끊긴 구간을 임의로 이어 붙이지 않습니다.
-
-이 앱의 프리뷰와 예측은 CFD 전체 유동장, 제작 안전성 또는 비행 인증을 대체하지 않습니다.
-
-## 팀 분업 제안
-
-| 파트 | 소유 범위 |
-| --- | --- |
-| Frontend | React/Vinext UI, Three.js STL viewer, Recharts, 접근성/반응형 |
-| Data | AircraftVerse 전처리, schema validation, metadata/trim index |
-| AI | Transformer/PointNet/Trim 모델 학습, 검증셋 metric, model registry |
-| Backend | FastAPI inference, optimization job, PostgreSQL/object storage |
-| MLOps | model version, confidence interval, GPU inference, monitoring |
-
-## 검증
+백엔드 의존성은 `backend/requirements-dev.txt`에 있습니다. 해당 의존성을 설치한 Python 환경에서 다음 검사를 실행합니다.
 
 ```bash
-npx tsc --noEmit
-npx oxlint components/drawn-app.tsx components/stl-viewer.tsx components/views lib/drawn-types.ts scripts/prepare-aircraftverse.mjs
-npm run build
+# TEST_DATABASE_URL은 별도로 만든 PostgreSQL 테스트 DB를 가리켜야 합니다.
+# 이 변수가 없으면 PostgreSQL 통합 테스트 일부가 skip됩니다.
+python -m pytest backend/tests
+
+# 원본·번들 해시와 CPU 검증 예측을 검사합니다. 파일을 재생성하지 않습니다.
+python scripts/package-performance-model.py --verify-only
+
+# 실행 중인 API에서 실제 모델 준비 상태와 예측을 확인합니다.
+npm run model:check
 ```
+
+`/api/health/live`는 API 응답 여부를, `/api/health/ready`는 DB와 검증된 모델의 준비 상태를 확인합니다. 이 결과만으로 실제 Google 로그인이나 외부 공급자 호출 성공까지 확인할 수는 없습니다.
+
+## 현재 상태와 남은 작업
+
+핵심 화면, 데이터 탐색, 파라미터 편집, 비교, 서버 저장과 에이전트 실행 구조를 구현했습니다. 실제 외부 계정을 연결한 전체 사용자 흐름과 편집 설계의 예측 품질은 추가 검증이 필요합니다.
+
+2026-10-12 클라우드 환경 점검에서는 프런트엔드 빌드·타입 검사, JavaScript 테스트 173개와 가공 데이터 검증을 통과했습니다. PostgreSQL 마이그레이션, 화면 렌더링과 공개 갤러리 API 프록시도 확인했습니다. 다음 문제는 아직 남아 있습니다.
+
+- **설치 재현성:** 현재 `package-lock.json`에는 일부 선택적 WASM 의존성 항목이 누락되어 있어 `npm ci`가 실패합니다. 환경 점검에서는 저장소 밖의 설치용 사본을 보완하고, 기존 고정 버전과 integrity 값이 유지되는지 확인해 의존성을 설치했습니다. 저장소 lockfile의 수정은 후속 작업입니다.
+- **CPU 모델 호환성:** Linux CPU의 `torch==2.13.0+cpu`에서 파일 해시는 일치했지만, golden 출력 160개 중 2개가 고정된 수치 허용 오차를 넘었습니다. 모델은 검증 실패 시 추론을 차단합니다. 이로 인해 백엔드 테스트는 84개 통과, 2개 실패, 14개 setup error였으며 모델 관련 검사 전체 통과를 주장하지 않습니다.
+- **실제 사용자 흐름:** Google 로그인부터 정상 OpenAI 응답, 변경안 적용, 부품 견적 저장까지 연결한 외부 서비스 통합 검증이 남아 있습니다. mock을 사용한 테스트와 실계정 검증을 구분합니다.
+- **편집 설계의 평가:** 수정 전후 설계를 같은 조건으로 시뮬레이션하고, 보지 못한 설계·부품·변경 범위에서 오차를 평가해야 합니다. 현재의 조건부 예측을 형상만으로 성능을 계산하는 모델로 확대 해석하지 않습니다.
+
+상세 완료 기준은 [에이전트 완성도와 남은 작업](docs/AGENT_READINESS.md), 모델 개선 방향은 [AI 모델 한계와 개선 과제](docs/AI_MODEL_LIMITATIONS.md)에 있습니다.
+
+Drawn의 프리뷰와 예측은 설계 탐색을 위한 자료입니다. 제작 안전성, 실제 비행 가능성이나 비행 인증을 보증하지 않습니다. 비행 장소 지도 역시 연간 공역 스냅샷이므로 실제 비행 전에는 [드론 원스톱](https://drone.onestop.go.kr)에서 최신 제한을 확인해야 합니다.
+
+## 저장소 둘러보기
+
+```text
+app/                    페이지와 FastAPI 프록시 라우트
+components/, hooks/     화면, 3D 뷰어, 클라이언트 상태
+lib/                    설계·성능·부품 도메인과 공용 타입
+backend/app/            인증, 프로젝트, 에이전트, 부품 API, 성능 추론
+backend/alembic/        PostgreSQL 마이그레이션
+backend/model_bundle/   실행용 가중치, 전처리, manifest, 검증 샘플
+public/data/            가공 설계 데이터와 카탈로그
+public/models/          대표 설계 STL
+ml/                     학습 자료와 원본 실험 산출물
+scripts/                데이터 가공, 실행 준비, 모델 패키징과 진단
+infra/, compose.yaml    nginx와 Docker 서비스 구성
+tests/, backend/tests/  프런트 계약·참조 구현·백엔드 테스트
+docs/                   구조, 모델 경계, 데이터와 실행 안내
+```
+
+데이터 원본과 배포 자산의 구분은 [데이터 배치 안내](docs/DATA_LAYOUT.md), 학습 자료와 체크포인트의 출처는 [ML 안내](ml/README.md), 부품 조회·견적의 계약은 [부품 에이전트 안내](docs/PARTS_AGENT.md)를 참고하세요.

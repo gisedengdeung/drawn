@@ -160,16 +160,18 @@ Drawn의 프리뷰와 예측은 설계 탐색을 위한 자료입니다. 제작 
 
 ## 팀원과 역할
 
-GitHub 기여 이력을 기준으로 정리한 각 팀원의 주요 작업 영역입니다.
+팀원과 담당 역할은 다음과 같습니다.
 
-| 팀원 | 주요 역할 | 기여 내용 |
+| 이름 | GitHub | 역할 |
 | --- | --- | --- |
-| [barcybarcy](https://github.com/barcybarcy) | 데이터·에이전트·서비스 통합 | AircraftVerse 데이터 통합, 파라메트릭 설계 스튜디오, 설계·부품 에이전트, FastAPI 연동과 실행 구조 통합 |
-| [combo124](https://github.com/combo124) | 3D 형상·파라미터 편집·프런트엔드 | 파라메트릭 기체 형상과 편집 기능, STEP 부품 좌표 추출, 설계·탐색 화면 개선 |
-| 이동현 · [ldh0784](https://github.com/ldh0784) | 사용자 경험·설계 탐색·비행 지도 | 설계 비교와 후보 탐색, 비행 공역 지도, 즐겨찾기와 정밀 입력, 화면 사용성 개선 |
-| [EastHA2403](https://github.com/EastHA2403) | 성능 모델·학습 데이터 | XGBoost 성능 예측 데이터 파이프라인, 딥러닝 학습용 trim 물리량 데이터 확장 |
-| [kmj8575](https://github.com/kmj8575) | 기체 외관·스킨 편집 | 드론 스킨 선택, 외관 미리보기, 스킨 파라미터 UI |
-| [jaypower199](https://github.com/jaypower199) | 설계 공유·상품 화면·브랜딩 | 설계 공유와 갤러리, 패키지 상품 페이지, 프로젝트 로고 |
+| 조수민 | [barcybarcy](https://github.com/barcybarcy) | 팀장 |
+| 이지혜 | [jihye20030320](https://github.com/jihye20030320) | 기획·문서 |
+| 박정현 | [jaypower199](https://github.com/jaypower199) | 기획·문서 |
+| 정헌용 | [combo124](https://github.com/combo124) | 프런트엔드 |
+| 이동현 | [ldh0784](https://github.com/ldh0784) | 프런트엔드 |
+| 김명진 | [kmj8575](https://github.com/kmj8575) | 기획·문서 |
+| 최형우 | [vvater00](https://github.com/vvater00) | 백엔드 |
+| 김동하 | [EastHA2403](https://github.com/EastHA2403) | 백엔드 |
 
 ## 저장소 둘러보기
 
